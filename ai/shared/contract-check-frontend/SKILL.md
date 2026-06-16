@@ -1,6 +1,6 @@
 ---
 name: contract-check-frontend
-description: Valida contratos API consumidos desde el frontend: los composables y stores que llaman a endpoints usan los tipos TypeScript generados desde OpenAPI (no tipos ad-hoc), manejan los error codes declarados, cancelan requests pendientes. Si la tarea escucha eventos async (websockets/SSE) verifica coherencia con AsyncAPI. Úsalo con /contract-check-frontend T{id}. Activar con "validar contratos frontend", "check tipos API", "revisar composables de fetch".
+description: 'Valida contratos API consumidos desde el frontend: los composables y stores que llaman a endpoints usan los tipos TypeScript generados desde OpenAPI (no tipos ad-hoc), manejan los error codes declarados, cancelan requests pendientes. Si la tarea escucha eventos async (websockets/SSE) verifica coherencia con AsyncAPI. Úsalo con /contract-check-frontend T{id}. Activar con "validar contratos frontend", "check tipos API", "revisar composables de fetch".'
 ---
 
 # Contract Check Frontend

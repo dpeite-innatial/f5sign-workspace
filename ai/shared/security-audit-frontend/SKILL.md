@@ -1,6 +1,6 @@
 ---
 name: security-audit-frontend
-description: Checks de seguridad específicos del stack frontend (Vue/Nuxt/TypeScript). Complementa a security-audit-core con: XSS (v-html + sanitización), CSP, secretos en código cliente, localStorage con datos sensibles, open redirects, postMessage con validación de origin, dependencias npm con CVEs. Invocada por security-audit-core. Úsalo con /security-audit-frontend T{id}. Activar con "security frontend", "audit Vue/JS", "check XSS/CSP".
+description: 'Checks de seguridad específicos del stack frontend (Vue/Nuxt/TypeScript). Complementa a security-audit-core con: XSS (v-html + sanitización), CSP, secretos en código cliente, localStorage con datos sensibles, open redirects, postMessage con validación de origin, dependencias npm con CVEs. Invocada por security-audit-core. Úsalo con /security-audit-frontend T{id}. Activar con "security frontend", "audit Vue/JS", "check XSS/CSP".'
 ---
 
 # Security Audit Frontend

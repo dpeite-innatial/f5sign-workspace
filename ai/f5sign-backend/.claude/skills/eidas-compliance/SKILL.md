@@ -1,6 +1,6 @@
 ---
 name: eidas-compliance
-description: Valida cumplimiento eIDAS de código de firma electrónica: algoritmos permitidos (EC-P256, SHA-256+), formatos (PAdES/XAdES/CAdES/JAdES), niveles (B-B, B-T, B-LT, B-LTA), sellado de tiempo TSA, LTV, trust lists LOTL/TSL, certificados, integración con EU DSS v6.4, y alineación con las 12 decisiones de project_cloud_signing_decisions.md. Úsalo con /eidas-compliance T{id}. Activar con "compliance eIDAS", "revisar firma", "validar PAdES/XAdES", "check EU DSS".
+description: 'Valida cumplimiento eIDAS de código de firma electrónica: algoritmos permitidos (EC-P256, SHA-256+), formatos (PAdES/XAdES/CAdES/JAdES), niveles (B-B, B-T, B-LT, B-LTA), sellado de tiempo TSA, LTV, trust lists LOTL/TSL, certificados, integración con EU DSS v6.4, y alineación con las 12 decisiones de project_cloud_signing_decisions.md. Úsalo con /eidas-compliance T{id}. Activar con "compliance eIDAS", "revisar firma", "validar PAdES/XAdES", "check EU DSS".'
 ---
 
 # eIDAS Compliance

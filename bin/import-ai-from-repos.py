@@ -64,7 +64,9 @@ for repo in REPOS:
 # 3) Deduplicar: por cada skill, el hash más común entre repos que lo tienen;
 #    si >=2 repos comparten ese hash exacto -> a ai/shared/ + symlink relativo.
 SHARED = AI / "shared"
-SHARED.mkdir(exist_ok=True)
+if SHARED.exists():
+    shutil.rmtree(SHARED)
+SHARED.mkdir(parents=True)
 print("\n=== DEDUP DE SKILLS ===")
 for skill, rh in sorted(skill_hashes.items()):
     cnt = Counter(rh.values())

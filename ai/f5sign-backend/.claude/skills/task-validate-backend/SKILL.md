@@ -1,6 +1,6 @@
 ---
 name: task-validate-backend
-description: Gate duro de calidad funcional en backend (PHP/Symfony): corre composer test:* (unit, integration, e2e), valida cobertura mínima del 80%, ejecuta PHPStan y PHP-CS-Fixer, comprueba cobertura de AC, y confirma que los ficheros declarados en el .md coinciden con los modificados. Solo para repositorios con stack PHP/Symfony. Úsalo con /task-validate-backend T{id}. Activar con "validar tarea backend", "run phpunit", "check PHPStan y AC".
+description: 'Gate duro de calidad funcional en backend (PHP/Symfony): corre composer test:* (unit, integration, e2e), valida cobertura mínima del 80%, ejecuta PHPStan y PHP-CS-Fixer, comprueba cobertura de AC, y confirma que los ficheros declarados en el .md coinciden con los modificados. Solo para repositorios con stack PHP/Symfony. Úsalo con /task-validate-backend T{id}. Activar con "validar tarea backend", "run phpunit", "check PHPStan y AC".'
 ---
 
 # Task Validate

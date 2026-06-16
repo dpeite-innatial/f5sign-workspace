@@ -1,6 +1,6 @@
 ---
 name: task-validate-frontend
-description: Gate duro de calidad funcional en frontend (Nuxt 3 + Vue 3 + TypeScript): ejecuta npm run lint, type-check (vue-tsc), tests unit/component (Vitest) y e2e (Playwright si aplica), build (vite), valida cobertura mínima del 80%, y verifica que los AC de la story están cubiertos por tests. Solo para repositorios frontend. Úsalo con /task-validate-frontend T{id}. Activar con "validar tarea frontend", "run vitest", "check tests Vue/TS".
+description: 'Gate duro de calidad funcional en frontend (Nuxt 3 + Vue 3 + TypeScript): ejecuta npm run lint, type-check (vue-tsc), tests unit/component (Vitest) y e2e (Playwright si aplica), build (vite), valida cobertura mínima del 80%, y verifica que los AC de la story están cubiertos por tests. Solo para repositorios frontend. Úsalo con /task-validate-frontend T{id}. Activar con "validar tarea frontend", "run vitest", "check tests Vue/TS".'
 ---
 
 # Task Validate Frontend

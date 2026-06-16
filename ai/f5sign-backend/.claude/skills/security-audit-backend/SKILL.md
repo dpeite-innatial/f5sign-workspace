@@ -1,6 +1,6 @@
 ---
 name: security-audit-backend
-description: Checks de seguridad específicos del stack backend (PHP/Symfony). Complementa a security-audit-core con: inyección SQL en PHP (Doctrine/PDO), uso correcto de Symfony asserts, auth middleware Symfony, rate limiting, idempotency, headers de seguridad, criptografía genérica (bcrypt/argon2, hash_equals, random_bytes). Invocada por security-audit-core. Úsalo con /security-audit-backend T{id}. Activar con "security backend", "audit PHP", "check Symfony security".
+description: 'Checks de seguridad específicos del stack backend (PHP/Symfony). Complementa a security-audit-core con: inyección SQL en PHP (Doctrine/PDO), uso correcto de Symfony asserts, auth middleware Symfony, rate limiting, idempotency, headers de seguridad, criptografía genérica (bcrypt/argon2, hash_equals, random_bytes). Invocada por security-audit-core. Úsalo con /security-audit-backend T{id}. Activar con "security backend", "audit PHP", "check Symfony security".'
 ---
 
 # Security Audit Backend

@@ -1,6 +1,6 @@
 ---
 name: doctrine-guard
-description: Validación mecánica de la capa de persistencia tras una tarea: entidades Doctrine (pureza hexagonal), mapeos orm.xml, migrations (reversibilidad, índices, multi-tenancy), políticas RLS y coherencia SQL↔PHP de ENUMs. Úsalo con /doctrine-guard T{id}. Activar con "validar migration", "revisar persistencia de tarea", "check doctrine", "auditar RLS".
+description: 'Validación mecánica de la capa de persistencia tras una tarea: entidades Doctrine (pureza hexagonal), mapeos orm.xml, migrations (reversibilidad, índices, multi-tenancy), políticas RLS y coherencia SQL↔PHP de ENUMs. Úsalo con /doctrine-guard T{id}. Activar con "validar migration", "revisar persistencia de tarea", "check doctrine", "auditar RLS".'
 ---
 
 # Doctrine Guard

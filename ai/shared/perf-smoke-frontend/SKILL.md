@@ -1,6 +1,6 @@
 ---
 name: perf-smoke-frontend
-description: Smoke test de performance en frontend (Nuxt/Vue): bundle size delta, Lighthouse CI (Performance, Accessibility, Best Practices, SEO), Core Web Vitals (LCP, FID, CLS), detección de imports pesados nuevos. Requiere tag critical-path. Emite warnings, no bloquea. Úsalo con /perf-smoke-frontend T{id}. Activar con "perf frontend", "bundle size", "lighthouse", "web vitals".
+description: 'Smoke test de performance en frontend (Nuxt/Vue): bundle size delta, Lighthouse CI (Performance, Accessibility, Best Practices, SEO), Core Web Vitals (LCP, FID, CLS), detección de imports pesados nuevos. Requiere tag critical-path. Emite warnings, no bloquea. Úsalo con /perf-smoke-frontend T{id}. Activar con "perf frontend", "bundle size", "lighthouse", "web vitals".'
 ---
 
 # Perf Smoke Frontend

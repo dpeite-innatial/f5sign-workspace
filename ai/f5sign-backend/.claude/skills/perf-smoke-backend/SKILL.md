@@ -1,6 +1,6 @@
 ---
 name: perf-smoke-backend
-description: Smoke test de performance en backend (PHP/Symfony) sobre código crítico: detecta N+1, falta de índices efectivos, endpoints lentos (p95), throughput de workers y consumo de memoria anómalo. Requiere fixtures perf cargadas previamente (composer perf:seed). Emite warnings, no bloquea. Solo para repositorios con stack PHP/Symfony. Úsalo con /perf-smoke-backend T{id}. Activar con "smoke perf backend", "benchmark API PHP", "check N+1".
+description: 'Smoke test de performance en backend (PHP/Symfony) sobre código crítico: detecta N+1, falta de índices efectivos, endpoints lentos (p95), throughput de workers y consumo de memoria anómalo. Requiere fixtures perf cargadas previamente (composer perf:seed). Emite warnings, no bloquea. Solo para repositorios con stack PHP/Symfony. Úsalo con /perf-smoke-backend T{id}. Activar con "smoke perf backend", "benchmark API PHP", "check N+1".'
 ---
 
 # Perf Smoke

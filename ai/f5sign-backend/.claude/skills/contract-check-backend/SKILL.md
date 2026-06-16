@@ -1,6 +1,6 @@
 ---
 name: contract-check-backend
-description: Valida contratos externos desde el lado backend (PHP/Symfony): anotaciones Nelmio #[OA\\*] en endpoints, OpenAPI generado coherente con los AC, definición correcta de domain events y sincronización con docs/asyncapi/. Solo para repositorios con stack PHP/Symfony. Úsalo con /contract-check-backend T{id}. Activar con "validar contratos backend", "check API PHP de tarea", "revisar Nelmio/AsyncAPI".
+description: 'Valida contratos externos desde el lado backend (PHP/Symfony): anotaciones Nelmio #[OA\\*] en endpoints, OpenAPI generado coherente con los AC, definición correcta de domain events y sincronización con docs/asyncapi/. Solo para repositorios con stack PHP/Symfony. Úsalo con /contract-check-backend T{id}. Activar con "validar contratos backend", "check API PHP de tarea", "revisar Nelmio/AsyncAPI".'
 ---
 
 # Contract Check

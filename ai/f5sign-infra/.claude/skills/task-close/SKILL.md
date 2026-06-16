@@ -1,6 +1,6 @@
 ---
 name: task-close
-description: Cierra documentalmente una tarea tras la implementación y validaciones: actualiza el .md (Estado=review, Fin, Commit SHA), consolida tagMismatches de todas las skills previas, añade sección "Desviaciones de lo planificado" al .md, y extrae aprendizajes no obvios a notes.md si los hay. Úsalo con /task-close T{id}. Activar con "cerrar tarea", "actualizar .md", "consolidar aprendizajes", "marcar tarea como review".
+description: 'Cierra documentalmente una tarea tras la implementación y validaciones: actualiza el .md (Estado=review, Fin, Commit SHA), consolida tagMismatches de todas las skills previas, añade sección "Desviaciones de lo planificado" al .md, y extrae aprendizajes no obvios a notes.md si los hay. Úsalo con /task-close T{id}. Activar con "cerrar tarea", "actualizar .md", "consolidar aprendizajes", "marcar tarea como review".'
 ---
 
 # Task Close

@@ -1,6 +1,6 @@
 ---
 name: docs-sync
-description: Actualiza documentación que vive fuera del código tras una tarea: AsyncAPI, ADRs (como borrador), CHANGELOG, .env.example, runbooks de workers, READMEs de módulo. NO toca OpenAPI (Nelmio lo cubre inline). Condicional por tags adr/config/breaking/event/worker/new-module. Úsalo con /docs-sync T{id}. Activar con "sincronizar docs", "actualizar changelog", "crear ADR", "actualizar AsyncAPI", "docs externas de tarea".
+description: 'Actualiza documentación que vive fuera del código tras una tarea: AsyncAPI, ADRs (como borrador), CHANGELOG, .env.example, runbooks de workers, READMEs de módulo. NO toca OpenAPI (Nelmio lo cubre inline). Condicional por tags adr/config/breaking/event/worker/new-module. Úsalo con /docs-sync T{id}. Activar con "sincronizar docs", "actualizar changelog", "crear ADR", "actualizar AsyncAPI", "docs externas de tarea".'
 ---
 
 # Docs Sync
