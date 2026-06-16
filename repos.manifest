@@ -1,0 +1,8 @@
+# Subrepos del workspace F5Sign — usados por bin/bootstrap.sh para clonar de cero.
+# Formato (separado por TAB):   nombre<TAB>url<TAB>rama
+# La rama es la que hay actualmente en uso; ajústala a la canónica si procede.
+f5sign-backend	git@github.com:dpeite-innatial/f5sign-backend.git	proto
+f5sign-dashboard	git@github.com:dpeite-innatial/f5sign-dashboard.git	feat/ssr-false-spa-static
+f5sign-docs	git@github.com:dpeite-innatial/innasign-doc.git	master
+f5sign-infra	git@github.com:dpeite-innatial/f5sign-infra.git	master
+f5sign-signer	git@github.com:dpeite-innatial/f5sign-signer.git	feat/T13.2.7-saneamiento-e2e-reauth-reviewer

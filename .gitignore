@@ -1,0 +1,11 @@
+# Subrepos — proyectos git independientes (se clonan con bin/bootstrap.sh)
+/f5sign-backend/
+/f5sign-dashboard/
+/f5sign-docs/
+/f5sign-infra/
+/f5sign-signer/
+
+# IDE / OS / local
+.idea/
+.DS_Store
+.claude/settings.local.json
