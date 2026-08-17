@@ -58,6 +58,12 @@ Not enabled (out of scope): SecurityBundle, LexikJWTAuthenticationBundle, TwigBu
 
 ## Running tests + tooling — always via the infra Makefile
 
+⛔ **FIRST: are you in a git worktree? Then every target in the table below validates SOMEONE ELSE'S CODE, and reports green for it.** `f5sign-infra`'s `docker-compose.override.yml` bind-mounts **`../f5sign-backend`** — the *main* checkout, hardcoded — into the container. A worktree is never mounted, so `make test`, `make phpstan`, `make lint` and `make composer cmd=…` all run against whatever branch the main checkout happens to be sitting on. Your edits are not in the container, and **nothing warns you**: the run succeeds, the counts look plausible, and the answer is about another branch.
+
+- **Check before trusting any run:** `git rev-parse --git-dir` — a path containing `/worktrees/` means you are in one. `git worktree list` names the main checkout, which is the tree those targets actually validate.
+- **From a worktree use `make wt-backend src=<path-to-your-worktree>`**, which mounts *your* tree. Two costs, both real: the lane is **postgres-test + an ephemeral php only** (no RabbitMQ, no MinIO — storage tests fail there, broker tests skip), and it runs **`composer test` only**. `lint`, `arch`, `phpstan` and `infection` have **no worktree-aware route today**; running them through the main-stack targets is the trap above, not a substitute.
+- ⚑ **Measured 2026-08-17 — this is what it looks like when it bites, and the failure is confident rather than silent.** A session working in the `f5sign-backend-develop` worktree ran `make composer cmd=test`, got `OK (16 tests)`, and concluded from the count that 8 test methods in the file it had just edited were never collected — reporting it as a defect that undermined a planned task's acceptance bar. Both claims were false: the container was running `f5sign-backend` on an unrelated branch, whose copy of that file genuinely has 6 test methods. That same session had already reported "PHPStan green" for edits PHPStan never saw.
+
 **Tests, PHPStan, Deptrac, lint, and Symfony console all run inside the `php-fpm` container** brought up by [`f5sign-infra`](../f5sign-infra/). The container has the network routes to `postgresql`, `postgres-test`, `rabbitmq`, and `minio`; the host does not. Running `vendor/bin/phpunit` or `vendor/bin/phpstan` directly from the host shell will:
 
 - pass for purely-static checks (phpstan analyse) but bypass the canonical run path,
