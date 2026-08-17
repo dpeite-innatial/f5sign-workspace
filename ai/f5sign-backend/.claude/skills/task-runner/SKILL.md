@@ -65,6 +65,12 @@ Verificar y **parar con mensaje claro** si falla:
    `docs/two-gate-signer-auth` u otra rama no está disponible: si `Builds on` la cita, parar y decirlo.
 4. **Crear workspace**: `var/task-runner/TASK-NNN/` (`/var/` está gitignorado; nada de esto se commitea).
    Si existe y no se pasó `--resume` → preguntar reanudar o reiniciar.
+   ⚠ **`var/` puede ser de root y no dejarte escribir.** Las herramientas corren en contenedores como
+   root, así que `var/` y `var/cache/` suelen quedar con ese dueño (comprobado 2026-08-17: `mkdir` desde
+   el host da *Permission denied*). Si pasa: crear el directorio dentro del contenedor
+   (`docker run --rm -v $(pwd):/var/www/html -w /var/www/html f5sign/backend:dev mkdir -p var/task-runner/TASK-NNN`)
+   o escribir los reports en el scratchpad de la sesión y **decir en el summary dónde quedaron**. Lo que
+   no vale es perderlos en silencio.
 5. **Rama**: `feat/TASK-NNN-{slug}` (kebab-case del título, ASCII, máx 40 chars) desde `develop`.
 6. **Inicializar `run.log`** (JSON lines) con `{phase: "prepare", status: "pass", at: ISO8601}`.
 

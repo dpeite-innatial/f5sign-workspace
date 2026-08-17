@@ -60,14 +60,25 @@ El campo que más se podre, así que se valida por contenido, no por presencia:
 
 ### Paso 4 — `Builds on` y `Sibling`
 
-Para cada task citada:
+⚑ **Los dos campos no se validan igual, y confundirlos produce un falso bloqueante.** `Builds on` es una
+dependencia real ("reuso su salida sin cambiarla"); `Sibling` es un aviso a un humano ("no planifiques
+estas dos por separado"). Una task que declara honestamente que su sibling vive en otra rama está
+haciendo justo lo que el formato pide, y penalizarlo castiga la conducta correcta.
 
-- [ ] Existe `docs/tasks/TASK-NNN-*.md` en **esta** rama. Si no existe pero sí en otra
-      (`git ls-tree -r --name-only <rama> -- docs/tasks/`) → `fail`, categoría `dependency-offbranch`,
-      nombrando la rama: una task que vive en otra rama no está disponible para construir sobre ella.
-- [ ] Si es `Builds on` y su `Status` es `Not started` → `fail`, categoría `dependency`.
-- [ ] Si es `Sibling` marcado con ⚑ → `warn` informativo recordando que **no se planifica de forma
-      independiente**; es un aviso al humano, no un bloqueo.
+**`Builds on` — bloquea:**
+
+- [ ] Cada task citada existe como `docs/tasks/TASK-NNN-*.md` en **esta** rama. Si no existe aquí pero sí
+      en otra (`git ls-tree -r --name-only <rama> -- ':(top)docs/tasks/'`) → `fail`, categoría
+      `dependency-offbranch`, nombrando la rama: no se puede construir sobre algo que no está en el árbol.
+- [ ] Si su `Status` es `Not started` → `fail`, categoría `dependency`.
+- [ ] Puede citar ADRs además de tasks; para esos basta que el enlace resuelva (Paso 6).
+
+**`Sibling` — nunca bloquea:**
+
+- [ ] Si está marcado con ⚑ → `warn`, categoría `sibling-flagged`, recordando que no se planifican de
+      forma independiente.
+- [ ] Si vive en otra rama → **el mismo `warn`, con la rama nombrada**, y decir qué pasa si se ejecuta
+      esta task antes de que aquella se integre. Nunca `fail`.
 
 ### Paso 5 — Secciones
 
@@ -95,9 +106,15 @@ Correr el sweep del README §4 **en el momento**:
 
 ```bash
 for b in $(git branch -a --format='%(refname:short)' | grep -v HEAD); do
-  git ls-tree -r --name-only "$b" -- docs/tasks/ 2>/dev/null | grep -oE 'TASK-[0-9]{3}'
+  git ls-tree -r --name-only "$b" -- ':(top)docs/tasks/' 2>/dev/null | grep -oE 'TASK-[0-9]{3}'
 done | sort -u
 ```
+
+⚠ **`':(top)'` no es decorativo, y sin él este check falla en abierto.** Un pathspec de git es relativo al
+**cwd**, así que `-- docs/tasks/` ejecutado desde `docs/tasks/` — el directorio donde estás precisamente
+cuando escribes una task — resuelve `docs/tasks/docs/tasks/` y devuelve **cero ids**. Cero ids se lee como
+"el id está libre", en el único check cuyo trabajo es impedir una colisión. Medido 2026-08-17: desde
+`docs/tasks/` daba 0; desde la raíz, 21.
 
 - [ ] El id del `.md` no aparece en ninguna otra rama con **otro** slug → si aparece: `fail`, categoría
       `id-collision`, nombrando la rama. Esto ha pasado de verdad: `TASK-021…023` viven en
