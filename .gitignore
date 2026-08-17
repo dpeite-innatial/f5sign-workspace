@@ -5,7 +5,16 @@
 /f5sign-infra/
 /f5sign-signer/
 
+# Worktrees enlazados de los subrepos — mismo git, checkout aparte. No son
+# subrepos y no van en .gitignore de arriba: se crean con `git worktree add`,
+# los cubre bin/sync-ai.sh, y nombrarlos aquí evita commitear un árbol de
+# producto entero dentro del repo raíz por un `git add -A` despistado.
+/f5sign-backend-develop/
+/f5sign-signer-develop/
+
 # IDE / OS / local
 .idea/
 .DS_Store
 .claude/settings.local.json
+/backups/
+/.playwright-cli/
