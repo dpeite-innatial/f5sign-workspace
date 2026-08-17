@@ -1,6 +1,6 @@
 ---
 name: spec-lint
-description: 'Validación mecánica de completitud del .md de una task de docs/tasks/ antes de implementarla. Comprueba la tabla de cabecera (Status, Type, Why), que Status sea falsificable, que Builds on resuelva, secciones numeradas, autocontención (OFFREPO, enlaces relativos, cero citas por número de línea), unicidad del id entre ramas y ausencia de marcadores de incertidumbre. Úsalo con /spec-lint TASK-NNN o /spec-lint {ruta-al-.md}. Activar con "lint de tarea", "validar definición", "verificar task X", "revisar .md de task".'
+description: 'Validación mecánica de completitud del .md de una task de docs/tasks/ antes de implementarla. Comprueba la tabla de cabecera (Status, Type, Why, Decision record), que Status y Decision record sean falsificables, que una task que toca superficies transversales (deptrac, phpstan.neon, Kernel/Foundation, dependencias cross-BC) cite un ADR, que Builds on resuelva, secciones numeradas, autocontención (OFFREPO, enlaces relativos, cero citas por número de línea), unicidad del id entre ramas y ausencia de marcadores de incertidumbre. Úsalo con /spec-lint TASK-NNN o /spec-lint {ruta-al-.md}. Activar con "lint de tarea", "validar definición", "verificar task X", "revisar .md de task".'
 ---
 
 # Spec Lint
@@ -44,8 +44,12 @@ Obligatorios:
 - [ ] `Type` — presente; texto libre, pero debe decir *qué clase de trabajo es* (forward build, corrective,
       enabling, groundwork) y no solo repetir el título
 - [ ] `Why` — presente; debe enunciar el fallo o la carencia, de forma que se pueda **discrepar** de ella
+- [ ] `Decision record` — presente, y **falsificable como `Status`** (ver Paso 3b). Un campo ausente aquí
+      es una task que no ha respondido *"¿qué decisión gobierna esto?"*, que es la pregunta de la que
+      depende la regla 7 del repo (contradecir un ADR aceptado es un cambio de ADR, no una edición
+      silenciosa). Ausente → `fail`, categoría `decision-record-missing`.
 
-Opcionales, y no se penaliza su ausencia: `Builds on`, `Scope`, `Decision record`, `Delivery bar`, `Sibling`.
+Opcionales, y no se penaliza su ausencia: `Builds on`, `Scope`, `Delivery bar`, `Sibling`.
 
 ### Paso 3 — `Status` falsificable
 
@@ -57,6 +61,23 @@ El campo que más se podre, así que se valida por contenido, no por presencia:
       `status-stale`.
 - [ ] Si contiene una fecha, que sea absoluta (`2026-08-17`), nunca relativa (*"la semana pasada"*) →
       `fail`, categoría `date-relative`.
+
+### Paso 3b — `Decision record` falsificable
+
+Dos formas válidas, y ninguna más:
+
+1. **Cita un ADR** (`[ADR-NNNN](../adr/ADR-NNNN-*.md)`) → el enlace debe resolver (Paso 6). Si además dice
+   que esta task *contradice* o *revierte* algo de ese ADR, comprobar que declara **dónde aterriza el ADR
+   nuevo** (esta task o cuál) → si no lo dice: `fail`, categoría `decision-unlanded`. Un ADR aceptado no
+   se contradice en silencio.
+2. **`No ADR yet` + qué lo forzaría.** La segunda mitad no es opcional: *"no hay ADR"* sin condición de
+   disparo es indistinguible de *"no me lo he preguntado"*. → sin ella: `fail`, categoría
+   `decision-record-unfalsifiable`.
+
+⚑ **Y si el §Scope de la task toca cualquiera de estas superficies, la forma 2 no vale:** el ruleset o las
+capas de [`deptrac.yaml`](../../../deptrac.yaml), `phpstan.dist.neon`, `phpstan-baseline.neon`, un contrato
+de `src/F5Sign/Kernel/` o `src/F5Sign/Foundation/`, o una dependencia cross-BC nueva. Todas son decisiones
+transversales por definición y piden ADR → `fail`, categoría `decision-required`, nombrando la superficie.
 
 ### Paso 4 — `Builds on` y `Sibling`
 

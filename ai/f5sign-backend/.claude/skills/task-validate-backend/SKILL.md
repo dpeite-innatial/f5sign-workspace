@@ -1,6 +1,6 @@
 ---
 name: task-validate-backend
-description: 'Gate duro de calidad funcional en backend (PHP/Symfony): corre la suite (composer test), PHPStan nivel 9, Deptrac, lint, y mide fuerza estructural con covered-MSI de Infection en vez de porcentaje de líneas. Comprueba que las propiedades declaradas en §Verification de la task se ejecutan de verdad, y que el diff no se sale de su §Scope. Solo para repositorios con stack PHP/Symfony. Úsalo con /task-validate-backend TASK-NNN. Activar con "validar tarea backend", "run phpunit", "check PHPStan y deptrac".'
+description: 'Gate duro de calidad funcional en backend (PHP/Symfony): corre la suite (composer test), PHPStan nivel 9, Deptrac, lint, y mide fuerza estructural con covered-MSI de Infection en vez de porcentaje de líneas. Recomputa la separación entre BCs sobre el propio deptrac.yaml (solo Contract/ ajeno, nada depende de Notification, Kernel sin dependencias) porque una allowlist ampliada no produce violación alguna, reporta el delta de cualquier regla relajada y exige el ADR que la declare, y comprueba que un ADR que aterriza lo hace completo. Comprueba que las propiedades declaradas en §Verification de la task se ejecutan de verdad, y que el diff no se sale de su §Scope. Solo para repositorios con stack PHP/Symfony. Úsalo con /task-validate-backend TASK-NNN. Activar con "validar tarea backend", "run phpunit", "check PHPStan y deptrac".'
 ---
 
 # Task Validate (backend)
@@ -93,6 +93,44 @@ composer lint        # PHP-CS-Fixer en modo check
       `requireCoverageMetadata="true"`), y `#[UsesClass]` para colaboradores, incluidas las excepciones que
       el test asserta.
 
+### Paso 3b — La separación entre dominios, afirmada en vez de contada
+
+`composer arch` responde *"¿hay violaciones?"*, y hay dos formas de que responda **no** sin que la
+propiedad se cumpla. Este paso cubre las dos.
+
+**a) El delta de la allowlist.** Si el diff toca [`deptrac.yaml`](../../../deptrac.yaml) (capas o ruleset),
+`phpstan.dist.neon`, o añade entradas a `phpstan-baseline.neon`:
+
+- [ ] **Reportar el delta en prosa**, no solo "fichero tocado": qué capa gana qué dependencia, qué regla se
+      relaja, qué hallazgo se silencia. Es la única forma de que un reviewer lo vea.
+- [ ] **Exigir ADR citado en el changeset** → si no hay: `fail`, categoría `undeclared-decision`. Ampliar
+      la allowlist para que el gate pase **es la decisión**, no el arreglo (`implement-backend` Paso 2b).
+
+**b) Las reglas con forma de ausencia, recomputadas.** Un ruleset ampliado no produce violación alguna:
+la regla desaparece en silencio. Recomputar directamente sobre `deptrac.yaml`:
+
+- [ ] **Ninguna capa fuera de Notification depende de una capa `Notification*`** — ADR-0037, BC de soporte
+      de categoría (c). Medido 2026-08-17: cero. Si aparece una, `fail` aunque `composer arch` esté verde.
+- [ ] **Ningún BC ve de otro BC nada que no sea su `Contract`** — ninguna lista de dependencias nombra un
+      `…Domain`, `…Application`, `…Infrastructure` o `…UI` de otro BC.
+- [ ] **`Kernel: []`** sigue sin depender de nada.
+
+Estos tres se comprueban leyendo el ruleset, no ejecutando Deptrac: son afirmaciones sobre el **fichero de
+reglas**, y por eso sobreviven a que alguien lo edite.
+
+### Paso 3c — Un ADR que aterriza, aterriza completo
+
+Si el diff añade o cambia el estado de un `docs/adr/ADR-*.md`:
+
+- [ ] `Status` no es `Accepted` a menos que la decisión esté **ejercitada** en este mismo diff — en este set
+      *Accepted* significa ejercitado, no acordado.
+- [ ] Están las **tres** ediciones de [`docs/adr/README.md`](../../../docs/adr/README.md): fila de índice,
+      grafo de relaciones, fila de crosswalk. Falta alguna → `fail`, categoría `adr-index-incomplete`.
+- [ ] Está el campo `Crosswalk` de la cabecera y las secciones que exige `AUTHORING.md`
+      (`Consequences` con **Risks**, `Enforced by`, `Realized in`).
+- [ ] Si el diff hace cierto algo que otro ADR daba por pendiente, **ese** ADR mueve su
+      `Status` / `Enforced by` / `Realized in` aquí y no después.
+
 ### Paso 4 — Las propiedades declaradas se prueban de verdad
 
 Por cada afirmación de §5 Verification, comprobar que **el harness elegido puede verla**. Es el paso que
@@ -141,6 +179,12 @@ make -C ../f5sign-infra sf cmd="doctrine:migrations:migrate --dry-run --no-inter
 **Tests:** {passed} passed, {failed} failed, {skipped} skipped
 **Covered-MSI:** {%} (umbral ADR-0035)
 **PHPStan:** {N} errores nuevos · **Deptrac:** {N} violaciones · **Lint:** {N}
+
+## Separación de dominios
+- Contract-only entre BCs: {ok | la capa X gana Y}
+- Nada depende de Notification: {ok | X → NotificationZ}
+- `Kernel: []`: {ok | depende de X}
+- Reglas relajadas en este diff: {ninguna | el delta en prosa + el ADR que lo declara}
 
 ## Propiedades declaradas y no probadas
 - {afirmación de §5} → el harness no la alcanza porque {razón}

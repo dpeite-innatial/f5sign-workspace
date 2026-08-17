@@ -102,6 +102,14 @@ de entrada.
 Si falla con `"spec contradictorio"` o `"contexto insuficiente"` → **no escalar**: parar y pedir al usuario
 ampliar el `.md` (normalmente su §2 *What already exists* o su §3 *Scope*).
 
+⛔ **Si devuelve `"awaiting-adr-acceptance"`, el turno es del usuario y de nadie más.** La skill ha
+encontrado una decisión transversal (contradice un ADR aceptado, abre una dependencia cross-BC, toca
+Kernel/Foundation, o edita `deptrac.yaml` / `phpstan.dist.neon` / el baseline) y ha dejado el ADR redactado
+como `Proposed`. Presentar el ADR al usuario —qué decide, qué descarta, qué prohíbe— y **parar ahí**, en los
+dos modos, `--auto` incluido. Prohibido: aceptarlo en su nombre, marcarlo `Accepted`, reintentar la Fase 2
+"a ver si pasa", o recortar el cambio para que la decisión deje de hacer falta. Un `--auto` que acepta
+decisiones de arquitectura solo no es no supervisado: es sin supervisión.
+
 `changes.diff`: `git diff $(git merge-base HEAD develop)..HEAD > var/task-runner/TASK-NNN/changes.diff`.
 
 ### Fase 3 — Validaciones condicionales

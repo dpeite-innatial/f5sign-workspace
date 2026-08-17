@@ -1,6 +1,6 @@
 ---
 name: implement-backend
-description: 'Implementa una task backend (PHP/Symfony) de docs/tasks/ con TDD dirigido por propiedades, respetando el kernel de dominio, Deptrac y las reglas de autoría de CLAUDE.md. Lee el .md de la task (§2 lo que ya existe, §3 scope, §5 verification), escribe código + tests al tier que usan sus hermanos, anota endpoints con Nelmio, y produce context-digest.md y plan.md. Solo para repositorios con stack PHP/Symfony. Úsalo con /implement-backend TASK-NNN. Activar con "implementa backend TASK-NNN", "codifica task PHP...", "ejecuta implementación backend de...".'
+description: 'Implementa una task backend (PHP/Symfony) de docs/tasks/ con TDD dirigido por propiedades, respetando el kernel de dominio, la separación entre BCs (solo Contract/ ajeno) y las reglas de autoría de CLAUDE.md. Para y consulta al usuario antes de tomar cualquier decisión transversal — contradecir un ADR aceptado, abrir una dependencia cross-BC, tocar Kernel/Foundation o editar deptrac/phpstan: redacta el ADR como Proposed y espera aceptación explícita, nunca lo marca Accepted por su cuenta. Lee el .md de la task (§2 lo que ya existe, §3 scope, §5 verification), escribe código + tests al tier que usan sus hermanos, anota endpoints con Nelmio, y produce context-digest.md y plan.md. Solo para repositorios con stack PHP/Symfony. Úsalo con /implement-backend TASK-NNN. Activar con "implementa backend TASK-NNN", "codifica task PHP...", "ejecuta implementación backend de...".'
 ---
 
 # Implement (backend)
@@ -86,6 +86,46 @@ no ve código sin llamantes. Una propiedad cuyo harness no la alcanza necesita o
 `status: fail` con `diagnosis` explícito (`"spec contradictorio"` / `"contexto insuficiente"`) y **no
 implementar nada**.
 
+### Paso 2b — Gate de decisión: un ADR no se salta, y tampoco se acuña solo
+
+⛔ **Para y consulta al usuario si el trabajo hace cualquiera de estas cosas.** No es una lista de casos
+sospechosos: es la definición operativa de "decisión transversal" en este repo (regla 7).
+
+| Disparador | Por qué es decisión |
+|---|---|
+| Contradice un ADR **aceptado** | Contradecirlo es un cambio de ADR, nunca una edición silenciosa |
+| Abre una dependencia **cross-BC** nueva | El acceso entre BCs es solo por `Contract/`; ampliarlo cambia el mapa |
+| Cambia un contrato de `src/F5Sign/Kernel/` o `src/F5Sign/Foundation/` | Es substrato: lo hereda todo |
+| Edita el ruleset o las capas de [`deptrac.yaml`](../../../deptrac.yaml), `phpstan.dist.neon`, o añade al `phpstan-baseline.neon` | **Estás editando la regla que te juzga** |
+| Introduce un patrón de realización nuevo (forma de use case, adapter, reactor) | Lo copiará el siguiente |
+
+**Qué hacer, en este orden:**
+
+1. **Parar antes de escribir el código que la decisión gobierna.** No "implemento y luego documento": el
+   ADR es la entrada del código, no su acta.
+2. **Redactar el ADR como `Proposed`**, con la plantilla de secciones de
+   [`docs/adr/AUTHORING.md`](../../../docs/adr/AUTHORING.md) — incluidas `Consequences` con sus tres
+   sublistas (**Risks no es opcional**) y `Counterpoint` si hay alternativa creíble. El id se acuña con el
+   sweep de `AUTHORING.md`, **corrido en ese momento y desde la raíz del repo**.
+3. **Presentárselo al usuario y esperar aceptación explícita.** Qué se decide, qué alternativa se descarta
+   y **qué prohíbe a partir de ahora**. Silencio no es aceptación; `status: fail` con
+   `diagnosis: "awaiting-adr-acceptance"` y para ahí.
+4. ⛔ **Nunca escribas `Accepted` por tu cuenta.** En este set *Accepted* significa **ejercitado**, no
+   acordado ([`AUTHORING.md`](../../../docs/adr/AUTHORING.md) § status): un ADR que nadie ha ejercitado
+   todavía se queda `Proposed`, y ponerlo `Accepted` falsifica el estado del repo.
+5. **Si el usuario lo rechaza**, la decisión no es tuya: recorta el scope o cambia de enfoque y vuelve al
+   gate de plan. No lo implementes "de forma más pequeña" para que no haga falta el ADR.
+6. **Cuando el ADR aterrice, aterriza completo**: fila de índice + grafo de relaciones + fila de crosswalk
+   en [`docs/adr/README.md`](../../../docs/adr/README.md), **más** el campo `Crosswalk` de la cabecera y
+   las secciones que pide `AUTHORING.md`. Son cuatro sitios, y son cuatro porque ya se fallaron los cuatro
+   a la vez con el checklist delante.
+
+⚑ **El caso que más veces se cuela: ampliar la allowlist para poner el gate verde.** Si `composer arch`
+falla, la respuesta **no** es añadir la capa a la lista de dependencias permitidas — esa edición *es* la
+decisión, y silencia la única cosa que la vigilaba. Igual con una entrada nueva en
+`phpstan-baseline.neon`: cada entrada de ese fichero es un hallazgo de diseño con su *por qué* escrito, no
+un supresor.
+
 ### Paso 3 — Bucle TDD
 
 Por cada propiedad de §5 Verification, en orden:
@@ -125,6 +165,18 @@ Por cada propiedad de §5 Verification, en orden:
 
 - **El dominio no importa Symfony ni Doctrine.** Lo vigila Deptrac (`composer arch`) y las reglas PHPStan
   de colocación; si lo ves antes que ellas, rehacer.
+- **Entre BCs solo se ve el `Contract/` ajeno.** `deptrac.yaml` declara 37 capas y lo dice explícitamente:
+  `EnvelopeApplication` puede ver `SessionContract`, `SignatureExecutionContract`,
+  `IdentityAccessContract`… y **ningún `Domain` ni `Infrastructure` de otro BC**. `Kernel` depende de nada
+  (`Kernel: []`). Si necesitas un dato que solo vive en el `Domain` de otro BC, la respuesta es un puerto
+  de lectura en su `Contract/` (ADR-0008), no un import — y **eso es Paso 2b**, no una decisión de mientras
+  implementas.
+- ⚑ **Notification es un BC de soporte: nada puede depender de él** (ADR-0037, categoría (c)). ⚠ **Y esta
+  regla no puede ponerse roja**, porque está expresada como una **ausencia**: ninguna lista del ruleset
+  menciona una capa `Notification*` desde fuera del propio BC (verificado 2026-08-17: cero). Añadir esa
+  dependencia **no genera ninguna violación** — Deptrac no tiene nada que reportar, el gate sigue verde, y
+  el BC deja de ser de soporte en silencio. Es la única regla estructural de este repo cuyo cumplimiento
+  hay que comprobar a mano, y por eso está aquí escrita en vez de delegada al gate.
 - **Solo los aggregate roots tienen repositorio.** Las entidades subordinadas se modifican por su root.
 - **Comandos por el bus; queries directas.** Los controladores inyectan el bus o el servicio de lectura,
   nunca un handler.
