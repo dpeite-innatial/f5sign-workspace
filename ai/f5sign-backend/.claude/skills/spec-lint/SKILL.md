@@ -1,112 +1,121 @@
 ---
 name: spec-lint
-description: Validación mecánica de completitud del .md de una tarea del Planning/ antes de implementarla. Comprueba frontmatter (Complejidad, Tags, Depende de), secciones obligatorias, formato de Contexto requerido, existencia de rutas citadas, estado de dependencias y ausencia de PENDIENTE/NEEDS CLARIFICATION. Úsalo con /spec-lint T{id} o /spec-lint {ruta-al-.md}. Activar con "lint de tarea", "validar definición", "verificar tarea X", "revisar .md de tarea".
+description: 'Validación mecánica de completitud del .md de una task de docs/tasks/ antes de implementarla. Comprueba la tabla de cabecera (Status, Type, Why), que Status sea falsificable, que Builds on resuelva, secciones numeradas, autocontención (OFFREPO, enlaces relativos, cero citas por número de línea), unicidad del id entre ramas y ausencia de marcadores de incertidumbre. Úsalo con /spec-lint TASK-NNN o /spec-lint {ruta-al-.md}. Activar con "lint de tarea", "validar definición", "verificar task X", "revisar .md de task".'
 ---
 
 # Spec Lint
 
-Gate de entrada. Ejecuta checklist determinista sobre el `.md` de la tarea.
+Gate de entrada. Checklist determinista sobre el `.md` de una task.
+
+> **La convención que valida es [`docs/tasks/README.md`](../../../docs/tasks/README.md).** Si esta skill y
+> ese README discrepan, gana el README y esta skill es el bug.
 
 ## Invocación
 
 ```
-/spec-lint T{id}                    # resuelve por Glob
+/spec-lint TASK-NNN                 # resuelve por Glob en docs/tasks/
 /spec-lint {ruta al .md}
 ```
 
 ## Inputs
 
-- Ruta al `.md` de la tarea (resuelta del argumento)
-- Planning root: `Planning/`
+- Ruta al `.md` (resuelta del argumento). Raíz de tasks: **`docs/tasks/`** — no `Planning/`, que es
+  legado del repo de docs (README §1).
 
 ## Outputs
 
-- `var/task-runner/T{id}/spec-lint.report.md` (crear el directorio si no existe)
-- Como último mensaje: JSON de una línea
-  ```json
-  {"status": "pass|fail", "summary": "...", "issues": [{"severity": "fail|warn", "category": "...", "message": "..."}]}
-  ```
+- `var/task-runner/TASK-NNN/spec-lint.report.md` (crear el directorio si no existe)
+- Última línea: JSON `{"status":"pass|fail","summary":"...","issues":[{"severity":"fail|warn","category":"...","message":"..."}]}`
 
 ## Ejecución
 
 ### Paso 1 — Leer el .md
 
-Si no existe o no es parseable → devolver `status: fail` con issue `{"category": "file", "message": "ruta no encontrada"}`.
+Si no existe o no parsea → `fail`, categoría `file`.
 
-### Paso 2 — Frontmatter
+### Paso 2 — Tabla de cabecera
 
-Extraer campos entre el título y la primera sección `##`. Verificar:
+Es una tabla de dos columnas entre el título y el primer `---`/`## `. **No hay frontmatter YAML, ni
+`Story Points`, `Tipo`, `Complejidad`, `Tags` o `Depende de`** — esos campos eran del formato `Planning/`.
 
-- [ ] `Story Points`: presente, entero > 0
-- [ ] `Tipo`: ∈ {Backend, Frontend, Integracion, Infraestructura, Diseno}
-- [ ] `Complejidad`: ∈ {baja, media, alta}
-- [ ] `Tags`: presente, no vacío (parsear CSV)
-- [ ] `Depende de`: presente (valor literal "ninguna" es válido)
+Obligatorios:
 
-Cada ausencia/invalidación → issue `fail` categoría `frontmatter`.
+- [ ] `Status` — presente y no vacío
+- [ ] `Type` — presente; texto libre, pero debe decir *qué clase de trabajo es* (forward build, corrective,
+      enabling, groundwork) y no solo repetir el título
+- [ ] `Why` — presente; debe enunciar el fallo o la carencia, de forma que se pueda **discrepar** de ella
 
-### Paso 3 — Dependencias
+Opcionales, y no se penaliza su ausencia: `Builds on`, `Scope`, `Decision record`, `Delivery bar`, `Sibling`.
 
-Si `Depende de` ≠ "ninguna":
-- Parsear lista de IDs (formato `T{xx}.{y}.{z}`)
-- Para cada ID: buscar `.md` con Glob `Planning/F*-*/EP*-*/S*-*/T{id}-*.md`
-- Si no existe → issue `fail` categoría `dependency`: "T{id} referenciada no existe"
-- Si existe → leer su tabla "Seguimiento", comprobar `Estado = completed`
-  - Si no está completed → issue `fail` categoría `dependency`: "T{id} está en estado {X}, debe ser completed"
+### Paso 3 — `Status` falsificable
 
-### Paso 4 — Secciones obligatorias
+El campo que más se podre, así que se valida por contenido, no por presencia:
 
-Verificar que estas secciones existen y ninguna contiene literalmente `PENDIENTE`:
-- `## Descripcion`
-- `## Contexto requerido`
-- `## Archivos a crear/modificar`
-- `## Detalle tecnico`
-- `## Tests`
+- [ ] Si afirma que existe código (`merged`, `landed`, `in progress`, `shipped`, `✅`) → **nombra una rama o
+      un commit**. Si no → `fail`, categoría `status-unverifiable`.
+- [ ] Si dice `Not started` y el diff de la rama ya toca los ficheros de §Scope → `warn`, categoría
+      `status-stale`.
+- [ ] Si contiene una fecha, que sea absoluta (`2026-08-17`), nunca relativa (*"la semana pasada"*) →
+      `fail`, categoría `date-relative`.
 
-Cada fallo → issue `fail` categoría `section`.
+### Paso 4 — `Builds on` y `Sibling`
 
-### Paso 5 — Contexto requerido
+Para cada task citada:
 
-Parsear subsecciones (`### Specs del proyecto`, `### ADRs y decisiones`, etc.). Verificar:
+- [ ] Existe `docs/tasks/TASK-NNN-*.md` en **esta** rama. Si no existe pero sí en otra
+      (`git ls-tree -r --name-only <rama> -- docs/tasks/`) → `fail`, categoría `dependency-offbranch`,
+      nombrando la rama: una task que vive en otra rama no está disponible para construir sobre ella.
+- [ ] Si es `Builds on` y su `Status` es `Not started` → `fail`, categoría `dependency`.
+- [ ] Si es `Sibling` marcado con ⚑ → `warn` informativo recordando que **no se planifica de forma
+      independiente**; es un aviso al humano, no un bloqueo.
 
-- [ ] Al menos una subsección con contenido no vacío
-- [ ] Cada bullet tiene formato `- <ruta> — <razón>` (dash seguido de razón no vacía)
-- [ ] Cada ruta citada existe en disco (resolver relativo a raíz del proyecto)
-- [ ] Ningún bullet > 200 chars
-- [ ] Total de bullets ≤ 15
+### Paso 5 — Secciones
 
-Rutas que NO hay que validar en disco (son conceptuales): paths con wildcards `*`, o paths bajo `Planning/` con wildcards.
+Las secciones van numeradas (`## 1. …`) y se citan como `§N` desde otros documentos.
 
-Issues: `fail` para rutas inexistentes y formato; `warn` para >15 bullets y bullets >200 chars.
+- [ ] Al menos una sección cuyo encabezado hable de **scope/alcance** y otra de
+      **verification/acceptance/definition of done**. ⚑ Comprobar por *intención*, no contra una lista
+      cerrada de encabezados: los 20 registros existentes usan variantes legítimas, y una enumeración
+      exime "todo lo que aún no está en la lista" (regla de autoría 5).
+- [ ] Numeración sin huecos ni repetidos, y **empezando en 1**.
+- [ ] Ninguna sección vacía (encabezado seguido de otro encabezado).
 
-### Paso 6 — Archivos a crear/modificar
+### Paso 6 — Autocontención
 
-- [ ] Tabla presente con cabecera `| Archivo | Accion |` o similar
-- [ ] Al menos una fila
-- [ ] Al menos una ruta bajo `tests/` (excepción: si `Tipo: Diseno` o `Tipo: Infraestructura`)
+- [ ] Todo enlace relativo resuelve en disco → si no: `fail`, categoría `link-broken`.
+- [ ] Toda referencia a algo fuera del repo lleva `<!-- OFFREPO: ... -->` cerca, y el hecho que se toma
+      de ahí está **restatado** en el `.md` → si falta el tag: `fail`, categoría `offrepo-untagged`.
+- [ ] **Cero citas por número de línea**: enlaces con `#L\d+` o rutas con `:\d+` → `fail`, categoría
+      `line-number-citation`. Se cita por símbolo o por patrón de grep.
+- [ ] Rutas con wildcard (`src/**/UI/`) no se validan en disco; son conceptuales.
 
-### Paso 7 — Tests
+### Paso 7 — Unicidad del id
 
-- [ ] Tabla presente
-- [ ] Al menos una fila (excepción: `Tipo: Diseno`)
+Correr el sweep del README §4 **en el momento**:
 
-### Paso 8 — Referencias cruzadas AC
+```bash
+for b in $(git branch -a --format='%(refname:short)' | grep -v HEAD); do
+  git ls-tree -r --name-only "$b" -- docs/tasks/ 2>/dev/null | grep -oE 'TASK-[0-9]{3}'
+done | sort -u
+```
 
-Buscar menciones de `AC-\d+` en el `.md`. Para cada una:
-- Buscar `README.md` de la story padre (directorio inmediato superior)
-- Verificar que el AC mencionado existe con ese número en la story
-- Si no existe → issue `fail` categoría `ac-reference`
+- [ ] El id del `.md` no aparece en ninguna otra rama con **otro** slug → si aparece: `fail`, categoría
+      `id-collision`, nombrando la rama. Esto ha pasado de verdad: `TASK-021…023` viven en
+      `docs/two-gate-signer-auth` y son invisibles desde cualquier otra rama.
 
-### Paso 9 — Marcadores de incertidumbre
+### Paso 8 — Marcadores de incertidumbre
 
-Grep del texto `[NEEDS CLARIFICATION` en todo el `.md`. Cualquier ocurrencia → issue `fail` categoría `clarification`.
+Grep de `PENDIENTE`, `[NEEDS CLARIFICATION`, `TBD`, `???`. Cualquier ocurrencia → `fail`, categoría
+`clarification`.
 
-## Generación del report
+⚠ **Excepción deliberada:** una sección de *Open follow-ups* **debe** contener cosas sin resolver — eso es
+su función (README §7). No penalizar ahí; solo exigir que cada punto diga *qué* está sin decidir y *qué*
+lo forzaría.
 
-`var/task-runner/T{id}/spec-lint.report.md`:
+## Report
 
 ```markdown
-# spec-lint — T{id}
+# spec-lint — TASK-NNN
 
 **Status:** {PASS|FAIL}
 **Issues:** {N} ({B} bloqueantes, {W} warnings)
@@ -118,25 +127,12 @@ Grep del texto `[NEEDS CLARIFICATION` en todo el `.md`. Cualquier ocurrencia →
 - [{categoría}] {mensaje}
 
 ## Chequeos superados
-- Frontmatter completo
-- {otros que pasaron}
-```
-
-## JSON de retorno
-
-Última línea de tu respuesta debe ser un JSON válido de una sola línea:
-
-```json
-{"status":"fail","summary":"3 issues (2 fail, 1 warn)","issues":[{"severity":"fail","category":"dependency","message":"T02.1.0 en estado pendiente"},{"severity":"fail","category":"section","message":"Contexto requerido contiene PENDIENTE"},{"severity":"warn","category":"contexto-size","message":"17 bullets (>15)"}]}
+- {lista}
 ```
 
 ## Qué NO hace
 
-- No valida calidad semántica del contenido (solo formato y existencia)
-- No modifica el `.md`
-- No ejecuta tests ni código
-- No resuelve las issues — solo las reporta
-
-## Referencias
-
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/common/02 - Spec Lint.md`
+- No valida calidad semántica (solo formato, resolución y existencia).
+- No modifica el `.md`.
+- No ejecuta tests ni código.
+- No resuelve las issues — solo las reporta.

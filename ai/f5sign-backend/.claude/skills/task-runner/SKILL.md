@@ -1,183 +1,182 @@
 ---
 name: task-runner
-description: Orquestador único del stack de skills de ejecución de tareas. Ejecuta una tarea del Planning/ end-to-end invocando skills especializadas (spec-lint, implement, task-validate, security-audit, etc.), gestionando gates, workspace en var/task-runner/T{id}/, rama git, commit único y PR final. Úsalo con /task-runner T{id} o /task-runner {ruta al .md}. Activar con frases como "ejecuta T02.1.1", "corre la tarea X", "task runner sobre...", "ejecuta la siguiente tarea del planning".
+description: 'Orquestador único del stack de skills de ejecución de tareas del backend. Ejecuta una task de docs/tasks/ end-to-end invocando skills especializadas (spec-lint, implement-backend, task-validate-backend, security-audit-core, etc.), gestionando gates, workspace en var/task-runner/TASK-NNN/, rama git y PR final. Úsalo con /task-runner TASK-NNN o /task-runner {ruta al .md}. Activar con frases como "ejecuta TASK-024", "corre la tarea X", "task runner sobre...".'
 ---
 
 # Task Runner
 
-Orquestador del stack. Ver diseño completo en `Implementación/Skills de Ejecución de Tareas/common/01 - Task Runner.md`.
+Orquestador del stack de ejecución de tareas del backend.
+
+> **Convención de tasks: [`docs/tasks/README.md`](../../../docs/tasks/README.md).** Es la fuente de verdad
+> del formato, de cómo se acuña un id y de qué significa cada campo de la tabla de cabecera. Esta skill
+> valida contra ese README; si discrepan, gana el README.
 
 ## Invocación
 
 ```
-/task-runner T{id}                    # ej: /task-runner T02.1.1
-/task-runner {ruta absoluta al .md}
-/task-runner T{id} --auto             # modo no supervisado (default: supervised)
-/task-runner T{id} --resume           # reanudar workspace existente
+/task-runner TASK-NNN                 # ej: /task-runner TASK-024
+/task-runner {ruta al .md}
+/task-runner TASK-NNN --auto          # no supervisado (default: supervised)
+/task-runner TASK-NNN --resume         # reanudar workspace existente
 ```
 
-Si no se pasa argumento, pedir al usuario el ID o ruta.
+Si no se pasa argumento, pedir al usuario el id o la ruta.
 
 ## Precondiciones
 
-Antes de empezar, verificar (y parar con mensaje claro si falla):
+Verificar y **parar con mensaje claro** si falla:
 
-1. El `.md` de la tarea existe y es legible
-2. `git status` está limpio (no hay cambios sin commitear en la rama actual)
-3. Estás en rama `master` (o la rama base del proyecto) — si no, checkout a base antes de crear rama nueva
-4. Docker Compose está up: `docker compose ps` muestra los servicios esenciales (postgres, rabbitmq, redis) en estado `running`
-   - Si no lo están → parar con "entorno no disponible: levantar con `docker compose up -d` antes de continuar"
+1. El `.md` de la task existe en `docs/tasks/TASK-NNN-*.md` y es legible.
+2. `git status` limpio en la rama actual.
+3. La rama base es **`develop`**, no `master`. El trabajo de producto se integra en `develop`; `master`
+   es la rama de publicación. Si no estás en `develop`, hacer checkout antes de crear la rama de la task.
+4. **El stack está arriba, y se comprueba desde `../f5sign-infra`, nunca con `docker compose` desde este
+   repo** (regla 5 del repo: Symfony Flex genera `compose.yaml` que está deshabilitado y gitignorado).
+   Comprobación: `make -C ../f5sign-infra worker-status` responde, o `docker ps` muestra `f5sign-php-fpm`.
+   Si no → parar con *"entorno no disponible: `make -C ../f5sign-infra up`"*.
+5. ⚑ **Comprobar qué checkout monta el stack antes de prometer que las validaciones valen.**
+   `f5sign-infra/docker-compose.override.yml` monta `../f5sign-backend`. Si estás trabajando en un
+   **worktree enlazado** (p. ej. `f5sign-backend-develop`), `make test` y `make phpstan` validan el otro
+   árbol y su verde no dice nada de tu código. Rutas válidas en ese caso, en orden de preferencia:
+   - `make -C ../f5sign-infra wt-backend src=$(pwd)` — lane efímero por worktree. ⚠ Hoy levanta **solo
+     postgres**: los tests de storage **fallan** (`Could not resolve host: minio`) y los de broker se
+     saltan, y `composer test` muere en el *process timeout* de 300 s de Composer. Úsalo sabiendo eso.
+   - Contenedor puntual sobre la red del stack, que es la vía que sí completa la suite:
+     ```
+     docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html \
+       f5sign/backend:dev sh -c 'php -d memory_limit=-1 bin/phpunit --no-progress'
+     ```
+   Elegir una y **declararla en el report**; una validación cuya diana no era tu árbol es peor que
+   ninguna, porque se lee como verde.
 
 ## Flujo de ejecución
 
 ### Fase 0 — Preparación
 
-1. **Parsear argumento** → resolver ruta al `.md` de la tarea (si vino un ID, buscar `Planning/F*-*/EP*-*/S*-*/T{id}-*.md` con Glob)
-2. **Leer frontmatter** del `.md`:
-   - `Story Points`, `Tipo`, `Complejidad`, `Tags`, `Depende de`
-   - Si falta alguno → informar al usuario y abortar (lo normal es que `spec-lint` lo detecte después, pero hay campos mínimos para decidir el flujo)
-3. **Verificar dependencias**: para cada task listada en `Depende de`, leer su `.md` y comprobar Estado = `completed`. Si alguna no lo está → **abortar** con mensaje "dependencia T{X} en estado {Y}; completar primero"
-4. **Crear workspace**: `var/task-runner/T{id}/`
-   - Si ya existe y no se pasó `--resume` → preguntar: reanudar desde última fase `pass` o reiniciar desde cero
-   - Si se reinicia → borrar el workspace y crear de nuevo
-5. **Verificar rama git**:
-   - Nombre: `feat/T{id}-{slug-del-título}` (slug kebab-case del título de la tarea, máx 40 chars, ASCII)
-   - Si no existe → crear desde base y checkout
-   - Si existe → checkout
-6. **Si tag `critical-path`**: ejecutar `composer perf:seed` — si falla, informar al usuario y preguntar si continuar (perf-smoke warnirá)
-7. **Inicializar `run.log`** (JSON lines, una línea por fase) con entrada `{phase: "prepare", status: "pass", at: ISO8601}`
+1. **Resolver el `.md`**: si vino un id, `docs/tasks/TASK-NNN-*.md` con Glob. Si vino ruta, usarla.
+2. **Leer la tabla de cabecera** (formato en el README §2): `Status`, `Type`, `Why`, `Builds on`,
+   `Scope`, `Decision record`, `Delivery bar`, `Sibling`. **No hay `Complejidad`, `Tags`, `Story Points`
+   ni `Depende de`** — ese era el formato del `Planning/` del repo de docs, que es legado (README §1).
+   - Si falta `Status`, `Type` o `Why` → parar; el resto lo diagnostica `spec-lint`.
+   - Si hay `Sibling` marcado con ⚑ → **leerlo antes de empezar**: dice explícitamente que la task no se
+     puede planificar de forma independiente.
+3. **Verificar `Builds on`**: para cada task citada, leer su `Status`. Si alguna sigue `Not started` y la
+   nuestra la reusa *unchanged* → parar con *"`Builds on` TASK-X en estado Y"*. Una task en
+   `docs/two-gate-signer-auth` u otra rama no está disponible: si `Builds on` la cita, parar y decirlo.
+4. **Crear workspace**: `var/task-runner/TASK-NNN/` (`/var/` está gitignorado; nada de esto se commitea).
+   Si existe y no se pasó `--resume` → preguntar reanudar o reiniciar.
+5. **Rama**: `feat/TASK-NNN-{slug}` (kebab-case del título, ASCII, máx 40 chars) desde `develop`.
+6. **Inicializar `run.log`** (JSON lines) con `{phase: "prepare", status: "pass", at: ISO8601}`.
 
-### Fase 1 — `spec-lint` [Haiku, GATE]
+### Fase 1 — `spec-lint` [GATE]
 
-Invocar skill via Agent tool:
 ```
 Agent({
   subagent_type: "general-purpose",
-  model: "haiku",
-  description: "spec-lint on T{id}",
-  prompt: "Execute the spec-lint skill defined at .claude/skills/spec-lint/SKILL.md on task {rutaMd}. Write the report to var/task-runner/T{id}/spec-lint.report.md. Return the JSON summary as the last line of your response."
+  description: "spec-lint on TASK-NNN",
+  prompt: "Execute the spec-lint skill defined at .claude/skills/spec-lint/SKILL.md on task {rutaMd}. Write the report to var/task-runner/TASK-NNN/spec-lint.report.md. Return the JSON summary as the last line of your response."
 })
 ```
 
-Leer el último mensaje → extraer JSON. Si `status: "fail"`:
-- Modo supervised: mostrar report al usuario, preguntar qué hacer (editar `.md` y reintentar, o abortar)
-- Modo auto: abortar con exit code 1
+Si `status: "fail"` → supervised: mostrar report y preguntar (editar el `.md` y reintentar, o abortar);
+auto: abortar.
 
-### Fase 2 — `implement` [Opus si Complejidad=alta, Sonnet si media/baja, GATE]
+### Fase 2 — `implement-backend` [GATE]
 
-Decidir modelo según `Complejidad` del frontmatter.
-
-Invocar Agent con el modelo correspondiente y prompt:
 ```
-"Execute the implement skill defined at .claude/skills/implement/SKILL.md on task {rutaMd}.
-Workspace: var/task-runner/T{id}/.
-Model assigned: {haiku|sonnet|opus según Complejidad}.
-Commit changes as a single commit at the end. Produce context-digest.md, plan.md, and ensure changes.diff is generable.
-Return the JSON summary."
+"Execute the implement-backend skill defined at .claude/skills/implement-backend/SKILL.md on task {rutaMd}.
+Workspace: var/task-runner/TASK-NNN/.
+Produce context-digest.md and plan.md. Return the JSON summary."
 ```
 
-Si falla con diagnóstico tipo `"spec contradictorio"` o `"contexto insuficiente"` → NO escalar, parar y pedir al usuario ampliar el `.md`.
+**Sin selección de modelo por `Complejidad`** — ese campo no existe en este formato. Hereda el modelo de
+la sesión. Escalar a un modelo mayor solo tras fallo repetido *con diagnóstico que lo justifique*, nunca
+de entrada.
 
-Si falla por otro motivo (3 intentos del modelo asignado) y el diagnóstico justifica escalada → reinvocar Agent con `model: "opus"` y **contexto ampliado** (README story padre + README epic padre + `.md` de dependencias + catálogo de eventos + cross-cutting-concerns + diagnóstico nivel 1).
+Si falla con `"spec contradictorio"` o `"contexto insuficiente"` → **no escalar**: parar y pedir al usuario
+ampliar el `.md` (normalmente su §2 *What already exists* o su §3 *Scope*).
 
-Si nivel 2 también falla → abortar con recomendación de enriquecer `Contexto requerido`.
-
-Generar `changes.diff`: `git diff {base}..HEAD > var/task-runner/T{id}/changes.diff` donde `{base}` es el commit común con `master`.
+`changes.diff`: `git diff $(git merge-base HEAD develop)..HEAD > var/task-runner/TASK-NNN/changes.diff`.
 
 ### Fase 3 — Validaciones condicionales
 
-Determinar qué skills invocar según tags del frontmatter.
+⚑ **La condición es lo que la task TOCA, no una lista de tags.** El formato de este repo no tiene `Tags`,
+y una enumeración de tags sería además el patrón que la regla 5 de autoría prohíbe: el conjunto que exime
+es "todo lo que aún no está en la lista". Derivar del `changes.diff`:
 
-Invocar en **paralelo** (múltiples Agent calls en un solo mensaje) las que no se bloquean mutuamente:
+| Skill | Se invoca si el diff toca |
+|---|---|
+| `doctrine-guard` | `migrations/`, `src/**/Infrastructure/Persistence/`, o SQL/RLS en cualquier fichero |
+| `contract-check-backend` | `src/**/UI/Http/`, `config/routes/`, cualquier `#[OA\`, o un `Contract/Event/` |
+| `task-validate-backend` | **siempre** |
 
-- `doctrine-guard` [Haiku] si tags incluye `db`, `migration`, `rls`, `tenancy`
-- `contract-check` [Haiku] si tags incluye `api` o `event`
-  - Pre-requisito: ejecutar `bin/console nelmio:apidoc:dump --format=json > var/task-runner/T{id}/openapi-snapshot.json` (si tag `api`)
-- `task-validate` [Haiku] — **siempre**
+En paralelo (varias llamadas Agent en un solo mensaje). Prerequisito de `contract-check-backend` si hay
+endpoints: `make -C ../f5sign-infra sf cmd="nelmio:apidoc:dump --format=json"` → guardar en el workspace.
 
-Esperar a que terminen todas. Consolidar JSONs de retorno.
+Después, secuencial: `security-audit-core` [GATE] — **siempre**. Delega en `security-audit-backend`, y en
+`eidas-compliance` si el diff toca firma/crypto (`src/F5Sign/SignatureExecution/`, `Foundation/Crypto/`,
+DSS, PAdES).
 
-Después (secuencial, puede consumir reports anteriores):
-- `security-audit` [Sonnet] — **siempre**, GATE
-  - Si tags incluye `signing`, `crypto` o `eidas`: dentro de security-audit se invocará `eidas-compliance` [Opus]
-
-Si algún gate duro falla:
-- Modo supervised: mostrar report, preguntar "reintentar implementación con el report como contexto" o "abortar"
-- Si reintentar: volver a Fase 2 pasando el report como input adicional (máx 2 iteraciones de corrección)
-- Modo auto: al 1er fallo de gate duro que no se puede auto-corregir, abortar
+Si un gate duro falla → supervised: mostrar report y preguntar (reintentar Fase 2 con el report como
+contexto, máx 2 iteraciones, o abortar); auto: abortar.
 
 ### Fase 4 — Validaciones no-gate
 
-- `perf-smoke` [Sonnet] si tag `critical-path` — no bloquea
-  - Si WARN alta: en supervised, preguntar si iterar
+`perf-smoke-backend`: ⚠ **hoy no es ejecutable y se salta declarándolo.** Depende de `composer perf:seed`,
+que no existe en `composer.json` (los scripts son `test`, `coverage*`, `phpstan`, `arch`, `lint`, `format`,
+`infection`, `qa`). Registrar en `run.log` como `{"phase":"perf-smoke","status":"skipped","reason":"no
+perf:seed script"}` — un skip declarado, no un verde.
 
-### Fase 5 — `docs-sync` [Haiku/Sonnet según actividad]
+### Fase 5 — `docs-sync`
 
-Invocar si tags incluye `adr`, `config`, `breaking`, `event`, `worker`, `new-module`.
-
-Modelo: Sonnet si la actividad incluye redactar ADR; Haiku en cualquier otro caso.
-
-Los cambios se amend-ean al commit existente: `git add <ficheros-tocados-por-docs-sync> && git commit --amend --no-edit`.
+Se invoca si el diff toca ADRs, `config/`, `.env*`, un `Contract/Event/`, o añade un módulo. Los cambios
+se añaden como **commit propio**, no amendeados (ver Fase 8).
 
 No es gate duro: si falla, warn y seguir.
 
-### Fase 6 — `task-close` [Haiku]
+### Fase 6 — `task-close`
 
-Invocar siempre. Edita el `.md` de la tarea (Estado → review, Fin, Commit SHA, limpia tagMismatches consolidados, añade sección Desviaciones). Escribe `notes.md` solo si hay aprendizajes.
+Siempre. Edita el `.md`: `Status` → lo que sea cierto **nombrando rama o commit** (README §3), y añade
+las desviaciones y los `Open follow-ups` que hayan aparecido. Escribe `notes.md` solo si hay aprendizajes
+no obvios.
 
-### Fase 7 — Confirmación (solo modo supervised)
+⚑ **Si la task descargó un deferral de un ADR, el `Status`/`Enforced by`/`Realized in` de ese ADR van en
+este changeset**, no en una limpieza posterior (`CLAUDE.md` regla de autoría 7).
 
-Mostrar al usuario:
-- Resumen de fases con status
-- Ficheros cambiados
-- Tests añadidos
-- AC cubiertos
-- Warnings activos
+### Fase 7 — Confirmación (solo supervised)
 
-Preguntar: ¿abrir PR ahora?
+Resumen de fases, ficheros cambiados, tests añadidos, criterios de §5 cubiertos, warnings activos, y **qué
+harness ejecutó la validación** (precondición 5). Preguntar: ¿abrir PR?
 
-### Fase 8 — `pr-ready` [Haiku]
+### Fase 8 — `pr-ready`
 
-Invocar solo si el usuario confirma (o modo auto).
-
-1. Amend final con `.md` actualizado
-2. Push de la rama
-3. `gh pr create` con título y body generados
-4. Actualizar campo `PR/Branch` del `.md` con URL
-5. Amend final + push `--force-with-lease`
-6. Devolver URL al usuario
+Solo si el usuario confirma (o `--auto`). **Sin política de commit único:** este repo integra PRs de varios
+commits y merges de `develop`; un `--amend` sobre un commit ya pusheado obliga a `--force-with-lease` sin
+ganar nada. `pr-ready` hace push, `gh pr create` contra **`develop`**, y actualiza el `.md` con la URL en un
+commit de seguimiento.
 
 ## Contrato con skills hijas
 
-Cada skill hija:
-- Recibe `taskDir` (var/task-runner/T{id}/) y `taskMdPath` como parte del prompt
-- Lee lo que declara necesitar; no re-lee si ya existe en workspace
-- Escribe su `*.report.md` en ruta predecible del workspace
-- Devuelve JSON estructurado como último mensaje (parseable): `{ status, summary, issues?, tagMismatches?, metrics? }`
+Cada skill hija recibe `taskDir` (`var/task-runner/TASK-NNN/`) y `taskMdPath`, escribe su `*.report.md` en
+ruta predecible, y devuelve como último mensaje `{ status, summary, issues?, metrics? }`.
 
 ## run.log
 
-Tras cada fase, append entrada JSON al `run.log`:
-```json
-{"phase": "implement", "status": "pass", "model": "sonnet", "attempts": 1, "tokens_estimated": 12500, "duration_s": 145, "at": "2026-04-13T10:15:00Z"}
-```
+Una línea JSON por fase: `{"phase":"implement","status":"pass","attempts":1,"at":"2026-08-17T10:15:00Z"}`.
 
 ## Manejo de fallos
 
-- **Skill devuelve status=fail**: actuar según gate (duro → parar/reintentar; no gate → warn y seguir)
-- **Agent tool falla** (error de red, timeout): reintentar una vez con el mismo modelo; si falla otra vez, reportar al usuario
-- **Git falla** (conflicto, push rechazado): nunca usar `--force` ni `reset --hard`; parar y pedir intervención manual
-- **Ctrl+C del usuario**: el workspace queda en el estado actual; se puede reanudar con `--resume`
+- **status=fail**: según gate (duro → parar/reintentar; no gate → warn y seguir).
+- **Agent falla** (red, timeout): reintentar una vez; si vuelve a fallar, reportar.
+- **Git falla**: nunca `--force` ni `reset --hard`; parar y pedir intervención.
+- ⚑ **Un merge que toque `.claude/` o `CLAUDE.md` puede abortar**: esos paths son symlinks al store con
+  `skip-worktree`. Salida: `bin/unlink-ai.sh` → merge → `bin/sync-ai.sh` en la raíz del workspace.
+- **Ctrl+C**: el workspace queda como está; `--resume`.
 
 ## Qué NO hace
 
-- No edita código
-- No interpreta reports de otras skills (solo lee su JSON de retorno)
-- No inventa tags, complejidad ni dependencias
-- No crea tareas (eso es `/planning-scaffold`)
-- No mergea PRs
-
-## Referencias
-
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/common/01 - Task Runner.md`
-- Índice del stack: `Implementación/Skills de Ejecución de Tareas/README.md`
+- No edita código.
+- No interpreta reports de otras skills (solo su JSON).
+- No crea tasks. Para eso, escribir el `.md` a mano siguiendo `docs/tasks/README.md` — incluido acuñar el
+  id con el sweep de su §4, que hay que correr **en el momento**, sobre todas las ramas.
+- No mergea PRs.

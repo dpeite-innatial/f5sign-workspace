@@ -1,6 +1,6 @@
 ---
 name: pr-ready
-description: Cierra la tarea creando el Pull Request final en GitHub. Consolida el commit (amend con .md actualizado), hace push de la rama, genera título (conventional commits) y body del PR (tarea + AC cubiertos + tabla de validaciones + test plan), aplica labels derivados del .md (fase, epic, tipo, tags), y marca el PR como draft si hubo warnings activos. Úsalo con /pr-ready T{id}. Activar con "crear PR", "abrir pull request", "cerrar tarea y publicar", "pr ready".
+description: 'Cierra la task abriendo el Pull Request contra develop. Hace push de la rama, genera título (conventional commits) y body del PR (task + propiedades de §5 cubiertas + tabla de validaciones con el harness declarado + test plan derivado del diff), y lo marca draft si quedan warnings activos. Úsalo con /pr-ready TASK-NNN. Activar con "crear PR", "abrir pull request", "cerrar task y publicar", "pr ready".'
 ---
 
 # PR Ready
@@ -10,210 +10,146 @@ Cierre final. Solo se invoca si los gates previos pasaron (o el usuario forzó c
 ## Invocación
 
 ```
-/pr-ready T{id}
-/pr-ready T{id} --draft         # forzar draft (override)
-/pr-ready T{id} --ready         # forzar ready (override — cuidado)
+/pr-ready TASK-NNN
+/pr-ready TASK-NNN --draft      # forzar draft
+/pr-ready TASK-NNN --ready      # forzar ready (cuidado)
 ```
 
 ## Inputs
 
-- `var/task-runner/T{id}/` (todos los artefactos y reports)
-- `.md` de la tarea (ya editado por task-close)
-- `plan.md`, `context-digest.md`
-- Reports: spec-lint, doctrine-guard, contract-check, task-validate, security-audit, eidas (si aplica), perf-smoke, docs-sync
+- `var/task-runner/TASK-NNN/` — artefactos y reports de las fases previas
+- El `.md` de la task, ya editado por `task-close`
 
 ## Outputs
 
-- Commit final amendado en la rama
-- Rama pusheada a `origin`
-- PR creado en GitHub
-- `.md` editado una vez más con URL del PR (2º amend)
-- `var/task-runner/T{id}/pr-ready.report.md`
-- JSON:
-  ```json
-  {"status":"pass|fail","summary":"...","prUrl":"...","prNumber":N,"branchName":"..."}
-  ```
+- Rama pusheada a `origin`, PR abierto contra **`develop`**
+- Commit de seguimiento con la URL del PR en el `.md`
+- `var/task-runner/TASK-NNN/pr-ready.report.md`
+- JSON: `{"status":"pass|fail","summary":"...","prUrl":"...","prNumber":N,"branchName":"...","draft":bool}`
 
 ## Ejecución
 
 ### Paso 1 — Pre-check
 
-- [ ] `git status --short` → no hay ficheros sin stagear inesperados. Ficheros esperables: el `.md` de la tarea, ficheros de `docs/`, `.env.example`.
-- [ ] `git rev-parse --abbrev-ref HEAD` devuelve `feat/T{id}-*`
-- [ ] `git log --oneline {base}..HEAD | wc -l` devuelve exactamente 1 (un solo commit sobre base)
-  - Si más de 1: squash defensivo antes de continuar: `git reset --soft {base} && git commit` con el mensaje original de implement.
-- [ ] `gh auth status` no falla (si falla → `status: fail, summary: "gh not authenticated, run gh auth login"`)
+- [ ] `git status --short` limpio, salvo lo que se espera (el `.md`, `docs/`, `.env*`).
+- [ ] La rama es `feat/TASK-NNN-*`.
+- [ ] `gh auth status` no falla → si falla: `status: fail`, `summary: "gh not authenticated"`.
+- [ ] **La base es `develop`.** `master` es la rama de publicación; el trabajo de producto no se integra ahí
+      directamente.
 
-### Paso 2 — Amend con `.md` actualizado
+⛔ **Sin squash defensivo.** Este repo integra PRs de varios commits y merges de `develop`; contar commits
+y hacer `git reset --soft` para dejar uno solo destruye historia útil y fuerza `--force-with-lease` sin
+ganar nada. Si los commits son coherentes y explican su *por qué*, están bien como están.
 
-Ficheros a incluir en el amend:
-- `.md` de la tarea (si task-close lo dejó en staging, ya está; si no, `git add`)
-- Cualquier fichero de `docs/` tocado por docs-sync que no haya sido amendado ya
-- `.env.example` si fue modificado
-
-```bash
-git add {rutaMd} {otros ficheros de docs/, .env.example si aplica}
-git commit --amend --no-edit
-```
-
-### Paso 3 — Determinar modo (draft vs ready)
-
-Leer todos los reports del workspace. Contar WARNs activos (no resueltos):
-- Sí, hay WARNs → `--draft`
-- No hay WARNs → ready (no pasar `--draft`)
-- Override explícito: respetar `--draft` o `--ready` del argumento
-
-Ejemplos que implican WARN activo:
-- perf-smoke con `status: warn` alto
-- security-audit con WARN
-- docs-sync con tag mismatches (estos realmente ya se limpiaron en task-close; si quedaron → es un bug)
-- Cualquier gate con `status: warn`
-
-### Paso 4 — Push
+### Paso 2 — Push
 
 ```bash
-git push -u origin feat/T{id}-{slug}
+git push -u origin feat/TASK-NNN-{slug}
 ```
 
-Si la rama ya existía en remote → `git push --force-with-lease` (NUNCA `--force` sin lease).
+Si la rama ya existe en remoto y el push no es fast-forward → **parar**: `status: fail` con la razón. Nunca
+`--force`; `--force-with-lease` solo si el usuario lo pide explícitamente y sabe qué descarta.
 
-Si el push falla con conflicto/protection rule:
-- `status: fail, summary: "push rechazado: {razón}"`
-- Detallar en el report
-- NO hacer `--force` real ni rebase automático
+### Paso 3 — Draft o ready
 
-### Paso 5 — Generar título del PR
+Leer los reports del workspace y contar WARNs no resueltos. Con WARNs → `--draft`. Sin WARNs → ready.
+`--draft` / `--ready` del argumento manda.
 
-Formato: `{tipo}(T{id}): {título de la tarea}`
+⚑ **Un `skipped` declarado no es un WARN, pero tampoco un PASS.** `perf-smoke-backend` hoy se salta por
+falta de `composer perf:seed`; va al body como *skipped, con su razón*, no como verde.
 
-Mapeo `Tipo` → conventional commit:
-- `Backend` → `feat` (o `fix` si el título o descripción indica "fix"/"bug")
-- `Frontend` → `feat` (o `fix`)
-- `Integracion` → `feat`
-- `Infraestructura` → `chore`
-- `Diseno` → `design` (o `docs` si el repo no acepta `design`)
+### Paso 4 — Título
 
-Extraer título de la primera línea del `.md` (tras `# `). Máximo 70 chars; truncar título si hace falta.
+`{tipo}({ámbito}): {qué hace, en imperativo}`, ≤70 chars. El `tipo` sale de lo que el diff hace
+(`feat`, `fix`, `docs`, `chore`, `refactor`, `test`), no de un campo `Tipo` — este formato de task no lo
+tiene. El `ámbito` es el BC o subsistema tocado (`envelope`, `notification`, `session`, `foundation`…).
+Si el cambio rompe contrato publicado, `!` antes de los dos puntos.
 
-### Paso 6 — Generar body del PR
-
-Plantilla:
+### Paso 5 — Body
 
 ```markdown
-## Tarea
-[T{id}]({ruta-relativa-al-.md}) — {título de la tarea}
-
-Epic: EP{xx} | Story: S{xx}.{y} | Fase: F{n}
+## Task
+[TASK-NNN](docs/tasks/TASK-NNN-{slug}.md) — {título}
 
 ## Resumen
-{2-3 líneas extraídas de context-digest.md § "Task summary"}
+{2-3 líneas de context-digest.md § Task summary}
 
 ## Cambios
-{lista generada parseando changes.diff, agrupada por capa}:
-- **Domain:** {ficheros bajo Domain/}
-- **Application:** {ficheros bajo Application/}
-- **Infrastructure:** {ficheros bajo Infrastructure/}
-- **Tests:** {ficheros bajo tests/}
-- **Docs:** {ficheros bajo docs/, .env.example}
+- **Domain / Application / Infrastructure / Contract / UI:** {ficheros por capa}
+- **Tests:** {ficheros}
+- **Docs:** {ADRs, docs/, .env*}
 
-## Criterios de aceptación cubiertos
-{extraído de task-validate.report acCovered[]}:
-- [x] AC-01 — {nombre del criterio extraído de la story}
-- [x] AC-02 — ...
+## Propiedades de §5 cubiertas
+- [x] {afirmación de §5 Verification} → {test que la prueba}
+- [ ] {la que no se pudo probar} → {por qué el harness no la alcanza}
 
 ## Validaciones ejecutadas
 | Skill | Status | Notas |
 |---|---|---|
 | spec-lint | PASS | — |
-| doctrine-guard | PASS | — |
-| contract-check | PASS | — |
-| task-validate | PASS | N tests, coverage X% |
-| security-audit | PASS | — |
-| eidas-compliance | PASS | Nivel PAdES B-LT |
-| perf-smoke | WARN | p95 = 312ms (ver notas) |
+| task-validate-backend | PASS | N tests · covered-MSI X% · **harness: {la vía usada}** |
+| doctrine-guard | PASS/n-a | — |
+| contract-check-backend | PASS/n-a | — |
+| security-audit-core | PASS | — |
+| eidas-compliance | PASS/n-a | — |
+| perf-smoke-backend | skipped | no existe `composer perf:seed` |
+| docs-sync | PASS/n-a | — |
 
 ## Notas para el reviewer
-{si hay WARNs o deuda técnica de task-close, listarlos aquí}
-- Performance: p95 en el límite del budget; se deja para iteración futura
-- ADR en borrador: `docs/adr/0012-*.md` (marcar como accepted al aprobar)
+{WARNs, deuda declarada, ADRs cuyo Status se movió en este changeset, y los Open follow-ups nuevos}
 
 ## Test plan
-- [ ] Revisar cobertura de AC
-- [ ] {si tag api:} curl al endpoint con cada caso del AC
-- [ ] {si tag worker:} encolar mensaje y verificar procesamiento
-- [ ] {si tag ui:} abrir página X y ejecutar flujo Y
-- [ ] {si tag migration:} ejecutar migrate, verificar schema, migrate:down y verificar reversibilidad
+{derivado de lo que toca el diff, no de tags}
+- [ ] {si toca UI/Http o config/routes:} llamar al endpoint en cada caso declarado, y comprobar que el
+      OpenAPI generado dice lo mismo que el código
+- [ ] {si toca migrations/:} `migrate`, verificar esquema, `migrate --dry-run` a la baja y comprobar
+      reversibilidad. Si escribe filas que el dominio lee: enumerar los estados del agregado sobre los que
+      cae la fila
+- [ ] {si toca un Contract/Event/ o un payload:} comprobar que no se añadió un campo obligatorio
+      (`Row::optionalString()`) y que ningún `event_type` se renombró en sitio
+- [ ] {si toca un worker o un reactor:} drenar (`worker-down` → profundidad 0) → desplegar → `worker-up`
 ```
 
-### Paso 7 — Crear PR con gh
+**El campo `harness` de la tabla es obligatorio.** Un PR que afirma verde sin decir qué árbol y qué
+servicios corrieron es exactamente el fallo que `task-validate-backend` documenta en su precondición: el
+stack monta `../f5sign-backend`, así que un verde sacado del checkout equivocado no dice nada del código
+del PR.
+
+### Paso 6 — Crear el PR
 
 ```bash
-gh pr create \
-  --base master \
-  --head feat/T{id}-{slug} \
-  --title "{título}" \
-  --body-file {fichero temporal con el body} \
-  [--draft]
+gh pr create --base develop --head feat/TASK-NNN-{slug} \
+  --title "{título}" --body-file {tmp} [--draft]
 ```
 
-Alternativa (body inline con HEREDOC):
-```bash
-gh pr create --base master --head feat/T{id}-{slug} \
-  --title "..." \
-  --body "$(cat <<'EOF'
-...
-EOF
-)" [--draft]
-```
+Si ya hay un PR abierto para la rama (`gh pr list --head ...`), hacer push y **actualizar el existente**;
+no crear otro. Reportarlo en el summary.
 
-Capturar la URL del PR que devuelve `gh` y el número (`gh pr view --json number`).
+### Paso 7 — Labels (solo las que existan)
 
-### Paso 8 — Labels
+`gh label list` primero; aplicar solo intersección. **No inventar labels** de fase/epic/tag: esos campos no
+existen en este formato de task, y crear labels fantasma ensucia el repo.
 
-Derivar labels del `.md`:
-- `fase:F{n}`, `epic:EP{xx}`
-- `tipo:{backend|frontend|integracion|infraestructura|diseno}` (lowercase)
-- Por cada tag canónico del `.md`: `tag:{tag}` (ej. `tag:signing`, `tag:critical-path`)
+### Paso 8 — URL del PR en el `.md`
+
+Actualizar el `Status` del `.md` para que nombre la rama y el PR (README §3: un `Status` que afirma código
+debe nombrar rama o commit) y commitear **encima**, sin amend:
 
 ```bash
-gh pr edit {prNumber} --add-label "fase:F0,epic:EP02,tipo:backend,tag:db,tag:migration"
-```
-
-Si algún label no existe en el repo, `gh` lo reporta; ignorar silenciosamente (no crear labels fantasma).
-
-### Paso 9 — Amend final con URL del PR
-
-Editar el `.md` de la tarea: actualizar el campo `PR/Branch` en la tabla Seguimiento de solo la rama → `{rama} — {URL del PR}`.
-
-```bash
-git add {rutaMd}
-git commit --amend --no-edit
-git push --force-with-lease
-```
-
-Resultado: un único commit final, con el `.md` totalmente actualizado (incluida la URL del PR que GitHub acaba de asignar).
-
-### Paso 10 — Devolver JSON
-
-```json
-{"status":"pass","summary":"PR abierto","prUrl":"https://github.com/owner/innasign/pull/42","prNumber":42,"branchName":"feat/T02.1.1-slug","draft":false}
+git add {rutaMd} && git commit -m "docs(tasks): point TASK-NNN at its PR" && git push
 ```
 
 ## Manejo de fallos
 
-- **Push rechazado por branch protection:** `status: fail`, detallar en report, sugerir al usuario qué regla violó
-- **`gh pr create` falla:** `status: fail`; si es por autenticación → `summary` sugiere `gh auth login`
-- **Conflicto con main durante push** (alguien mergeó entretanto): `status: fail, summary: "rebase requerido, intervención manual"`. NO intentar rebase automático.
-- **Rama ya tiene un PR abierto:** detectarlo con `gh pr list --head feat/T{id}-*`; si existe, hacer push y actualizar el PR existente en vez de crear uno nuevo; reportarlo en el summary.
+- **Push rechazado (branch protection):** `status: fail`, decir qué regla se violó.
+- **`gh pr create` falla:** `status: fail`; si es auth, sugerir `gh auth login`.
+- **Alguien integró en `develop` entretanto:** `status: fail`, `summary: "merge de develop requerido"`. No
+  rebasar automáticamente. ⚑ Si el merge toca `.claude/` o `CLAUDE.md`, puede abortar por `skip-worktree`:
+  `bin/unlink-ai.sh` → merge → `bin/sync-ai.sh` desde la raíz del workspace.
 
 ## Qué NO hace
 
-- No mergea el PR (responsabilidad del reviewer humano)
-- No asigna reviewers (se configuran con CODEOWNERS, fuera de scope)
-- No añade a milestones ni projects
-- No ejecuta CI manualmente (GitHub lo dispara al abrir PR)
-- No edita `.md` post-merge (SHA de main, fecha de merge) — sería otra skill futura o hook
-
-## Referencias
-
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/common/04 - PR Ready.md`
+- No mergea el PR.
+- No asigna reviewers ni milestones.
+- No ejecuta CI a mano.
+- No hace squash ni reescribe historia.

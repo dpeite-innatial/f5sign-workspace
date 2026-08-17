@@ -1,155 +1,165 @@
 ---
 name: task-validate-backend
-description: 'Gate duro de calidad funcional en backend (PHP/Symfony): corre composer test:* (unit, integration, e2e), valida cobertura mínima del 80%, ejecuta PHPStan y PHP-CS-Fixer, comprueba cobertura de AC, y confirma que los ficheros declarados en el .md coinciden con los modificados. Solo para repositorios con stack PHP/Symfony. Úsalo con /task-validate-backend T{id}. Activar con "validar tarea backend", "run phpunit", "check PHPStan y AC".'
+description: 'Gate duro de calidad funcional en backend (PHP/Symfony): corre la suite (composer test), PHPStan nivel 9, Deptrac, lint, y mide fuerza estructural con covered-MSI de Infection en vez de porcentaje de líneas. Comprueba que las propiedades declaradas en §Verification de la task se ejecutan de verdad, y que el diff no se sale de su §Scope. Solo para repositorios con stack PHP/Symfony. Úsalo con /task-validate-backend TASK-NNN. Activar con "validar tarea backend", "run phpunit", "check PHPStan y deptrac".'
 ---
 
-# Task Validate
+# Task Validate (backend)
 
 Gate duro de calidad funcional. Se invoca siempre.
 
 ## Invocación
 
 ```
-/task-validate T{id}
+/task-validate-backend TASK-NNN
 ```
 
 ## Inputs
 
-- `var/task-runner/T{id}/changes.diff`
-- `.md` de la tarea
-- README de la story padre (para AC)
+- `var/task-runner/TASK-NNN/changes.diff`
+- El `.md` de la task — en particular **§3 Scope** y **§5 Verification** (formato en
+  [`docs/tasks/README.md`](../../../docs/tasks/README.md))
 
 ## Outputs
 
-- `var/task-runner/T{id}/validate.report.md`
-- `var/task-runner/T{id}/test-results.json`
-- JSON:
-  ```json
-  {"status":"pass|fail","summary":"...","issues":[...],"acCovered":["AC-01","AC-02"],"acFailed":[],"coverage":0.87}
-  ```
+- `var/task-runner/TASK-NNN/validate.report.md`
+- `var/task-runner/TASK-NNN/test-results.xml` (JUnit)
+- JSON: `{"status":"pass|fail","summary":"...","issues":[...],"harness":"...","msi":0.91,"propertiesUnproven":[]}`
 
-## Precondición crítica
+## Precondición crítica — declarar el harness, y comprobar que apunta a TU árbol
 
-El entorno de tests debe estar operativo (DB, RabbitMQ, Redis). Si algún servicio está down durante la ejecución → `status: fail, summary: "infrastructure unavailable: X"`. No reintentar automáticamente.
+Los servicios que la suite necesita (Postgres, RabbitMQ, MinIO, Mailpit) los levanta
+`../f5sign-infra`. **Nunca `docker compose` desde este repo** (regla 5). Y antes de correr nada:
+
+⚑ **`f5sign-infra/docker-compose.override.yml` monta `../f5sign-backend`.** Si trabajas en un worktree
+enlazado, `make test` valida el otro árbol y su verde no dice nada de tu código. Elegir vía y **escribirla
+en el campo `harness` del JSON**:
+
+| Vía | Sirve para | Limitación conocida |
+|---|---|---|
+| `make -C ../f5sign-infra test` | El checkout principal | Valida `../f5sign-backend`, no un worktree |
+| `make -C ../f5sign-infra wt-backend src=$(pwd)` | Un worktree | Solo postgres: storage **falla** (`host: minio`), broker se salta, y `composer test` muere en el timeout de 300 s de Composer |
+| `docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html f5sign/backend:dev sh -c 'php -d memory_limit=-1 bin/phpunit --no-progress'` | Un worktree, suite completa | Requiere el stack arriba; migra antes contra `postgres-test` |
+
+Si un servicio está caído durante la ejecución → `status: fail`, `summary: "infrastructure unavailable: X"`.
+**No reintentar automáticamente, y no confundirlo con un fallo de código:** el síntoma clásico es
+`Connection could not be established with host` (Mailpit desconectado de la red) o
+`Could not resolve host: minio`. Ambos son entorno, no regresión.
 
 ## Ejecución
 
-### Paso 1 — Suite de tests
-
-Ejecutar en orden (parar al primer fallo bloqueante si todos los siguientes dependen):
+### Paso 1 — Suite
 
 ```bash
-composer test:unit          # exit code 0 esperado
-composer test:integration   # exit code 0 esperado
-composer test:e2e           # solo si tags incluye "api"
+composer test        # un solo tier; NO existen test:unit / test:integration / test:e2e
 ```
 
-Capturar output en `test-results.json` (usar `--log-junit` de PHPUnit o equivalente).
+Los tiers de este repo son **directorios**, no scripts (ADR-0035): `Unit/`, `Application/` (herméticos),
+`Integration/` (DB real, rollback DAMA), `Acceptance/` (HTTP). Para acotar:
+`vendor/bin/phpunit --testsuite <name>` o `--filter`.
 
-Para cada suite:
-- [ ] Exit code 0
-- [ ] Contar tests ejecutados vs tests declarados en la tabla `## Tests` del `.md`
-  - Diff negativo → `fail` "tests declarados no ejecutados"
-  - Diff positivo → `warn` "más tests ejecutados que declarados" (puede ser legítimo)
+- [ ] Exit code 0.
+- [ ] Los tests que §5 Verification nombra **existen y se han ejecutado** (buscarlos por nombre en el
+      JUnit). Un test nombrado en la task y ausente del run es `fail` categoría `property-unproven`.
 
-### Paso 2 — Coverage
-
-- Generar coverage solo de líneas modificadas (parsear `changes.diff` + coverage clover):
-  ```bash
-  composer test:unit -- --coverage-clover=var/task-runner/T{id}/coverage.xml
-  ```
-- Calcular % de líneas nuevas/modificadas cubiertas
-- Umbral: **80%** (duro, sin excepciones por tarea)
-- < 78% → `fail`
-- 78-80% → `warn` "rozando el umbral"
-- ≥ 80% → pass
-
-### Paso 3 — Análisis estático
+### Paso 2 — Fuerza estructural: covered-MSI, no porcentaje de líneas
 
 ```bash
-composer phpstan -- --error-format=json {ficheros-del-diff}
+composer infection
 ```
 
-- [ ] Sin errores nuevos en ficheros del diff (comparar contra baseline si existe)
+**Este repo no tiene umbral de cobertura de líneas y no se debe inventar uno.** El gate es el covered-MSI
+de Infection (ADR-0035). `composer coverage:text` / `coverage:clover` existen para inspección, no como bar.
+
+- Covered-MSI por debajo del umbral → `fail`. El número lo declara `infection.json5.dist`
+  (`minCoveredMsi`); leerlo de ahí, no de aquí ni de memoria.
+- ⚠ **Infection no ve código sin llamantes**, y su `source` es `src/F5Sign` solamente. Un artefacto nuevo
+  sin ningún llamante puntúa como si no existiera, y el test de una regla PHPStan propia (que vive en
+  `phpstan/`) es su **única** guarda. Si el diff añade superficie en esas zonas, decirlo en el report en vez
+  de dejar que el MSI hable por ella.
+
+### Paso 3 — Estático y arquitectura
 
 ```bash
-composer psalm -- --output-format=json {ficheros-del-diff}    # solo si está configurado
-composer cs-check                                               # PHP-CS-Fixer o Pint
+composer phpstan     # nivel 9
+composer arch        # Deptrac: contrato de visibilidad entre capas y BCs
+composer lint        # PHP-CS-Fixer en modo check
 ```
 
-- [ ] Sin errores nuevos
-- [ ] Sin violaciones de estilo
+- [ ] PHPStan sin errores nuevos. **No ampliar `phpstan-baseline.neon` para pasar el gate**: cada entrada
+      del baseline es un hallazgo de diseño con su *por qué* escrito. Añadir una es una decisión, no un fix.
+- [ ] Deptrac sin violaciones. **No tiene baseline**: una violación se reporta como hallazgo, no se silencia.
+- [ ] Lint limpio.
+- [ ] Si el diff añade tests: llevan `#[CoversClass]` o `#[CoversNothing]` (`phpunit.dist.xml` tiene
+      `requireCoverageMetadata="true"`), y `#[UsesClass]` para colaboradores, incluidas las excepciones que
+      el test asserta.
 
-### Paso 4 — Cobertura de AC
+### Paso 4 — Las propiedades declaradas se prueban de verdad
 
-Para cada `AC-\d+` en la story que aplique a esta tarea (heurística: la tabla de Tasks de la story menciona la tarea):
-- [ ] Existe al menos un test cuyo nombre o DocBlock contiene `AC-{xx}` (ej. `testAC01_HappyPath` o `@covers AC-01`)
-- [ ] El test ha sido ejecutado y pasa
+Por cada afirmación de §5 Verification, comprobar que **el harness elegido puede verla**. Es el paso que
+distingue esta skill de "correr la suite", y existe porque el repo ha shippeado guardas verdes que nada
+ejecutaba (`CLAUDE.md` regla de autoría 4):
 
-Lista `acCovered` y `acFailed` en el JSON.
+- **Locks de fila**: `Integration/` corre **una conexión** bajo rollback DAMA, así que con y sin
+  `FOR UPDATE` es indistinguible. Se necesita una segunda conexión
+  ([`ProbesRowLocks`](../../../tests/F5Sign/Support/ProbesRowLocks.php)).
+- **Redelivery / reintentos**: `async_events` es `in-memory://` en test; nada se reentrega.
+- **Identidad tras serializar**: un fake que devuelve la instancia que guardó no prueba nada de `save()`.
+- **Fixtures que no discriminan**: si dos variables siempre concuerdan en los datos de prueba, una
+  proyección que filtra por la equivocada pasa igual. Exigir el caso donde **discrepan**.
 
-Si algún AC aplicable no tiene test → `fail` categoría `ac-uncovered`.
+Lo que no pueda probarse con este harness va a `propertiesUnproven` y es `fail` si §5 lo declaraba probado.
 
-### Paso 5 — Ficheros declarados vs reales
+### Paso 5 — El diff no se sale del §Scope
 
-- Parsear tabla `## Archivos a crear/modificar` del `.md`
-- Obtener `git diff --name-only {base}..HEAD`
-- [ ] Todos los ficheros declarados están en el diff → si falta alguno: `fail` categoría `missing-file`
-- [ ] Ficheros en el diff fuera de los declarados: `warn` categoría `extra-file` (puede ser legítimo pero alerta)
+Este formato de task **no lleva tabla de "Archivos a crear/modificar"** (eso era el `Planning/` legado).
+La diana es la prosa de §3 Scope, con su lista **In** y su lista **Out**:
 
-### Paso 6 — Migrations (si tags incluye `migration`)
+- `git diff --name-only $(git merge-base HEAD develop)..HEAD`.
+- [ ] Nada del diff cae en algo que §3 declara **Out** → si cae: `fail` categoría `out-of-scope`.
+- [ ] Ficheros fuera de lo que §3 anticipaba pero no prohibidos: `warn` categoría `undeclared-file`.
+- ⚑ Si el cambio re-corta o renombra un concepto, comprobar el barrido de la regla 1:
+      `rg -n '<término retirado>' src tests migrations docs config CLAUDE.md`. Un fichero que aún necesita
+      la edición aparece con **diff vacío**, así que el diff no es la superficie de búsqueda.
+
+### Paso 6 — Migraciones (si el diff toca `migrations/`)
 
 ```bash
-bin/console doctrine:migrations:migrate --dry-run --no-interaction
+make -C ../f5sign-infra sf cmd="doctrine:migrations:migrate --dry-run --no-interaction"
 ```
 
-- [ ] Sin errores
-
-Si tag `rls`: ejecutar la suite específica de RLS si el proyecto la tiene (ej. `composer test:rls`).
+- [ ] Sin errores, y reversible.
+- [ ] Si la migración **escribe filas que el dominio luego lee**, es `doctrine-guard` quien lo audita
+      (regla de autoría 6); aquí basta con marcarlo en el report para que no se pierda.
 
 ## Report
 
 ```markdown
-# task-validate — T{id}
+# task-validate-backend — TASK-NNN
 
 **Status:** {PASS|FAIL}
-**Tests:** {ejecutados} passed, {failed} failed, {skipped} skipped
-**Coverage:** {%} (umbral 80%)
-**AC cubiertos:** {N}/{total}
+**Harness:** {la vía elegida, literal}
+**Tests:** {passed} passed, {failed} failed, {skipped} skipped
+**Covered-MSI:** {%} (umbral ADR-0035)
+**PHPStan:** {N} errores nuevos · **Deptrac:** {N} violaciones · **Lint:** {N}
 
-## Failed tests
-- {fichero::método}
-  - Expected: {x}
-  - Actual: {y}
+## Propiedades declaradas y no probadas
+- {afirmación de §5} → el harness no la alcanza porque {razón}
 
-## AC no cubiertos
-- AC-{xx} "{descripción}": ningún test lo verifica
-
-## Análisis estático
-- PHPStan: {N} errores nuevos
-- PHP-CS: {N} violaciones
-
-## Ficheros fuera de scope
+## Fuera de §Scope
 - {lista o "ninguno"}
-```
 
-## JSON de retorno
-
-```json
-{"status":"fail","summary":"3 tests fallan, AC-05 no cubierto","issues":[{"severity":"fail","category":"test-failure","test":"CloseEnvelopeHandlerTest::testAC03","message":"..."}],"acCovered":["AC-01","AC-02","AC-03","AC-04"],"acFailed":[],"acUncovered":["AC-05"],"coverage":0.76}
+## Servicios no disponibles
+- {lista o "ninguno"} (entorno, no regresión)
 ```
 
 ## Qué NO hace
 
-- No audita seguridad, compliance, performance
-- No juzga diseño/arquitectura (cubierto implícitamente por PHPStan + convenciones)
-- No escribe tests faltantes — solo detecta que faltan
-- No corrige código ni tests
+- No audita seguridad, compliance ni performance.
+- No escribe tests que falten — solo detecta que faltan.
+- No corrige código ni tests.
+- No amplía baselines para pasar.
 
 ## Protocolo de corrección
 
-Si `task-runner` lanza un reintento con este report como input a `implement`, la instrucción es "corregir los issues sin cambiar el scope". Máximo 2 iteraciones automáticas. Al 3er intento fallido → abort + intervención humana.
-
-## Referencias
-
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/backend/04 - Task Validate Backend.md`
+Si `task-runner` reintenta con este report como input, la instrucción es *"corregir los issues sin cambiar
+el scope"*. Máximo 2 iteraciones automáticas; al tercer intento, intervención humana.
