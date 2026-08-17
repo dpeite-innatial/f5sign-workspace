@@ -1,200 +1,204 @@
 ---
 name: docs-sync
-description: 'Actualiza documentación que vive fuera del código tras una tarea: AsyncAPI, ADRs (como borrador), CHANGELOG, .env.example, runbooks de workers, READMEs de módulo. NO toca OpenAPI (Nelmio lo cubre inline). Condicional por tags adr/config/breaking/event/worker/new-module. Úsalo con /docs-sync T{id}. Activar con "sincronizar docs", "actualizar changelog", "crear ADR", "actualizar AsyncAPI", "docs externas de tarea".'
+description: 'Actualiza la documentación que vive fuera del código tras una task: los modelos de dominio de docs/ddd/ (docs vivos), docs/LIVE_SCHEMA.md, docs/ARCHITECTURE.md, CLAUDE.md cuando cambia el stack, las variables de .env/.env.dev/.env.test bajo la regla 4 del repo, y ADRs — que redacta SIEMPRE como Proposed y nunca da por aceptados sin el usuario. NO toca OpenAPI (Nelmio lo cubre inline). Condiciona por lo que toca el diff, no por tags. Úsalo con /docs-sync TASK-NNN. Activar con "sincronizar docs", "actualizar el modelo de dominio", "redactar ADR", "docs externas de task".'
 ---
 
 # Docs Sync
 
-Actualización de documentación externa. No es gate duro; fallos emiten warnings.
+Documentación fuera del código. No es gate duro; los fallos son warnings.
+
+⚑ **La mitad de las dianas que esta skill tenía no existen en este repo.** Medido 2026-08-17: no hay
+`CHANGELOG.md`, no hay `.env.example`, no hay `docs/asyncapi/`, no hay `docs/runbooks/`, y no hay
+`src/*/README.md`. **Crear una superficie de documentación es una decisión, no una sincronización** — si
+falta y hace falta, se reporta y se ficha en el BACKLOG; no se inventa a mitad de una task.
 
 ## Invocación
 
 ```
-/docs-sync T{id}
+/docs-sync TASK-NNN
 ```
 
 ## Inputs
 
-- `var/task-runner/T{id}/changes.diff`
-- `var/task-runner/T{id}/context-digest.md`
-- `var/task-runner/T{id}/contract-check.report.md` (si tag `event`, para saber qué eventos sincronizar en AsyncAPI)
-- `.md` de la tarea
-
-Del repo (leer si existen):
-- `docs/asyncapi/*.yaml`
-- `docs/adr/*.md`
-- `CHANGELOG.md`
-- `.env.example`
-- `docs/runbooks/*.md`
-- `src/*/README.md`
+- `var/task-runner/TASK-NNN/changes.diff` y `context-digest.md`
+- El `.md` de la task
+- Del repo: [`docs/adr/`](../../../docs/adr/), [`docs/ddd/`](../../../docs/ddd/),
+  [`docs/LIVE_SCHEMA.md`](../../../docs/LIVE_SCHEMA.md),
+  [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md),
+  [`docs/BACKLOG.md`](../../../docs/BACKLOG.md), [`CLAUDE.md`](../../../CLAUDE.md), `.env*`
 
 ## Outputs
 
-- Ficheros modificados en el repo (amend al commit existente)
-- `var/task-runner/T{id}/docs-sync.report.md`
-- JSON:
-  ```json
-  {"status":"pass|warn","summary":"...","filesUpdated":[...],"tagMismatches":[...]}
-  ```
+- Ficheros del repo modificados, en **su propio commit** (no `--amend`: este repo integra PRs de varios
+  commits)
+- `var/task-runner/TASK-NNN/docs-sync.report.md`
+- JSON: `{"status":"pass|warn","summary":"...","filesUpdated":[...],"surfacesAbsent":[...]}`
 
-## Selección de modelo
+## Qué se ejecuta, según lo que toca el diff
 
-Esta skill puede ejecutarse con **Haiku** (default, para trabajo mecánico) o **Sonnet** (cuando redacta ADR).
+**No hay tags en este formato de task.** La condición es el diff.
 
-Si la tarea tiene tag `adr`: task-runner debe invocar con model=sonnet. Para otros tags: Haiku es suficiente.
+### El diff toca `src/F5Sign/<BC>/Domain/` o cambia un flujo → `docs/ddd/<bc>-domain-model.md`
 
-## Ejecución
+Los modelos de dominio son **documentos vivos**: se actualizan en el sitio y su rastro es git
+([`docs/adr/AUTHORING.md`](../../../docs/adr/AUTHORING.md) § ADRs vs domain models). Los ADRs son lo
+contrario, puntuales.
 
-Según tags del `.md`, ejecutar las subsecciones correspondientes. Al final, detectar tag mismatches.
+- Actualizar el modelo del BC afectado con el estado actual.
+- ⚑ **Si un ADR de este changeset supersede parte de un modelo**, no reescribas el modelo en la rama del
+  ADR: pon un **banner con fecha** en la parte obsoleta apuntando al ADR, y deja que la siguiente feature
+  del modelo lo reconcilie. El contrato está en
+  [`docs/ddd/README.md`](../../../docs/ddd/README.md) § Document lifecycle.
 
-### Tag `adr` (requiere Sonnet)
+### El diff toca `migrations/` → `docs/LIVE_SCHEMA.md`
 
-- Localizar `docs/adr/` (crearlo si no existe)
-- Determinar próximo número: mayor NNNN existente + 1
-- Título kebab-case derivado del título de la tarea o de la decisión principal en `context-digest.md § Decisiones tomadas`
-- Crear `docs/adr/NNNN-titulo-kebab-case.md`:
+- Actualizarlo, y **decir de dónde se re-derivó** (la migración, o una consulta al esquema).
+- ⚠ Es **hecho de base de datos transcrito a mano**, o sea la única clase de afirmación que un documento no
+  puede mantener cierta: ya está fichado como tal (`BL-99`). Si lo que toca es grande, el report debe decir
+  que se transcribió a mano y qué no se verificó.
+
+### El diff añade o cambia una variable de entorno → `.env`, `.env.dev`, `.env.test`
+
+⛔ **No existe `.env.example` y no se crea.** La superficie de descubribilidad es la cabecera de orden de
+carga de `.env`, que **nombra las variables en prosa**.
+
+⛔ **Y para una variable sensible, un placeholder es la respuesta equivocada.** `.env` viaja **dentro de la
+imagen de producción**, así que una clave nombrada ahí **siempre resuelve** y producción arrancaría con el
+valor commiteado. La cabecera de `.env` lo dice literalmente: *no arregles esa ausencia commiteando un
+placeholder*. Los dos patrones de la regla 4 del repo, y el primero es el estándar:
+
+| Patrón | Cuándo | Ejemplos |
+|---|---|---|
+| **(A) Ausente** — el estándar | Siempre, salvo (B) | `DATABASE_URL`, `APP_SECRET`, `MESSENGER_TRANSPORT_DSN`, `SIGNING_TOKEN_SECRET`. `%env()%` falla al construir el contenedor en vez de caer a una contraseña de desarrollo |
+| **(B) Presente y vacía** — excepción estrecha | Solo si un valor vacío **jamás** puede funcionar *y* su consumidor lo rechaza | `FIELD_ENCRYPTION_SECRET=` únicamente. **No es transferible**: `SIGNING_TOKEN_SECRET` tiene valor de dev en `.env.dev`, así que vacío no fallaría cerrado |
+
+Añadir la variable al fichero del entorno que corresponda (valores de stack local sí van: coinciden con el
+compose de infra y no son secretos), y **nombrarla en la cabecera de `.env`** si es de las ausentes.
+
+### El diff cambia el stack, un bundle, un script de composer o un target de make → `CLAUDE.md`
+
+⚑ **Es la superficie de mayor valor del repo y la que más daño hace al podrirse**, porque no se queda
+obsoleta: empieza a **instruir mal**, y el siguiente agente reconstruye lo que quitaste. Declaró
+*"Doctrine ORM 3"* durante semanas después de que saliera de `composer.json`. Entra en el barrido de la
+regla de autoría 1 siempre.
+
+### El diff añade un BC, una capa o cambia una ruta de decisión → `docs/ARCHITECTURE.md`
+
+Su tabla de enrutado pregunta→documento es lo que lee alguien que llega nuevo. Si el mapa cambió, cambia.
+
+### Hay una decisión transversal → un ADR, y **solo como `Proposed`**
+
+⛔ **Esta skill no acepta decisiones.** Redacta; el usuario acepta. Hereda entero el gate de
+`implement-backend` Paso 2b:
+
+- **El vocabulario de estado es `Proposed` · `Accepted` · `Superseded`.** No existe `draft`. Y **`Accepted`
+  significa ejercitado, no acordado**: escribirlo aquí falsifica el estado del repo.
+- **Nada de `Origin: T{id}` ni cabeceras inventadas.** La cabecera es la tabla
+  `| Field | Value |` con `Status` · `Date` · `Relates to` · `Crosswalk`, y las secciones son las de
+  `AUTHORING.md` § Section template: `Context`, `Decision`, `Consequences` (con **Positive / Negative /
+  Risks** — Risks no es opcional), `Related ADRs`, `Enforced by (in-repo)`, `Realized in (in-repo)`, y
+  `Counterpoint` cuando hay alternativa creíble.
+- **El número se acuña con el sweep de `AUTHORING.md`, corrido en ese momento y desde la raíz del repo**
+  (`cd "$(git rev-parse --show-toplevel)"`, pathspec `':(top)docs/adr'`), sobre **todas** las ramas. "El
+  mayor que hay + 1" mirando solo el working tree es cómo se acuñan colisiones: `AUTHORING.md` registra dos
+  de ADR-0040, y `ADR-0049` apareció en otra rama en medio de una sesión.
+- **Aterrizar es aterrizar completo:** fila de índice + grafo de relaciones + fila de crosswalk en
+  `docs/adr/README.md`, más el campo `Crosswalk` de la cabecera. Cuatro sitios, fallados los cuatro a la vez
+  con el checklist abierto.
+- **Presentarlo al usuario** con qué decide, qué descarta y qué prohíbe, y **parar** hasta que responda.
+
+### El diff cambia algo que el frontal consume → `docs/frontend-handoff/`
+
+**Por qué existe.** La regla 4 del workspace prohíbe cruzar repos en un mismo commit: *dos proyectos = dos
+PRs coordinados*. Así que un cambio de contrato del backend y su adopción en `f5sign-dashboard` /
+`f5sign-signer` son changesets distintos, y sin un artefacto de traspaso el segundo se reconstruye
+adivinando —o no llega nunca, que es lo que pasó con `signed_copy_url`: el frontal del firmante esconde su
+botón de descarga desde entonces porque espera un campo que el backend nunca envía, y eso vive hoy solo en
+un docblock.
+
+**Cuándo se escribe** — predicado, no tags. El diff toca `src/**/UI/Http/`, `config/routes/`, cualquier
+`#[OA\`, un `Contract/` que la API emite, un enum cuyos valores salen por la API, una cabecera o regla CORS,
+o una variable de entorno que el frontal necesita.
+
+**Dónde:** `docs/frontend-handoff/TASK-NNN-<slug>.md` (o `YYYY-MM-DD-<slug>.md` si el cambio no viene de una
+task). Convención completa en [`docs/frontend-handoff/README.md`](../../../docs/frontend-handoff/README.md).
+
+**Qué lleva, y la forma importa porque el lector es un agente en otro repo sin acceso a este:**
 
 ```markdown
-# ADR NNNN — {Título}
+# Traspaso al frontal — {qué cambió, en una frase}
 
-Status: draft
-Date: {fecha actual}
-Origin: T{id}
+| | |
+|---|---|
+| **Origen** | rama `feat/...` · commit `<sha>` · {PR si existe} |
+| **Fecha** | YYYY-MM-DD |
+| **Repos afectados** | dashboard / signer / ambos |
+| **Naturaleza** | aditivo · **rompe contrato** · corrige el spec |
+| **Acción requerida** | ninguna · actualizar tipos · manejar estado nuevo · **migrar antes de {fecha}** |
 
-## Context
-{extraído de context-digest.md § Reglas de negocio y §/Decisiones}
+## Lo que cambió en el contrato
+- `{MÉTODO} {ruta}` — {qué campo/estado/código aparece o desaparece}, y **si es obligatorio**
 
-## Decision
-{extraído literalmente o parafraseado con precisión}
+## Lo que el frontal tiene que hacer
+1. {paso concreto, en imperativo}
 
-## Consequences
-{positivas y negativas, inferidas del contexto}
+## Lo que NO está listo todavía
+- {para que nadie construya contra un seam a medias}
 
-## Alternatives considered
-{si se mencionan; si no, sección vacía o "No documentadas"}
+## Cómo verificarlo desde el frontal
+- {llamada concreta, o "regenerar el spec y diffear": el OpenAPI generado es la verdad máquina}
 ```
 
-**Status inicial `draft`.** El humano lo promueve a `accepted` en un commit manual posterior.
+**Tres reglas anti-podredumbre**, porque este documento es la clase que más rápido se queda mintiendo:
 
-- Añadir entrada al índice `docs/adr/README.md` si existe.
+1. **No copies el spec.** El OpenAPI que emite Nelmio es la verdad legible por máquina; aquí se dice **qué
+   cambió y qué hacer**, y se apunta a él. Un esquema duplicado a mano divergirá y el frontal creerá al
+   equivocado.
+2. **Nombra el commit de origen.** Es lo único que le permite al agente del frontal saber si el traspaso ya
+   está aplicado o si va por detrás.
+3. **Di lo que no está listo.** La mitad del valor está en frenar trabajo contra un seam incompleto —el caso
+   `signed_copy_url` es exactamente eso: los bytes ya son alcanzables, falta un campo y **la decisión de
+   qué extremo lo pone**, que no se puede tomar desde dentro de este BC.
 
-### Tag `config`
+⚑ **Este fichero no autoriza a tocar el otro repo.** Se escribe aquí, viaja con este PR, y el cambio del
+frontal es su propio PR en su propio repo.
 
-- Detectar env vars nuevas/modificadas en el diff:
-  - Grep en ficheros PHP por `$_ENV`, `$_SERVER`, `getenv(`, `env(`
-  - Grep en `config/packages/*.yaml` y `config/services.yaml` por `%env(...)%`
-- Para cada var nueva no presente en `.env.example`:
-  - Añadir: `VAR_NAME=placeholder-or-default`
-  - Añadir comentario encima explicando qué es (de una línea)
-  - Si es secreta: placeholder tipo `CHANGE_ME` o `your-secret-here`
-- Si existe `docs/configuracion.md` o equivalente: actualizar si hay sección correspondiente
+### Superficies que no existen → warn, y ficha si hace falta
 
-### Tag `breaking`
+`CHANGELOG.md`, `.env.example`, `docs/asyncapi/`, `docs/runbooks/`, `src/*/README.md`.
 
-- Añadir entrada en `CHANGELOG.md` bajo `## [Unreleased]` → `### Breaking`:
-  - Formato: `- **{área}**: {qué cambia} ({cómo migrar})`
-  - Si afecta API pública: incluir ejemplo antes/después en bloque de código
-
-Si `CHANGELOG.md` no existe: crear con estructura keepachangelog.com y añadir la entrada.
-
-### Tag `event`
-
-- Revisar `docs/asyncapi/*.yaml` (puede haber varios ficheros por bounded context)
-- Para cada evento nuevo/modificado (extraído de `context-digest.md § Eventos de dominio / Emite`):
-  - Añadir/actualizar `components.schemas.{EventName}` con payload schema 1:1 con propiedades del evento PHP (tipos Jakarta-style: `type: string, format: uuid`, etc.)
-  - Añadir/actualizar `channels.{module}.{event-slug}` con `subscribe` u `operation`
-  - Si el evento hace referencia a queue/topic específico (Messenger config), reflejarlo en el channel binding
-
-Si `docs/asyncapi/` no existe: emitir `warn` "AsyncAPI no presente en el proyecto, evento {X} sin documentar" y seguir. No crear AsyncAPI fantasma.
-
-- Si hay catálogo (`docs/events-catalog.md`), añadir entrada.
-
-### Tag `worker`
-
-- Crear/actualizar `docs/runbooks/{worker-name}.md`:
-  - Nombre del runbook = nombre del handler en kebab-case
-  - Secciones:
-    - Qué procesa (qué cola/mensaje)
-    - Arranque/parada (comando supervisor/systemd)
-    - Métricas a monitorizar (cola length, rate de fallo, p95)
-    - Procedimiento ante atasco (DLQ, reproceso)
-    - Cómo reprocesar mensajes fallidos
-
-### Tag `new-module`
-
-- Detectar directorio `src/{Module}/` nuevo en el diff
-- Si no existe `src/{Module}/README.md`, crearlo:
-  ```markdown
-  # {Module}
-  
-  ## Propósito
-  {2-3 líneas extraídas de context-digest.md}
-  
-  ## Aggregate roots
-  {listar}
-  
-  ## Dependencias con otros módulos
-  {listar, con referencia al Mapa de Módulos si procede}
-  
-  ## Eventos de dominio
-  - Emite: {lista}
-  - Consume: {lista}
-  
-  ## Entry points
-  - Endpoints HTTP: {lista}
-  - Handlers async: {lista}
-  ```
-- Actualizar `Arquitectura/Mapa de Módulos - Bounded Contexts.md` si existe: añadir el nuevo módulo a la lista/diagrama si procede.
-
-## Paso final — Tag mismatches
-
-Para cada tag procesado: si no se pudo generar cambios relevantes porque el diff no contiene evidencia del cambio declarado por el tag, añadir a `tagMismatches`.
-
-Ejemplos:
-- Tag `adr` pero no se puede extraer una decisión arquitectónica discernible del context-digest → `adr`
-- Tag `config` pero no se detectaron env vars nuevas → `config`
-- Tag `new-module` pero no hay directorio nuevo en `src/` → `new-module`
-
-## Paso final — Amend al commit
-
-Hacer `git add` de los ficheros tocados por docs-sync (solo los modificados en este paso) y `git commit --amend --no-edit`. Preserva la regla "1 commit por tarea".
+No crear ninguna. Reportar en `surfacesAbsent` qué quedó sin documentar y dónde vive esa información
+mientras tanto (p. ej. los eventos viven en sus clases `Contract/Event/` y en el ADR que los gobierna). Si
+la ausencia es una carencia real y repetida, **una fila en `docs/BACKLOG.md`** con el id re-derivado por
+grep en el momento — no un fichero fantasma a medio rellenar, que es peor que nada porque parece cobertura.
 
 ## Report
 
 ```markdown
-# docs-sync — T{id}
+# docs-sync — TASK-NNN
 
-**Status:** {PASS|WARN}
-**Ficheros actualizados:** {N}
-**Tags procesados:** {lista}
+**Status:** {PASS|WARN} · **Ficheros actualizados:** {N}
 
 ## Cambios aplicados
-- docs/asyncapi/envelope.yaml: añadido channel `envelope.closed` + schema
-- .env.example: añadida DSS_TIMESTAMP_AUTHORITY_URL
-- docs/adr/0012-tsa-fallback-strategy.md: creado (status: draft)
+- {fichero}: {qué}
 
-## Omitidos (con razón)
-- AsyncAPI: docs/asyncapi/ no presente en el proyecto; evento EnvelopeClosed sin documentar
+## ADRs redactados
+- ADR-NNNN — **Proposed**, pendiente de aceptación del usuario. Checklist de aterrizaje: {3 ediciones de
+  README + campo Crosswalk} {hecho|pendiente}
 
-## Tag mismatches
-- {lista o "ninguno"}
-```
+## Superficies ausentes (no creadas a propósito)
+- {p. ej. docs/asyncapi/: el evento X queda sin documentar; vive en su clase Contract/Event/ y en ADR-NNNN}
 
-## JSON de retorno
-
-```json
-{"status":"pass","summary":"3 ficheros actualizados, 1 ADR creado como draft","filesUpdated":["docs/asyncapi/envelope.yaml",".env.example","docs/adr/0012-tsa-fallback-strategy.md"],"tagMismatches":[]}
+## Transcrito a mano y no verificado
+- {p. ej. LIVE_SCHEMA.md: columnas de la tabla Y}
 ```
 
 ## Qué NO hace
 
-- **No toca OpenAPI** (Nelmio lo regenera inline)
-- No edita el `.md` de la tarea (eso es task-close)
-- No escribe descripción del PR (pr-ready)
-- No crea docs no solicitadas por tags
-- No "mejora" documentación existente fuera del scope de la tarea
-
-## Referencias
-
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/common/05 - Docs Sync.md`
-- Estrategia API docs: `memory/project_api_docs_strategy.md`
+- **No toca OpenAPI** — Nelmio lo cubre inline, en las anotaciones del código (`implement-backend` Paso 4).
+- No edita el `.md` de la task (eso es `task-close`).
+- No escribe el body del PR (`pr-ready`).
+- **No marca ningún ADR como `Accepted`**, ni sigue adelante sin la respuesta del usuario.
+- No crea superficies de documentación que el repo no tiene.
+- No "mejora" documentación fuera del alcance de la task — salvo la prosa que la regla de autoría 1 obliga
+  a corregir en el mismo changeset.

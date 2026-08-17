@@ -150,9 +150,14 @@ No es gate duro: si falla, warn y seguir.
 
 ### Fase 6 — `task-close`
 
-Siempre. Edita el `.md`: `Status` → lo que sea cierto **nombrando rama o commit** (README §3), y añade
-las desviaciones y los `Open follow-ups` que hayan aparecido. Escribe `notes.md` solo si hay aprendizajes
-no obvios.
+Siempre. Edita el `.md`: `Status` → lo que sea cierto **nombrando rama o commit** (README §3), y añade la
+sección de desviaciones **al final**, sin renumerar (las secciones son anclas `§N` citadas desde otros
+documentos).
+
+⚑ **Su trabajo real es que nada de lo aprendido se quede en `var/`.** Cada deferral va a
+`§Open follow-ups` de la task **más** su fila en `docs/BACKLOG.md`; cada decisión transversal, a su ADR. Un
+aprendizaje escrito solo en el workspace es un aprendizaje perdido — este repo ya tuvo que reconstruir a
+mano *"eight deferrals that lived only in an untracked memo"*.
 
 ⚑ **Si la task descargó un deferral de un ADR, el `Status`/`Enforced by`/`Realized in` de ese ADR van en
 este changeset**, no en una limpieza posterior (`CLAUDE.md` regla de autoría 7).

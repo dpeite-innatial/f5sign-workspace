@@ -19,6 +19,15 @@ Implementación TDD de una tarea frontend. El modelo se elige según `Complejida
 
 - `.md` de la tarea
 - Ficheros listados en `## Contexto requerido`
+- ⚑ **Los traspasos pendientes del backend: `../f5sign-backend/docs/frontend-handoff/*.md`.** Un cambio de
+  contrato en el backend y su adopción aquí son **dos PRs** (regla 4 del workspace: dos proyectos, dos PRs
+  coordinados), así que ese directorio es el único sitio donde está escrito *qué cambió y qué hay que hacer
+  en este repo*. Cada fichero nombra su commit de origen — compáralo con lo que ya está aplicado para saber
+  si vas por detrás — y lee su sección *"Lo que NO está listo todavía"* **antes** de construir contra un
+  endpoint: media utilidad de ese documento es frenar trabajo contra un seam incompleto.
+  Si el directorio no es alcanzable (acceso solo a este repo), **pide al usuario el fichero de traspaso** en
+  vez de inferir el contrato; y los tipos se regeneran del OpenAPI, que es la verdad legible por máquina,
+  nunca a mano desde la prosa del traspaso.
 - Si `--amplified-context`: README de story padre + README de epic padre + `.md` de dependencias + catálogo de eventos si aplica
 - Referencias fijas: `Arquitectura/Arquitectura Frontend.md`, `.claude/skills/planning-detail/references/wireframe-conventions.md`
 - `tailwind.config.ts` (tokens canónicos)

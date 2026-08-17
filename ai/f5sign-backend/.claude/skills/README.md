@@ -14,11 +14,11 @@ La adaptación va por fases. Esta tabla es el estado real, medido el **2026-08-1
 | `task-validate-backend` | ✅ adaptada | — |
 | `pr-ready` | ✅ adaptada | — |
 | `task-runner` | ✅ adaptada | — |
-| `task-close` | ⚠ pendiente | Escribe `Estado`, `Fin` y `Commit SHA` en una tabla *Seguimiento* que este formato no tiene. El equivalente es el campo `Status` de la tabla de cabecera, y debe **nombrar rama o commit** ([README](../../../docs/tasks/README.md) §3) |
+| `task-close` | ✅ adaptada | — |
 | `doctrine-guard` | ⚠ pendiente | Valida mapeos `*.orm.xml` y "entidades Doctrine": **0 ficheros `*.orm.xml`** en el árbol y el ORM se retiró (ADR-0018). Lo que sí aplica y hay que conservar: reversibilidad de migraciones, índices, RLS (ADR-0017), convenciones de esquema (ADR-0019), coherencia ENUM SQL↔PHP, y la regla de autoría 6 |
 | `contract-check-backend` | ⚠ pendiente | La mitad Nelmio `#[OA\*]` vale tal cual; la mitad AsyncAPI **no tiene diana**: `docs/asyncapi/` no existe. O se ficha crearlo, o se recorta la skill a la mitad que existe |
 | `perf-smoke-backend` | ⛔ no ejecutable | Depende de `composer perf:seed`, que no existe (`composer run-script --list`: `test`, `coverage*`, `phpstan`, `arch`, `lint`, `format`, `infection`, `qa`). `task-runner` la salta **declarándolo** en `run.log`, no la da por verde |
-| `docs-sync` | ⚠ pendiente | Condiciona por tags del frontmatter, que no existen. La condición correcta es lo que toca el diff, como ya hace `task-runner` Fase 3. ⚑ **Al adaptarla, hereda la regla del gate de decisión** (`implement-backend` Paso 2b): redacta ADRs como **`Proposed`** y nunca `Accepted`, y no los da por buenos sin aceptación explícita del usuario. Es la skill que redacta ADRs, así que es donde más caro sale saltárselo |
+| `docs-sync` | ✅ adaptada | — |
 | `security-audit-core` / `security-audit-backend` | ⚠ pendiente | Revisar referencias a rutas y namespaces del prototipo (`Innasign\`) |
 | `eidas-compliance` | ⚠ pendiente | Cita `project_cloud_signing_decisions.md`, que vive en el repo de docs. Cada hecho que tome de ahí debe quedar **restatado** aquí |
 | `v1-touched-file-hygiene` | ✅ nativa | Escrita para este repo. Se usa antes de commitear |
