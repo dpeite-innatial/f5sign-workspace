@@ -39,10 +39,19 @@ Verificar y **parar con mensaje claro** si falla:
    **worktree enlazado** (p. ej. `f5sign-backend-develop`), `make test` y `make phpstan` validan el otro
    árbol y su verde no dice nada de tu código. Rutas válidas en ese caso, en orden de preferencia:
    - `make -C ../f5sign-infra wt-backend src=$(pwd)` — lane efímero por worktree. ⚠ Hoy levanta **solo
-     postgres**: los tests de storage **fallan** (`Could not resolve host: minio`) y los de broker se
-     saltan, y `composer test` muere en el *process timeout* de 300 s de Composer. Úsalo sabiendo eso.
-   - Contenedor puntual sobre la red del stack, que es la vía que sí completa la suite:
+     postgres** (`docker-compose.wt.backend.yml` declara `postgres-test` + `php-fpm-wt` y nada más): los
+     tests de storage **fallan** (`Could not resolve host: minio`) y los de broker se saltan. Observado
+     además que la corrida muere en el *process timeout* de 300 s de Composer — pero **la causa no es la
+     duración de la suite**: medida aparte tarda ~74 s y los fallos de storage caen en ~28 s. El lane mete
+     `composer install` + migraciones + suite en el mismo proceso, que es la explicación probable. Si lo usas
+     y muere, no lo leas como "los tests son lentos".
+   - Contenedor puntual sobre la red del stack, que es la vía que sí completa la suite (medido: 1489 tests
+     en ~74 s). ⚠ **Migra primero contra `postgres-test`**, que es tmpfs y arranca vacío — sin ese paso los
+     tests de DB fallan con `could not translate host name` o tabla inexistente, y parece un fallo de código:
      ```
+     docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html \
+       -e DATABASE_URL='postgresql://f5sign:f5sign_test_pw@postgres-test:5432/f5sign_test?serverVersion=16&charset=utf8' \
+       f5sign/backend:dev sh -c 'php bin/console doctrine:migrations:migrate --env=test --no-interaction --allow-no-migration'
      docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html \
        f5sign/backend:dev sh -c 'php -d memory_limit=-1 bin/phpunit --no-progress'
      ```
@@ -57,7 +66,11 @@ Verificar y **parar con mensaje claro** si falla:
 2. **Leer la tabla de cabecera** (formato en el README §2): `Status`, `Type`, `Why`, `Builds on`,
    `Scope`, `Decision record`, `Delivery bar`, `Sibling`. **No hay `Complejidad`, `Tags`, `Story Points`
    ni `Depende de`** — ese era el formato del `Planning/` del repo de docs, que es legado (README §1).
-   - Si falta `Status`, `Type` o `Why` → parar; el resto lo diagnostica `spec-lint`.
+   - Si falta `Status` o `Type` → parar. **`Why` solo es obligatorio en tasks aún no implementadas**
+     (ver `spec-lint` Paso 2): medido 2026-08-17, 15 de los 21 registros existentes no lo llevan, y exigirlo
+     en bloque haría que este orquestador se negara a arrancar en la mayoría del corpus.
+   - Los encabezados de sección **no** están en posiciones fijas: localiza alcance y verificación por
+     intención, no por `§N` (§3 es *Scope* en 13 de 21; §5 es *Verification* en 7).
    - Si hay `Sibling` marcado con ⚑ → **leerlo antes de empezar**: dice explícitamente que la task no se
      puede planificar de forma independiente.
 3. **Verificar `Builds on`**: para cada task citada, leer su `Status`. Si alguna sigue `Not started` y la
@@ -71,7 +84,10 @@ Verificar y **parar con mensaje claro** si falla:
    (`docker run --rm -v $(pwd):/var/www/html -w /var/www/html f5sign/backend:dev mkdir -p var/task-runner/TASK-NNN`)
    o escribir los reports en el scratchpad de la sesión y **decir en el summary dónde quedaron**. Lo que
    no vale es perderlos en silencio.
-5. **Rama**: `feat/TASK-NNN-{slug}` (kebab-case del título, ASCII, máx 40 chars) desde `develop`.
+5. **Rama**: la convención real de este repo es `<tipo>/<slug>` — `feat/notification-email-html`,
+   `docs/task-conventions`, `chore/dockerfile-dev-target`. ⚠ **Ninguna rama en la historia del repo ha
+   llevado el id de la task en el nombre**, así que no inventes `feat/TASK-NNN-…`: el id va en el cuerpo del
+   PR y en el `Status` del `.md`. Kebab-case, ASCII, desde `develop`.
 6. **Inicializar `run.log`** (JSON lines) con `{phase: "prepare", status: "pass", at: ISO8601}`.
 
 ### Fase 1 — `spec-lint` [GATE]
@@ -100,7 +116,7 @@ la sesión. Escalar a un modelo mayor solo tras fallo repetido *con diagnóstico
 de entrada.
 
 Si falla con `"spec contradictorio"` o `"contexto insuficiente"` → **no escalar**: parar y pedir al usuario
-ampliar el `.md` (normalmente su §2 *What already exists* o su §3 *Scope*).
+ampliar el `.md` (normalmente su sección de *lo que ya existe* o la de *alcance*).
 
 ⛔ **Si devuelve `"awaiting-adr-acceptance"`, el turno es del usuario y de nadie más.** La skill ha
 encontrado una decisión transversal (contradice un ADR aceptado, abre una dependencia cross-BC, toca
@@ -168,6 +184,11 @@ Resumen de fases, ficheros cambiados, tests añadidos, criterios de §5 cubierto
 harness ejecutó la validación** (precondición 5). Preguntar: ¿abrir PR?
 
 ### Fase 8 — `pr-ready`
+
+⛔ **Hoy no se puede completar en esta máquina: `gh` no está instalado**, ni en el host ni en la imagen
+`f5sign/backend:dev`, y el Makefile de infra no tiene target para él. `pr-ready` falla cerrado en su
+precondición en vez de romper, pero el PR hay que abrirlo a mano. Decirlo en el resumen en vez de reportar
+un fallo de la skill.
 
 Solo si el usuario confirma (o `--auto`). **Sin política de commit único:** este repo integra PRs de varios
 commits y merges de `develop`; un `--amend` sobre un commit ya pusheado obliga a `--force-with-lease` sin

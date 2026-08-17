@@ -1,6 +1,6 @@
 ---
 name: pr-ready
-description: 'Cierra la task abriendo el Pull Request contra develop. Hace push de la rama, genera título (conventional commits) y body del PR (task + propiedades de §5 cubiertas + tabla de validaciones con el harness declarado + test plan derivado del diff), y lo marca draft si quedan warnings activos. Úsalo con /pr-ready TASK-NNN. Activar con "crear PR", "abrir pull request", "cerrar task y publicar", "pr ready".'
+description: 'Cierra la task abriendo el Pull Request contra develop. Hace push de la rama, genera título (conventional commits) y body del PR (task + propiedades verificadas + tabla de validaciones con el harness declarado + test plan derivado del diff), y lo marca draft si quedan warnings activos. Úsalo con /pr-ready TASK-NNN. Activar con "crear PR", "abrir pull request", "cerrar task y publicar", "pr ready".'
 ---
 
 # PR Ready
@@ -24,7 +24,8 @@ Cierre final. Solo se invoca si los gates previos pasaron (o el usuario forzó c
 
 - Rama pusheada a `origin`, PR abierto contra **`develop`**
 - Commit de seguimiento con la URL del PR en el `.md`
-- `var/task-runner/TASK-NNN/pr-ready.report.md`
+- `var/task-runner/TASK-NNN/pr-ready.report.md` — ⚠ `var/` puede ser de root y no dejarte escribir; en ese
+  caso, scratchpad de la sesión y **decir dónde quedó** (`task-runner` Fase 0 lo documenta)
 - JSON: `{"status":"pass|fail","summary":"...","prUrl":"...","prNumber":N,"branchName":"...","draft":bool}`
 
 ## Ejecución
@@ -32,8 +33,14 @@ Cierre final. Solo se invoca si los gates previos pasaron (o el usuario forzó c
 ### Paso 1 — Pre-check
 
 - [ ] `git status --short` limpio, salvo lo que se espera (el `.md`, `docs/`, `.env*`).
-- [ ] La rama es `feat/TASK-NNN-*`.
-- [ ] `gh auth status` no falla → si falla: `status: fail`, `summary: "gh not authenticated"`.
+- [ ] La rama sigue la convención real del repo, `<tipo>/<slug>` (`feat/notification-email-html`,
+      `docs/task-conventions`). ⚠ **Ninguna rama de este repo ha llevado nunca el id de la task en el nombre**,
+      así que no exijas `feat/TASK-NNN-*`: ese patrón falla en el 100 % de las ramas reales. El id va en el
+      cuerpo del PR.
+- [ ] `gh` existe. ⛔ **Hoy no está instalado** — ni en el host ni en la imagen `f5sign/backend:dev`, y el
+      Makefile de infra no tiene target — así que esta skill **no puede completar su trabajo en esta máquina**
+      y el PR se abre a mano. `status: fail`, `summary: "gh CLI ausente: abrir el PR manualmente"`, y **no**
+      lo diagnostiques como problema de autenticación: no hay binario que autenticar.
 - [ ] **La base es `develop`.** `master` es la rama de publicación; el trabajo de producto no se integra ahí
       directamente.
 
@@ -44,7 +51,7 @@ ganar nada. Si los commits son coherentes y explican su *por qué*, están bien 
 ### Paso 2 — Push
 
 ```bash
-git push -u origin feat/TASK-NNN-{slug}
+git push -u origin <rama>
 ```
 
 Si la rama ya existe en remoto y el push no es fast-forward → **parar**: `status: fail` con la razón. Nunca
@@ -79,8 +86,8 @@ Si el cambio rompe contrato publicado, `!` antes de los dos puntos.
 - **Tests:** {ficheros}
 - **Docs:** {ADRs, docs/, .env*}
 
-## Propiedades de §5 cubiertas
-- [x] {afirmación de §5 Verification} → {test que la prueba}
+## Propiedades verificadas
+- [x] {afirmación de la sección de verificación} → {test que la prueba}
 - [ ] {la que no se pudo probar} → {por qué el harness no la alcanza}
 
 ## Validaciones ejecutadas
@@ -118,7 +125,7 @@ del PR.
 ### Paso 6 — Crear el PR
 
 ```bash
-gh pr create --base develop --head feat/TASK-NNN-{slug} \
+gh pr create --base develop --head <rama> \
   --title "{título}" --body-file {tmp} [--draft]
 ```
 
@@ -142,7 +149,9 @@ git add {rutaMd} && git commit -m "docs(tasks): point TASK-NNN at its PR" && git
 ## Manejo de fallos
 
 - **Push rechazado (branch protection):** `status: fail`, decir qué regla se violó.
-- **`gh pr create` falla:** `status: fail`; si es auth, sugerir `gh auth login`.
+- **`gh pr create` falla:** `status: fail`. ⚠ Antes de sugerir `gh auth login`, comprueba que el binario
+  existe: hoy **no está instalado**, y confundir ausencia con falta de credenciales manda al usuario a
+  autenticar algo que no está ahí.
 - **Alguien integró en `develop` entretanto:** `status: fail`, `summary: "merge de develop requerido"`. No
   rebasar automáticamente. ⚑ Si el merge toca `.claude/` o `CLAUDE.md`, puede abortar por `skip-worktree`:
   `bin/unlink-ai.sh` → merge → `bin/sync-ai.sh` desde la raíz del workspace.

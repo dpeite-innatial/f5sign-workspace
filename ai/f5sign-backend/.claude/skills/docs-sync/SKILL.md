@@ -38,7 +38,11 @@ falta y hace falta, se reporta y se ficha en el BACKLOG; no se inventa a mitad d
 
 **No hay tags en este formato de task.** La condición es el diff.
 
-### El diff toca `src/F5Sign/<BC>/Domain/` o cambia un flujo → `docs/ddd/<bc>-domain-model.md`
+### El diff toca `src/F5Sign/<BC>/Domain/` o cambia un flujo → el modelo de dominio de ese BC
+
+⚠ **El nombre del fichero no se deriva del directorio**: `Session/` → `signing-session-domain-model.md`,
+`IdentityAccess/` → `identity-access-domain-model.md`, `SignatureExecution/` → `signature-execution-domain-model.md`.
+Haz `ls docs/ddd/` en vez de construir el nombre en minúsculas.
 
 Los modelos de dominio son **documentos vivos**: se actualizan en el sitio y su rastro es git
 ([`docs/adr/AUTHORING.md`](../../../docs/adr/AUTHORING.md) § ADRs vs domain models). Los ADRs son lo
@@ -69,7 +73,7 @@ placeholder*. Los dos patrones de la regla 4 del repo, y el primero es el están
 
 | Patrón | Cuándo | Ejemplos |
 |---|---|---|
-| **(A) Ausente** — el estándar | Siempre, salvo (B) | `DATABASE_URL`, `APP_SECRET`, `MESSENGER_TRANSPORT_DSN`, `SIGNING_TOKEN_SECRET`. `%env()%` falla al construir el contenedor en vez de caer a una contraseña de desarrollo |
+| **(A) Ausente** — el estándar | Siempre, salvo (B) | Son **seis**, y la cabecera de `.env` las nombra: `DATABASE_URL`, `APP_SECRET`, `MESSENGER_TRANSPORT_DSN`, `SIGNING_TOKEN_SECRET`, `IDENTITY_DATABASE_URL` y `PROVISIONING_DATABASE_URL` (las dos últimas llegaron con Identity & Access; `CLAUDE.md` sigue listando solo cuatro). `%env()%` falla al construir el contenedor en vez de caer a una contraseña de desarrollo |
 | **(B) Presente y vacía** — excepción estrecha | Solo si un valor vacío **jamás** puede funcionar *y* su consumidor lo rechaza | `FIELD_ENCRYPTION_SECRET=` únicamente. **No es transferible**: `SIGNING_TOKEN_SECRET` tiene valor de dev en `.env.dev`, así que vacío no fallaría cerrado |
 
 Añadir la variable al fichero del entorno que corresponda (valores de stack local sí van: coinciden con el
@@ -102,9 +106,11 @@ Su tabla de enrutado pregunta→documento es lo que lee alguien que llega nuevo.
   (`cd "$(git rev-parse --show-toplevel)"`, pathspec `':(top)docs/adr'`), sobre **todas** las ramas. "El
   mayor que hay + 1" mirando solo el working tree es cómo se acuñan colisiones: `AUTHORING.md` registra dos
   de ADR-0040, y `ADR-0049` apareció en otra rama en medio de una sesión.
-- **Aterrizar es aterrizar completo:** fila de índice + grafo de relaciones + fila de crosswalk en
-  `docs/adr/README.md`, más el campo `Crosswalk` de la cabecera. Cuatro sitios, fallados los cuatro a la vez
-  con el checklist abierto.
+- **Aterrizar es aterrizar completo: CINCO sitios.** Los tres de `docs/adr/README.md` (índice, grafo,
+  crosswalk) más el campo `Crosswalk` de la cabecera; **más** los dos que `AUTHORING.md` llama *"each
+  conditional but each easy to forget"*: la referencia `(ADR-NNNN)` en los docblocks del código que gobierna,
+  y **la reconciliación del modelo de dominio** en `docs/ddd/` con su fila de estado en `docs/ddd/README.md`.
+  Ese último es tuyo por definición: esta skill es la que mantiene los modelos.
 - **Presentarlo al usuario** con qué decide, qué descarta y qué prohíbe, y **parar** hasta que responda.
 
 ### El diff cambia algo que el frontal consume → `docs/frontend-handoff/`
@@ -113,8 +119,10 @@ Su tabla de enrutado pregunta→documento es lo que lee alguien que llega nuevo.
 PRs coordinados*. Así que un cambio de contrato del backend y su adopción en `f5sign-dashboard` /
 `f5sign-signer` son changesets distintos, y sin un artefacto de traspaso el segundo se reconstruye
 adivinando —o no llega nunca, que es lo que pasó con `signed_copy_url`: el frontal del firmante esconde su
-botón de descarga desde entonces porque espera un campo que el backend nunca envía, y eso vive hoy solo en
-un docblock.
+botón de descarga desde entonces porque espera un campo que el backend nunca envía, y eso vivía
+solo en un docblock del canal de email cuando se escribió esto — hoy está también en
+`docs/ddd/notification-domain-model.md` y en el README del traspaso. (Dejo la corrección a la vista porque es
+la regla 2 en acción: el *porqué* seguía siendo cierto y la mitad factual se había podrido.)
 
 **Cuándo se escribe** — predicado, no tags. El diff toca `src/**/UI/Http/`, `config/routes/`, cualquier
 `#[OA\`, un `Contract/` que la API emite, un enum cuyos valores salen por la API, una cabecera o regla CORS,
@@ -122,6 +130,12 @@ o una variable de entorno que el frontal necesita.
 
 **Dónde:** `docs/frontend-handoff/TASK-NNN-<slug>.md` (o `YYYY-MM-DD-<slug>.md` si el cambio no viene de una
 task). Convención completa en [`docs/frontend-handoff/README.md`](../../../docs/frontend-handoff/README.md).
+
+⚠ **Y aquí hay una excepción explícita a la regla de arriba**, para que no parezca contradicción: el
+directorio y su README nacieron en la rama `docs/task-conventions` y **puede que no existan en la rama donde
+trabajas**. Escribir el primer traspaso ahí **sí** crea la superficie — y está autorizado, porque la decisión
+ya está tomada y su convención escrita. Lo que la regla prohíbe es inventarse una superficie **sin decisión
+previa**; esta la tiene. Si el README no está en tu rama, dilo en el report y enlaza a la rama que lo lleva.
 
 **Qué lleva, y la forma importa porque el lector es un agente en otro repo sin acceso a este:**
 

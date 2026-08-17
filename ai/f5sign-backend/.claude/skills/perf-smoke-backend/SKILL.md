@@ -1,6 +1,6 @@
 ---
 name: perf-smoke-backend
-description: 'Smoke de performance en backend (PHP/Symfony). Su mitad ESTÁTICA sí corre hoy y es la útil: N+1 por lectura de código, índice efectivo para las consultas nuevas, trabajo pesado (o llamadas de red) dentro de una transacción o un lock, y trabajo síncrono en el camino HTTP que debería ir por Messenger. La mitad DINÁMICA (p95, throughput, memoria) no es ejecutable: depende de composer perf:seed, que no existe en este repo, y se reporta como skipped con su razón, nunca como verde. Emite warnings, no bloquea. Solo para repositorios con stack PHP/Symfony. Úsalo con /perf-smoke-backend T{id}. Activar con "smoke perf backend", "benchmark API PHP", "check N+1".'
+description: 'Smoke de performance en backend (PHP/Symfony). Su mitad ESTÁTICA sí corre hoy y es la útil: N+1 por lectura de código, índice efectivo para las consultas nuevas, trabajo pesado (o llamadas de red) dentro de una transacción o un lock, y trabajo síncrono en el camino HTTP que debería ir por Messenger. La mitad DINÁMICA (p95, throughput, memoria) no es ejecutable: depende de composer perf:seed, que no existe en este repo, y se reporta como skipped con su razón, nunca como verde. Emite warnings, no bloquea. Solo para repositorios con stack PHP/Symfony. Úsalo con /perf-smoke-backend TASK-NNN. Activar con "smoke perf backend", "benchmark API PHP", "check N+1".'
 ---
 
 # Perf Smoke (backend)
@@ -24,12 +24,12 @@ fixtures no hay p95, ni throughput, ni consumo comparable, y **`task-runner` la 
 
 Lo estático emite `warn`, no bloquea. Lo dinámico se reporta como no ejecutado.
 
-Smoke test de performance. Solo si tags incluye `critical-path`. NO es gate duro — emite warnings.
+Smoke test de performance. Se invoca cuando el diff toca un camino caliente (consulta en bucle, transacción larga, worker, endpoint de lista). NO es gate duro — emite warnings.
 
 ## Invocación
 
 ```
-/perf-smoke T{id}
+/perf-smoke-backend TASK-NNN
 ```
 
 ## Precondición
@@ -38,21 +38,21 @@ Smoke test de performance. Solo si tags incluye `critical-path`. NO es gate duro
 
 ## Inputs
 
-- `var/task-runner/T{id}/changes.diff`
-- `var/task-runner/T{id}/context-digest.md`
-- `var/task-runner/T{id}/doctrine-guard.report.md` (si existe; para correlacionar índices)
+- `var/task-runner/TASK-NNN/changes.diff`
+- `var/task-runner/TASK-NNN/context-digest.md`
+- `var/task-runner/TASK-NNN/doctrine-guard.report.md` (si existe; para correlacionar índices)
 - `.md` de la tarea (tags + umbrales overrideados si los declara)
 
 Umbrales por defecto (overridables en el `.md`):
 - Endpoint HTTP: p95 < 300ms → pass; 300-800ms → warn; > 800ms → warn alta
-- Worker: throughput por encima del mínimo definido en config del proyecto
+- Worker: throughput ⚠ **sin diana: ningún fichero de `config/` define un mínimo de throughput**, así que esta comparación no tiene lado derecho. Reportar la medida cruda, no un veredicto
 - Memoria: endpoint < 50MB por request
 (Frontend perf se mide con la skill `perf-smoke-frontend` en su propio repo.)
 
 ## Outputs
 
-- `var/task-runner/T{id}/perf-smoke.report.md`
-- `var/task-runner/T{id}/perf-metrics.json`
+- `var/task-runner/TASK-NNN/perf-smoke.report.md`
+- `var/task-runner/TASK-NNN/perf-metrics.json`
 - JSON:
   ```json
   {"status":"pass|warn|fail","summary":"...","issues":[...],"metrics":{"endpoints":{...},"workers":{...}}}
@@ -73,7 +73,7 @@ Si no hay nada medible → `status: pass`, `summary: "nada medible en el diff"`.
 
 ### Paso 2 — Análisis estático de queries (si hay código de persistencia en diff)
 
-- Habilitar Doctrine SQL logger en el entorno de medición
+- ⛔ **No hay Doctrine SQL logger que habilitar**: DBAL 4 retiró la API `SQLLogger` en favor de middleware, el ORM se retiró entero (ADR-0018) y no hay WebProfiler. Para contar consultas: instrumentar un middleware de DBAL o leer el log de Postgres
 - Para cada endpoint nuevo: llamarlo una vez contra datos del seed
 - Contar queries ejecutadas; si > 5 cuando debería ser 1 por colección → `warn` "N+1 sospechoso"
 - `EXPLAIN ANALYZE` sobre cada query nueva:
@@ -104,12 +104,12 @@ Para cada endpoint nuevo:
 
 ### Paso 6 — Fallback
 
-Si tooling no disponible (PHPBench no instalado, Lighthouse no instalado, seed no cargado) → `status: warn`, summary claro indicando qué faltó, y saltarse la medición correspondiente. Nunca bloquear por infra faltante en dev.
+⚠ **El tooling dinámico no está**: PHPBench no es dependencia de este repo, y Lighthouse es de frontend (vive en `perf-smoke-frontend`, no aquí). Reportar `skipped` con la razón y quedarse en la mitad estática.
 
 ## Report
 
 ```markdown
-# perf-smoke — T{id}
+# perf-smoke — TASK-NNN
 
 **Status:** {PASS|WARN}
 **Issues:** {N} warnings ({alta}/{media})
@@ -146,4 +146,4 @@ Nunca dispara reintento automático. Si modo supervised y hay WARN alta, task-ru
 ## Referencias
 
 - <!-- OFFREPO --> Diseño original (prototipo, superado): `Implementación/Skills de Ejecución de Tareas/backend/07 - Perf Smoke Backend.md`
-- Fixtures perf: T26.2.3 (provee `composer perf:seed`)
+- ⚠ **No hay task que provea `composer perf:seed`**: el puntero anterior (`T26.2.3`, formato de ids legado) no resuelve a nada. Crear el seed es una decisión y necesita su fila de BACKLOG, que **hoy tampoco existe**

@@ -1,6 +1,6 @@
 ---
 name: implement-backend
-description: 'Implementa una task backend (PHP/Symfony) de docs/tasks/ con TDD dirigido por propiedades, respetando el kernel de dominio, la separación entre BCs (solo Contract/ ajeno) y las reglas de autoría de CLAUDE.md. Para y consulta al usuario antes de tomar cualquier decisión transversal — contradecir un ADR aceptado, abrir una dependencia cross-BC, tocar Kernel/Foundation o editar deptrac/phpstan: redacta el ADR como Proposed y espera aceptación explícita, nunca lo marca Accepted por su cuenta. Lee el .md de la task (§2 lo que ya existe, §3 scope, §5 verification), escribe código + tests al tier que usan sus hermanos, anota endpoints con Nelmio, y produce context-digest.md y plan.md. Solo para repositorios con stack PHP/Symfony. Úsalo con /implement-backend TASK-NNN. Activar con "implementa backend TASK-NNN", "codifica task PHP...", "ejecuta implementación backend de...".'
+description: 'Implementa una task backend (PHP/Symfony) de docs/tasks/ con TDD dirigido por propiedades, respetando el kernel de dominio, la separación entre BCs (solo Contract/ ajeno) y las reglas de autoría de CLAUDE.md. Para y consulta al usuario antes de tomar cualquier decisión transversal — contradecir un ADR aceptado, abrir una dependencia cross-BC, tocar Kernel/Foundation o editar deptrac/phpstan: redacta el ADR como Proposed y espera aceptación explícita, nunca lo marca Accepted por su cuenta. Lee el .md de la task (lo que ya existe, el alcance y la verificación, localizados por intención y no por número de sección), escribe código + tests al tier que usan sus hermanos, anota endpoints con Nelmio, y produce context-digest.md y plan.md. Solo para repositorios con stack PHP/Symfony. Úsalo con /implement-backend TASK-NNN. Activar con "implementa backend TASK-NNN", "codifica task PHP...", "ejecuta implementación backend de...".'
 ---
 
 # Implement (backend)
@@ -24,9 +24,13 @@ modelo de la sesión; escalar solo tras fallo repetido con diagnóstico que lo j
 
 ## Inputs
 
-- El `.md` de la task, completo. Las secciones que gobiernan el trabajo son **§2 What already exists**
-  (lo que hay que reusar y no reconstruir), **§3 Scope** (lo que se puede tocar y lo que no) y
-  **§5 Verification** (el listón).
+- El `.md` de la task, completo. Tres secciones gobiernan el trabajo: **lo que ya existe** (reusar, no
+  reconstruir), **el alcance** (qué se toca y qué no) y **la verificación** (el listón).
+  ⚠ **Localízalas por intención, no por número.** Medido 2026-08-17 sobre los 21 registros: el alcance está
+  en §3 en 13 de 21 (también en §4 y §6), la verificación en §5 en solo 7 (también §4, §6, §9), y "lo que ya
+  existe" aparece como *What was built*, *What will be built*, *Design grounding*, *Locked decisions* o
+  *The model*. `docs/tasks/README.md` §2 dice explícitamente que los encabezados varían con el trabajo, así
+  que direccionar por `§N` es la lista cerrada que la propia convención prohíbe.
 - Lo que citen sus campos `Builds on` y `Decision record`.
 - Referencias fijas, siempre:
   - [`CLAUDE.md`](../../../CLAUDE.md) — convenciones + reglas de autoría
@@ -115,10 +119,14 @@ sospechosos: es la definición operativa de "decisión transversal" en este repo
    todavía se queda `Proposed`, y ponerlo `Accepted` falsifica el estado del repo.
 5. **Si el usuario lo rechaza**, la decisión no es tuya: recorta el scope o cambia de enfoque y vuelve al
    gate de plan. No lo implementes "de forma más pequeña" para que no haga falta el ADR.
-6. **Cuando el ADR aterrice, aterriza completo**: fila de índice + grafo de relaciones + fila de crosswalk
-   en [`docs/adr/README.md`](../../../docs/adr/README.md), **más** el campo `Crosswalk` de la cabecera y
-   las secciones que pide `AUTHORING.md`. Son cuatro sitios, y son cuatro porque ya se fallaron los cuatro
-   a la vez con el checklist delante.
+6. **Cuando el ADR aterrice, aterriza completo — son CINCO sitios**, y `AUTHORING.md` § *Maintenance when
+   adding an ADR* los enumera: (1) fila de índice, (2) grafo de relaciones y (3) fila de crosswalk en
+   [`docs/adr/README.md`](../../../docs/adr/README.md), más el campo `Crosswalk` de la cabecera y las
+   secciones que pide la plantilla; (4) **hacer el ADR alcanzable desde el código que gobierna** con
+   referencias `(ADR-NNNN)` en los docblocks —*"only the pair makes the decision discoverable in both
+   directions"*—; y (5) **reconciliar el modelo de dominio afectado** en `docs/ddd/` y su fila de estado en
+   `docs/ddd/README.md`. Los dos últimos son los que AUTHORING llama *"each conditional but each easy to
+   forget"*, y son justo los que esta lista omitía.
 
 ⚑ **El caso que más veces se cuela: ampliar la allowlist para poner el gate verde.** Si `composer arch`
 falla, la respuesta **no** es añadir la capa a la lista de dependencias permitidas — esa edición *es* la
@@ -128,7 +136,7 @@ un supresor.
 
 ### Paso 3 — Bucle TDD
 
-Por cada propiedad de §5 Verification, en orden:
+Por cada propiedad de la sección de verificación, en orden:
 
 1. **Escribir el test** en el tier que usan sus hermanos (`ls` el directorio de tests del BC; ser el único
    `*UseCase.php` sin `*UseCaseTest.php` al lado es la señal, y ha acertado siempre). Debe llevar:
@@ -165,23 +173,38 @@ Por cada propiedad de §5 Verification, en orden:
 
 - **El dominio no importa Symfony ni Doctrine.** Lo vigila Deptrac (`composer arch`) y las reglas PHPStan
   de colocación; si lo ves antes que ellas, rehacer.
-- **Entre BCs solo se ve el `Contract/` ajeno.** `deptrac.yaml` declara 37 capas y lo dice explícitamente:
+- **Entre BCs solo se ve el `Contract/` ajeno.** `deptrac.yaml` declara **38** capas (37 con entrada en `ruleset` más `Vendor`) y lo dice explícitamente:
   `EnvelopeApplication` puede ver `SessionContract`, `SignatureExecutionContract`,
   `IdentityAccessContract`… y **ningún `Domain` ni `Infrastructure` de otro BC**. `Kernel` depende de nada
   (`Kernel: []`). Si necesitas un dato que solo vive en el `Domain` de otro BC, la respuesta es un puerto
   de lectura en su `Contract/` (ADR-0008), no un import — y **eso es Paso 2b**, no una decisión de mientras
   implementas.
-- ⚑ **Notification es un BC de soporte: nada puede depender de él** (ADR-0037, categoría (c)). ⚠ **Y esta
-  regla no puede ponerse roja**, porque está expresada como una **ausencia**: ninguna lista del ruleset
-  menciona una capa `Notification*` desde fuera del propio BC (verificado 2026-08-17: cero). Añadir esa
-  dependencia **no genera ninguna violación** — Deptrac no tiene nada que reportar, el gate sigue verde, y
-  el BC deja de ser de soporte en silencio. Es la única regla estructural de este repo cuyo cumplimiento
-  hay que comprobar a mano, y por eso está aquí escrita en vez de delegada al gate.
+- ⚑ **Notification es un BC de soporte: nada puede depender de él** (ADR-0037, categoría (c)). El gate **sí**
+  lo caza: el `ruleset` de deptrac es una **allowlist positiva** y el repo corre con `Uncovered 0`, así que
+  una clase que dependa de una capa no permitida da `DependsOnDisallowedLayer`. Lo que **no** puede ponerse
+  rojo es **añadir la entrada a la allowlist**: eso no viola nada, simplemente deja de vigilar. Así que la
+  pregunta al revisar no es *"¿pasa deptrac?"* sino *"¿toca este diff `deptrac.yaml`?"* — y si lo toca, es
+  el Paso 2b, no una decisión de mientras implementas. Corregido 2026-08-17: esta viñeta decía que el gate
+  era ciego a la dependencia, que es la dirección peligrosa de equivocarse.
 - **Solo los aggregate roots tienen repositorio.** Las entidades subordinadas se modifican por su root.
-- **Comandos por el bus; queries directas.** Los controladores inyectan el bus o el servicio de lectura,
-  nunca un handler.
-- **VOs `final readonly`** con constructor privado y named constructors.
-- **Eventos de dominio en pasado** (`EnvelopeClosed`, no `CloseEnvelope`) — ADR-0011.
+- **Comandos por el bus; queries por llamada directa.** ADR-0008: **no hay QueryBus**, y un `QueryHandler`
+  se realiza con un `handle(Query): R` directo — su §Counterpoint rechaza expresamente meter un adaptador en
+  medio. Así que un controlador **sí** inyecta un query handler (tres lo hacen hoy) y eso es conforme; lo que
+  no debe hacer es inyectar un *command* handler saltándose el bus, porque el bus es donde viven la
+  transacción, el tenant y el issuer (ADR-0010).
+- **VOs: la forma depende del tipo, y en bloque es incorrecta** (ADR-0005). Un **wrapper** (un solo campo)
+  es `final readonly`; un **composite** (varios campos) es `final` y **no** readonly — 11 de los 22 del árbol
+  lo son, con constructor público. El modelo a imitar es
+  [`Settings`](../../../src/F5Sign/Envelope/Domain/ValueObject/Settings.php), que lo dice en su propio
+  docblock: *"final (not readonly) per ADR-0005"*. Exigir `final readonly` a todos reintroduce el defecto
+  que ADR-0005 existe para registrar. Named constructors sí, en los dos casos.
+- **Eventos de dominio en pasado** — ADR-0011, ilustrado con eventos que este repo tiene de verdad:
+  `EnvelopeCreated`, `EnvelopeSent`, `EnvelopeCompleted`, `StepCompleted`. ⚠ Y la forma superficial es la
+  mitad **cosmética**: ADR-0011 dice que lo load-bearing es la **partición de propiedad** (el prefijo
+  pertenece a un BC) y el **espejo**, y que el lint de prefijo↔BC es *candidate rule, not yet written*. Ojo
+  con leerlo al pie de la letra: `EnvelopeReadyToSeal` no es un verbo en pasado y **es conforme** (nombre de
+  transición a estado objetivo, §4), y ADR-0011 está en `Proposed`, así que por la regla 7 del repo aún no
+  vincula.
 - **Persistencia solo DBAL.** El ORM se retiró (ADR-0018): `doctrine/orm` no es dependencia y no hay
   ningún `*.orm.xml`. ⛔ **No escribas un docblock que justifique nada con hidratación/reflexión del ORM,
   ni con el outbox, ni con `AuditCommandInterface`**: son mecanismos ya retirados, y la regla de autoría 2
@@ -198,7 +221,7 @@ coherentes, cada uno con mensaje que diga *por qué*, y `git add` de ficheros co
 
 Antes del último commit:
 
-1. `git status` no debe traer nada que §3 Scope declare **Out**.
+1. `git status` no debe traer nada que el alcance de la task declare **Out**.
 2. Si el cambio re-cortó, renombró o re-gateó un concepto: barrido de la regla 1, en un comando —
    `rg -n '<término retirado>' src tests migrations docs config CLAUDE.md`. **El diff no es la superficie
    de búsqueda**: un fichero que aún necesita la edición aparece con diff vacío. Y `CLAUDE.md` está en el

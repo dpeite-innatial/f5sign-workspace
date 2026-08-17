@@ -1,6 +1,6 @@
 ---
 name: task-close
-description: 'Cierra documentalmente una task tras la implementación y las validaciones: actualiza su Status en la tabla de cabecera nombrando rama y commit, añade la sección de desviaciones al final (sin renumerar), y —lo que más importa— lleva cada deferral y cada aprendizaje a un home durable en el repo (§Open follow-ups + fila de docs/BACKLOG.md), nunca a un memo suelto. Úsalo con /task-close TASK-NNN. Activar con "cerrar task", "actualizar el .md", "consolidar aprendizajes", "marcar task como review".'
+description: 'Cierra documentalmente una task tras la implementación y las validaciones, y es la dueña del paso que nadie tenía: proponer el salto de un ADR de Proposed a Accepted cuando la task lo ejercita, nombrando el artefacto y esperando tu OK. También actualiza su Status en la tabla de cabecera nombrando rama y commit, añade la sección de desviaciones al final (sin renumerar), y —lo que más importa— lleva cada deferral y cada aprendizaje a un home durable en el repo (§Open follow-ups + fila de docs/BACKLOG.md), nunca a un memo suelto. Úsalo con /task-close TASK-NNN. Activar con "cerrar task", "actualizar el .md", "consolidar aprendizajes", "marcar task como review".'
 ---
 
 # Task Close
@@ -47,7 +47,7 @@ existe código, nombra rama o commit.**
 Forma a escribir:
 
 ```
-| **Status** | **Implemented on `feat/TASK-NNN-slug`** (<sha corto>), 2026-08-17 — suite verde bajo
+| **Status** | **Implemented on `feat/<slug>`** (<sha corto>), 2026-08-17 — suite verde bajo
 {harness}. Pendiente de review. {qué quedó fuera, si algo}. |
 ```
 
@@ -67,7 +67,7 @@ Contenido, y las subsecciones vacías se escriben como "Ninguna" en vez de omiti
 
 ```markdown
 ### Scope
-- {ficheros del diff que §3 no anticipaba, o "Ninguna"}
+- {ficheros del diff que el alcance no anticipaba, o "Ninguna"}
 
 ### Decisiones tomadas durante la implementación
 - {de context-digest.md; cada una con su por qué}
@@ -95,13 +95,32 @@ Los homes reales, por tipo:
 |---|---|
 | Algo decidido y **no hecho** | `§Open follow-ups` de esta task (el home de verdad) **+ una fila en `docs/BACKLOG.md`** que lo indexa apuntando aquí |
 | Una decisión transversal tomada | Su ADR. Si aún no existe → es `implement-backend` Paso 2b, no una nota |
-| Un ADR que esta task hizo cierto | El `Status` / `Enforced by` / `Realized in` **de ese ADR**, en este changeset (regla de autoría 7) |
+| Un ADR que esta task hizo cierto | El `Status` / `Enforced by` / `Realized in` **de ese ADR**, en este changeset (regla de autoría 7) — ver Paso 4b, que es quien lo ejecuta |
 | Una guarda que ningún harness alcanza | Fila de BACKLOG, citando qué harness haría falta |
 | Prosa que quedó obsoleta en otro fichero | Se corrige ahora, no se apunta: es el barrido de la regla 1 |
 | Fricción del proceso (entorno, tooling) | `var/…/task-close.report.md` está bien **solo** si es efímero de esta corrida; si se va a repetir, va al BACKLOG |
 
 Para la fila de BACKLOG: **re-derivar el id por grep en el momento**, sobre todas las ramas, con el
 pathspec absoluto (`':(top)docs/BACKLOG.md'`) — el mismo fallo en abierto que tenían los sweeps de ids.
+
+### Paso 4b — Mover un ADR de `Proposed` a `Accepted` (esta skill es la dueña, con tu OK)
+
+⚑ **Nadie era dueño de esta transición y por eso ADR-0018 y ADR-0035 se quedaron diciendo *not yet* mientras
+su trabajo ya estaba en `master`.** `implement-backend` redacta el ADR como `Proposed` y para; `docs-sync` no
+puede marcarlo `Accepted`; y aquí es donde por fin se sabe qué quedó verde. Así que el cambio de estado se
+propone **aquí**, y solo aquí.
+
+En este set **`Accepted` significa ejercitado**, no acordado. Por tanto:
+
+- [ ] ¿La decisión del ADR está **ejercitada por algo que se puede señalar** — un test que la prueba, un
+      camino de código que la aplica, una regla que la enforza? Si no, se queda `Proposed`. *"Ya está
+      implementado"* no basta: hay que nombrar el artefacto.
+- [ ] Rellenar **`Enforced by (in-repo)`** y **`Realized in (in-repo)`** con esos artefactos, por símbolo o
+      patrón de grep, **nunca por número de línea**.
+- [ ] **Proponerlo al usuario y esperar su OK**, igual que `implement-backend` hace al acuñarlo: *"ADR-NNNN
+      pasa de Proposed a Accepted porque {artefacto} lo ejercita"*. ⛔ Sin respuesta no se toca el campo.
+- [ ] Si la task ejercita **parte** de la decisión, existe el matiz: `Accepted (enforcement partial)` es una
+      forma en uso en este repo (ADR-0045). Mejor eso que un `Accepted` que promete más de lo que hay.
 
 ### Paso 5 — Los `Open follow-ups` que la task ya resolvió
 
@@ -141,7 +160,7 @@ normal. No hay `--amend` que esperar: `pr-ready` ya no reescribe historia.
 ## Qué NO hace
 
 - No abre PR (`pr-ready`).
-- No escribe ADRs (los propone `implement-backend`, los redacta `docs-sync`) — pero **sí** exige que el ADR
-  que esta task hizo cierto mueva su estado aquí.
+- No **redacta** ADRs (los propone `implement-backend`, los escribe `docs-sync`) — pero **sí es quien mueve
+  su estado** cuando la task los ejercita, con tu confirmación (Paso 4b).
 - No decide si se publica.
 - No corrige código ni tests.

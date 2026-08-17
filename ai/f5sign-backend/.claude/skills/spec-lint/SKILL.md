@@ -1,6 +1,6 @@
 ---
 name: spec-lint
-description: 'Validación mecánica de completitud del .md de una task de docs/tasks/ antes de implementarla. Comprueba la tabla de cabecera (Status, Type, Why, Decision record), que Status y Decision record sean falsificables, que una task que toca superficies transversales (deptrac, phpstan.neon, Kernel/Foundation, dependencias cross-BC) cite un ADR, que Builds on resuelva, secciones numeradas, autocontención (OFFREPO, enlaces relativos, cero citas por número de línea), unicidad del id entre ramas y ausencia de marcadores de incertidumbre. Úsalo con /spec-lint TASK-NNN o /spec-lint {ruta-al-.md}. Activar con "lint de tarea", "validar definición", "verificar task X", "revisar .md de task".'
+description: 'Validación mecánica de completitud del .md de una task de docs/tasks/ antes de implementarla. Comprueba la tabla de cabecera (Status, Type, Why, Decision record), que Status y Decision record sean falsificables, que una task que toca superficies transversales (deptrac, phpstan.dist.neon, el baseline, Kernel/Foundation, dependencias cross-BC) cite un ADR, que Builds on resuelva, secciones numeradas, autocontención (OFFREPO, enlaces relativos, cero citas por número de línea), unicidad del id entre ramas y ausencia de marcadores de incertidumbre. Úsalo con /spec-lint TASK-NNN o /spec-lint {ruta-al-.md}. Activar con "lint de tarea", "validar definición", "verificar task X", "revisar .md de task".'
 ---
 
 # Spec Lint
@@ -24,7 +24,11 @@ Gate de entrada. Checklist determinista sobre el `.md` de una task.
 
 ## Outputs
 
-- `var/task-runner/TASK-NNN/spec-lint.report.md` (crear el directorio si no existe)
+- `var/task-runner/TASK-NNN/spec-lint.report.md`. ⚠ **`var/` puede ser de root y no dejarte crear el
+  directorio** (comprobado 2026-08-17: `mkdir` desde el host da *Permission denied*, porque las herramientas
+  corren en contenedores como root). Esta skill es la primera del flujo, así que es la que se lo encuentra:
+  si pasa, crea el directorio dentro del contenedor o escribe el report en el scratchpad de la sesión, y
+  **di en el summary dónde quedó**.
 - Última línea: JSON `{"status":"pass|fail","summary":"...","issues":[{"severity":"fail|warn","category":"...","message":"..."}]}`
 
 ## Ejecución
@@ -44,10 +48,16 @@ Obligatorios:
 - [ ] `Type` — presente; texto libre, pero debe decir *qué clase de trabajo es* (forward build, corrective,
       enabling, groundwork) y no solo repetir el título
 - [ ] `Why` — presente; debe enunciar el fallo o la carencia, de forma que se pueda **discrepar** de ella
-- [ ] `Decision record` — presente, y **falsificable como `Status`** (ver Paso 3b). Un campo ausente aquí
-      es una task que no ha respondido *"¿qué decisión gobierna esto?"*, que es la pregunta de la que
-      depende la regla 7 del repo (contradecir un ADR aceptado es un cambio de ADR, no una edición
-      silenciosa). Ausente → `fail`, categoría `decision-record-missing`.
+- [ ] `Decision record` — presente y **falsificable como `Status`** (Paso 3b), con la misma condición de
+      antigüedad que `Why`. Un campo ausente es una task que no ha respondido *"¿qué decisión gobierna
+      esto?"*, la pregunta de la que depende la regla 7 del repo.
+
+⚑ **`Why` y `Decision record` solo bloquean en tasks todavía no implementadas.** La condición es una
+propiedad, no una lista: si el `Status` **no** afirma código existente, el registro sigue siendo un plan
+editable y los dos campos son obligatorios (`fail`). Si ya afirma código, son `warn` — porque rellenar el
+*por qué* de un trabajo ya cerrado es inventarlo a posteriori, y un `Why` inventado es peor que ausente.
+**Medido 2026-08-17: `Why` está en 6 de 21 registros y `Decision record` en 12**, así que exigirlos en
+bloque haría fallar a 15 de 21 y el linter sería más estricto que el corpus del que dice derivarse.
 
 Opcionales, y no se penaliza su ausencia: `Builds on`, `Scope`, `Delivery bar`, `Sibling`.
 
@@ -74,7 +84,10 @@ Dos formas válidas, y ninguna más:
    disparo es indistinguible de *"no me lo he preguntado"*. → sin ella: `fail`, categoría
    `decision-record-unfalsifiable`.
 
-⚑ **Y si el §Scope de la task toca cualquiera de estas superficies, la forma 2 no vale:** el ruleset o las
+⚑ **Y si el alcance de la task toca cualquiera de estas superficies, la forma 2 no vale.** ⚠ *Alcance*
+aquí es **la sección**, no el campo `Scope` de la cabecera: ese campo existe en 2 de 21 registros y el Paso 2
+lo declara opcional, así que gatear sobre él dejaría el check vacío en casi todos. Si no hay ni campo ni
+sección de alcance, dilo como `warn` (`scope-unstated`) en vez de dar por bueno que no toca nada. Superficies: el ruleset o las
 capas de [`deptrac.yaml`](../../../deptrac.yaml), `phpstan.dist.neon`, `phpstan-baseline.neon`, un contrato
 de `src/F5Sign/Kernel/` o `src/F5Sign/Foundation/`, o una dependencia cross-BC nueva. Todas son decisiones
 transversales por definición y piden ADR → `fail`, categoría `decision-required`, nombrando la superficie.
@@ -107,7 +120,7 @@ Las secciones van numeradas (`## 1. …`) y se citan como `§N` desde otros docu
 
 - [ ] Al menos una sección cuyo encabezado hable de **scope/alcance** y otra de
       **verification/acceptance/definition of done**. ⚑ Comprobar por *intención*, no contra una lista
-      cerrada de encabezados: los 20 registros existentes usan variantes legítimas, y una enumeración
+      cerrada de encabezados: los 21 registros de esta rama usan variantes legítimas —el alcance aparece en §3, §4 y §6; la verificación en §4, §5, §6 y §9— y una enumeración
       exime "todo lo que aún no está en la lista" (regla de autoría 5).
 - [ ] Numeración sin huecos ni repetidos, y **empezando en 1**.
 - [ ] Ninguna sección vacía (encabezado seguido de otro encabezado).
@@ -134,8 +147,10 @@ done | sort -u
 ⚠ **`':(top)'` no es decorativo, y sin él este check falla en abierto.** Un pathspec de git es relativo al
 **cwd**, así que `-- docs/tasks/` ejecutado desde `docs/tasks/` — el directorio donde estás precisamente
 cuando escribes una task — resuelve `docs/tasks/docs/tasks/` y devuelve **cero ids**. Cero ids se lee como
-"el id está libre", en el único check cuyo trabajo es impedir una colisión. Medido 2026-08-17: desde
-`docs/tasks/` daba 0; desde la raíz, 21.
+"el id está libre", en el único check cuyo trabajo es impedir una colisión. Medido 2026-08-17: **0 ids** sin
+`:(top)` desde `docs/tasks/`, y **24** con él (o desde la raíz). ⚑ Y no copies ese 24 a ninguna parte: es el
+recuento de ese día, no una constante. Una versión anterior de esta línea decía 21 —el número de ficheros de
+*una* rama— y ese error se propagó a dos documentos antes de que un audit lo cazara.
 
 - [ ] El id del `.md` no aparece en ninguna otra rama con **otro** slug → si aparece: `fail`, categoría
       `id-collision`, nombrando la rama. Esto ha pasado de verdad: `TASK-021…023` viven en

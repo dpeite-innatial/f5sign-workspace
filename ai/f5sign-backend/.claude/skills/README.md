@@ -23,6 +23,25 @@ La adaptación va por fases. Esta tabla es el estado real, medido el **2026-08-1
 | `eidas-compliance` | ✅ adaptada | — |
 | `v1-touched-file-hygiene` | ✅ nativa | Escrita para este repo. Se usa antes de commitear |
 
+## Auditadas el 2026-08-17
+
+Las doce pasaron por una auditoría de cinco agentes con contexto fresco: cuatro comprobando cada afirmación
+factual contra el árbol (un comando por claim) y uno preguntando lo contrario — qué debería vigilar el stack
+dada la arquitectura y no vigila nadie. Salieron ~100 hallazgos y todos los de estas cuatro clases están
+corregidos: **afirmar protección o regla inexistente** (PII cifrada, identidad derivada contra ADR-0042, VOs
+`final readonly` en bloque, B-LT por defecto), **checks que no podían fallar** (registro de eventos, `NO FORCE`,
+`CHECK (... IN ...)`, cuatro pasos enteros de eIDAS), **instrucciones inejecutables** (ramas `feat/TASK-NNN-*`
+que nunca existieron, `--testsuite <tier>`, JUnit sin configurar, `make sf` para el dry-run) y **duplicar un
+test que ya existe** (`OpenApiSpecTest`, `SchemaConformanceTest`).
+
+Lo que la auditoría dejó **abierto y no es arreglo de skill** está fichado en `docs/BACKLOG.md`: los dos
+agujeros de producto que encontró, el censo de row-lock que se deja cuatro use cases, `BC_SCHEMAS ⊄
+OWNED_SCHEMA`, los 26 `EVENT_TYPE` sin pin, y que no hay CI.
+
+⚑ **El hueco grande que sigue ahí:** ninguna de las doce nombra una categoría del kernel, y el contrato
+conductual de `Repository` —siete invariantes de `save`— no tiene ni un fichero de test. La forma está
+enforzada casi por completo; el comportamiento, por nada. Eso es trabajo nuevo, no adaptación.
+
 ## Dos reglas para quien siga la adaptación
 
 1. **Probar cada skill adaptada contra una task real antes de fiarse.** Una skill cuyos checks no

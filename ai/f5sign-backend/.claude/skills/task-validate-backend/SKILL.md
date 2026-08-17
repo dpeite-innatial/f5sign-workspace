@@ -1,6 +1,6 @@
 ---
 name: task-validate-backend
-description: 'Gate duro de calidad funcional en backend (PHP/Symfony): corre la suite (composer test), PHPStan nivel 9, Deptrac, lint, y mide fuerza estructural con covered-MSI de Infection en vez de porcentaje de líneas. Recomputa la separación entre BCs sobre el propio deptrac.yaml (solo Contract/ ajeno, nada depende de Notification, Kernel sin dependencias) porque una allowlist ampliada no produce violación alguna, reporta el delta de cualquier regla relajada y exige el ADR que la declare, y comprueba que un ADR que aterriza lo hace completo. Comprueba que las propiedades declaradas en §Verification de la task se ejecutan de verdad, y que el diff no se sale de su §Scope. Solo para repositorios con stack PHP/Symfony. Úsalo con /task-validate-backend TASK-NNN. Activar con "validar tarea backend", "run phpunit", "check PHPStan y deptrac".'
+description: 'Gate duro de calidad funcional en backend (PHP/Symfony): corre la suite (composer test), PHPStan nivel 9, Deptrac, lint, y mide fuerza estructural con covered-MSI de Infection en vez de porcentaje de líneas. Vigila el diff de deptrac.yaml/phpstan y comprueba que las cuatro formas load-bearing del ruleset siguen intactas — el gate sí caza una dependencia prohibida, pero no puede cazar que alguien amplíe la allowlist para permitirla — reportando el delta y exigiendo el ADR que lo declare, y comprueba que un ADR que aterriza lo hace completo. Comprueba que las propiedades declaradas en §Verification de la task se ejecutan de verdad, y que el diff no se sale de su §Scope. Solo para repositorios con stack PHP/Symfony. Úsalo con /task-validate-backend TASK-NNN. Activar con "validar tarea backend", "run phpunit", "check PHPStan y deptrac".'
 ---
 
 # Task Validate (backend)
@@ -16,13 +16,17 @@ Gate duro de calidad funcional. Se invoca siempre.
 ## Inputs
 
 - `var/task-runner/TASK-NNN/changes.diff`
-- El `.md` de la task — en particular **§3 Scope** y **§5 Verification** (formato en
-  [`docs/tasks/README.md`](../../../docs/tasks/README.md))
+- El `.md` de la task — sus secciones de **alcance** y **verificación**, localizadas por intención: no están
+  en `§3` y `§5` de forma fiable (medido: alcance en §3 en 13 de 21; verificación en §5 en 7 de 21)
 
 ## Outputs
 
 - `var/task-runner/TASK-NNN/validate.report.md`
-- `var/task-runner/TASK-NNN/test-results.xml` (JUnit)
+- `var/task-runner/TASK-NNN/test-results.xml` (JUnit) — ⚠ **solo si lo pides explícitamente**:
+  `phpunit.dist.xml` no tiene bloque `<logging>` y `composer test` no pasa `--log-junit`, así que la orden
+  del Paso 1 tal cual **no produce ningún fichero**. Para el cruce con la sección de verificación, añade
+  `--log-junit var/task-runner/TASK-NNN/test-results.xml` a la invocación de phpunit, o lee los nombres del
+  stdout
 - JSON: `{"status":"pass|fail","summary":"...","issues":[...],"harness":"...","msi":0.91,"propertiesUnproven":[]}`
 
 ## Precondición crítica — declarar el harness, y comprobar que apunta a TU árbol
@@ -37,7 +41,7 @@ en el campo `harness` del JSON**:
 | Vía | Sirve para | Limitación conocida |
 |---|---|---|
 | `make -C ../f5sign-infra test` | El checkout principal | Valida `../f5sign-backend`, no un worktree |
-| `make -C ../f5sign-infra wt-backend src=$(pwd)` | Un worktree | Solo postgres: storage **falla** (`host: minio`), broker se salta, y `composer test` muere en el timeout de 300 s de Composer |
+| `make -C ../f5sign-infra wt-backend src=$(pwd)` | Un worktree | Solo postgres: storage **falla** (`host: minio`) y broker se salta. Muere además en el timeout de 300 s de Composer, pero **no por la duración de la suite** (~74 s medidos aparte): mete install + migraciones + suite en un proceso |
 | `docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html f5sign/backend:dev sh -c 'php -d memory_limit=-1 bin/phpunit --no-progress'` | Un worktree, suite completa | Requiere el stack arriba; migra antes contra `postgres-test` |
 
 Si un servicio está caído durante la ejecución → `status: fail`, `summary: "infrastructure unavailable: X"`.
@@ -54,11 +58,13 @@ composer test        # un solo tier; NO existen test:unit / test:integration / t
 ```
 
 Los tiers de este repo son **directorios**, no scripts (ADR-0035): `Unit/`, `Application/` (herméticos),
-`Integration/` (DB real, rollback DAMA), `Acceptance/` (HTTP). Para acotar:
-`vendor/bin/phpunit --testsuite <name>` o `--filter`.
+`Integration/` (DB real, rollback DAMA), `Acceptance/` (HTTP). ⚠ **Para acotar, `--filter`, no
+`--testsuite`**: `phpunit.dist.xml` declara exactamente dos suites, `default` (todo `tests/`) y
+`phpstan-rules` (`phpstan/tests`), y **ninguna es un tier**. `tests/README.md` registra las suites por tier
+como *"(target)"*, o sea no construidas: `--testsuite Unit` da error.
 
 - [ ] Exit code 0.
-- [ ] Los tests que §5 Verification nombra **existen y se han ejecutado** (buscarlos por nombre en el
+- [ ] Los tests que la sección de verificación nombra **existen y se han ejecutado** (buscarlos por nombre en el
       JUnit). Un test nombrado en la task y ausente del run es `fail` categoría `property-unproven`.
 
 ### Paso 2 — Fuerza estructural: covered-MSI, no porcentaje de líneas
@@ -70,8 +76,12 @@ composer infection
 **Este repo no tiene umbral de cobertura de líneas y no se debe inventar uno.** El gate es el covered-MSI
 de Infection (ADR-0035). `composer coverage:text` / `coverage:clover` existen para inspección, no como bar.
 
-- Covered-MSI por debajo del umbral → `fail`. El número lo declara `infection.json5.dist`
-  (`minCoveredMsi`); leerlo de ahí, no de aquí ni de memoria.
+- **Son DOS puertas y `composer infection` falla con cualquiera de las dos.** `infection.json5.dist`
+  declara `minCoveredMsi` (profundidad: de lo cubierto, cuánto resiste) **y `minMsi`** (amplitud: incluye lo
+  no cubierto). Leer los dos números de ahí, no de aquí ni de memoria.
+- ⛔ **Si cae `minMsi`, no lo repares atribuyendo los flujos anchos.** El propio fichero lo advierte: *"the
+  cheapest way to raise MSI is to attribute the broad flows"* — y eso deshace la regla de dos tiers de
+  ADR-0035. El arreglo es test, no atribución.
 - ⚠ **Infection no ve código sin llamantes**, y su `source` es `src/F5Sign` solamente. Un artefacto nuevo
   sin ningún llamante puntúa como si no existiera, y el test de una regla PHPStan propia (que vive en
   `phpstan/`) es su **única** guarda. Si el diff añade superficie en esas zonas, decirlo en el report en vez
@@ -106,17 +116,29 @@ propiedad se cumpla. Este paso cubre las dos.
 - [ ] **Exigir ADR citado en el changeset** → si no hay: `fail`, categoría `undeclared-decision`. Ampliar
       la allowlist para que el gate pase **es la decisión**, no el arreglo (`implement-backend` Paso 2b).
 
-**b) Las reglas con forma de ausencia, recomputadas.** Un ruleset ampliado no produce violación alguna:
-la regla desaparece en silencio. Recomputar directamente sobre `deptrac.yaml`:
+**b) Las cuatro formas load-bearing de `deptrac.yaml`, leídas como datos.**
 
-- [ ] **Ninguna capa fuera de Notification depende de una capa `Notification*`** — ADR-0037, BC de soporte
-      de categoría (c). Medido 2026-08-17: cero. Si aparece una, `fail` aunque `composer arch` esté verde.
-- [ ] **Ningún BC ve de otro BC nada que no sea su `Contract`** — ninguna lista de dependencias nombra un
-      `…Domain`, `…Application`, `…Infrastructure` o `…UI` de otro BC.
-- [ ] **`Kernel: []`** sigue sin depender de nada.
+⚠ **Corregido 2026-08-17, y la corrección importa:** una versión anterior de este paso decía que estas
+reglas *"no pueden ponerse rojas"*. Falso. El `ruleset` es una **allowlist positiva** y el repo corre con
+`Uncovered 0 / Allowed 3755`, así que una clase que dependa de una capa no permitida **sí** produce
+`DependsOnDisallowedLayer`. Lo que no puede ponerse rojo es **ampliar la allowlist**: eso no viola nada,
+simplemente deja de vigilar. Por eso el check real es el (a) de arriba —mirar el diff del fichero— más
+comprobar que estas cuatro formas siguen intactas:
 
-Estos tres se comprueban leyendo el ruleset, no ejecutando Deptrac: son afirmaciones sobre el **fichero de
-reglas**, y por eso sobreviven a que alguien lo edite.
+- [ ] **`Kernel: []`** — no depende de nada.
+- [ ] **`Foundation: [Kernel, Vendor]` y nada más.** `LOAD-BEARING.md` §1.13 la marca como *"la más probable
+      de todas de deshacerse, y por razón mecánica: un ruleset relajado no falla nada"*. Añadirle un
+      `…Contract` disuelve la inversión de dependencia que ADR-0044 existe para forzar.
+- [ ] **Entre BCs, solo `…Contract`** — ninguna lista nombra un `Domain`/`Application`/`Infrastructure`/`UI`
+      ajeno. Y ninguna capa fuera de Notification nombra una `Notification*` (ADR-0037).
+- [ ] **`IdentityAccessApplication` e `IdentityAccessInfrastructure` tienen lista de hermanos VACÍA**
+      (ADR-0044, `LOAD-BEARING.md` §1.11). *"Completarla por simetría"* —porque parece un olvido al lado de
+      once listas pobladas— es el modo de destrucción documentado.
+
+⚑ **Y el collector `Vendor` es una allowlist de namespaces**, así que un vendor que no esté en su regex no
+pertenece a ninguna capa y un `Domain/` puede importarlo sin violar nada. Hoy `Lexik\` está en
+`composer.json` y **no** en la regex. Si el diff añade una dependencia de vendor, comprobar que su namespace
+entra en el collector.
 
 ### Paso 3c — Un ADR que aterriza, aterriza completo
 
@@ -126,6 +148,10 @@ Si el diff añade o cambia el estado de un `docs/adr/ADR-*.md`:
       *Accepted* significa ejercitado, no acordado.
 - [ ] Están las **tres** ediciones de [`docs/adr/README.md`](../../../docs/adr/README.md): fila de índice,
       grafo de relaciones, fila de crosswalk. Falta alguna → `fail`, categoría `adr-index-incomplete`.
+- [ ] Y las **dos que `AUTHORING.md` llama fáciles de olvidar**, porque son cinco sitios en total: la
+      referencia `(ADR-NNNN)` en los docblocks del código que gobierna (*"only the pair makes the decision
+      discoverable in both directions"*), y la reconciliación del modelo de dominio en `docs/ddd/` **más su
+      fila de estado** en `docs/ddd/README.md`.
 - [ ] Está el campo `Crosswalk` de la cabecera y las secciones que exige `AUTHORING.md`
       (`Consequences` con **Risks**, `Enforced by`, `Realized in`).
 - [ ] Si el diff hace cierto algo que otro ADR daba por pendiente, **ese** ADR mueve su
@@ -133,7 +159,7 @@ Si el diff añade o cambia el estado de un `docs/adr/ADR-*.md`:
 
 ### Paso 4 — Las propiedades declaradas se prueban de verdad
 
-Por cada afirmación de §5 Verification, comprobar que **el harness elegido puede verla**. Es el paso que
+Por cada afirmación de la sección de verificación, comprobar que **el harness elegido puede verla**. Es el paso que
 distingue esta skill de "correr la suite", y existe porque el repo ha shippeado guardas verdes que nada
 ejecutaba (`CLAUDE.md` regla de autoría 4):
 
@@ -145,27 +171,57 @@ ejecutaba (`CLAUDE.md` regla de autoría 4):
 - **Fixtures que no discriminan**: si dos variables siempre concuerdan en los datos de prueba, una
   proyección que filtra por la equivocada pasa igual. Exigir el caso donde **discrepan**.
 
-Lo que no pueda probarse con este harness va a `propertiesUnproven` y es `fail` si §5 lo declaraba probado.
+- **Redelivery / reintentos**: `async_events` es `in-memory://` en test… **pero no es toda la verdad**:
+  `when@test` declara además dos transportes AMQP reales (`async_events_amqp`,
+  `async_events_unroutable_amqp`) para que los tests de broker alcancen propiedades de redelivery. Antes de
+  declarar una propiedad inalcanzable, comprobar si le sirve uno de esos.
+- ⚑ **La probe de locks necesita `#[SkipDatabaseRollback]`.** Su propio docblock lo dice: sin ese atributo la
+  conexión estática de DAMA da a cada "sesión" la misma conexión física, **y un lock nunca choca consigo
+  mismo**. Añadirla sin él reproduce el verde-que-no-prueba-nada que este paso existe para cazar.
 
-### Paso 5 — El diff no se sale del §Scope
+**Dos formas de contaminar el run que hacen que un VERDE no valga nada** (`tests/README.md` § *Two ways to
+get an untrustworthy run*):
+
+- [ ] **`worker` o `relay` arriba durante la suite**: consumidores compitiendo en el mismo broker, se comen
+      los mensajes que el test espera. `make worker-down`, confirmar con `make worker-status`. `ensure-stack`
+      **no** lo comprueba.
+- [ ] **Dos `phpunit` a la vez contra la misma DB de test**: el aislamiento de DAMA es por *conexión*, no por
+      proceso — *"falla cerca del 100 % de las veces y se parece exactamente a una tormenta de flakes"*.
+- [ ] Entorno: `ensure-stack` exige `redis` (que los tests no usan, `LOCK_DSN=flock`) y **no** exige `minio`
+      (que sí usan), así que `make test` puede arrancar en verde con el storage caído.
+
+⚑ **Antes de rehacer a mano una comprobación estructural, mira si ya hay un test que la cierra.** Dos existen
+y ninguno de estos pasos los sustituye:
+[`OpenApiSpecTest`](../../../tests/F5Sign/Acceptance/OpenApiSpecTest.php) cierra el conjunto de claves del
+spec **en las dos direcciones**, con control positivo, y censa cada enum publicado; y
+[`SchemaConformanceTest`](../../../tests/F5Sign/Integration/SchemaConformanceTest.php) afirma el scoping por
+tenant y la RLS canónica contra la DB viva, con su taxonomía de exenciones. **Ejecútalos y lee su salida en
+vez de reproducirlos**; si falta un caso, se añade allí.
+
+Lo que no pueda probarse con este harness va a `propertiesUnproven` y es `fail` si la task lo declaraba probado.
+
+### Paso 5 — El diff no se sale del alcance declarado
 
 Este formato de task **no lleva tabla de "Archivos a crear/modificar"** (eso era el `Planning/` legado).
-La diana es la prosa de §3 Scope, con su lista **In** y su lista **Out**:
+La diana es la prosa de la sección de alcance, con sus listas **In** y **Out**:
 
 - `git diff --name-only $(git merge-base HEAD develop)..HEAD`.
-- [ ] Nada del diff cae en algo que §3 declara **Out** → si cae: `fail` categoría `out-of-scope`.
-- [ ] Ficheros fuera de lo que §3 anticipaba pero no prohibidos: `warn` categoría `undeclared-file`.
+- [ ] Nada del diff cae en algo declarado **Out** → si cae: `fail` categoría `out-of-scope`.
+- [ ] Ficheros fuera de lo anticipado pero no prohibidos: `warn` categoría `undeclared-file`.
 - ⚑ Si el cambio re-corta o renombra un concepto, comprobar el barrido de la regla 1:
       `rg -n '<término retirado>' src tests migrations docs config CLAUDE.md`. Un fichero que aún necesita
       la edición aparece con **diff vacío**, así que el diff no es la superficie de búsqueda.
 
 ### Paso 6 — Migraciones (si el diff toca `migrations/`)
 
-```bash
-make -C ../f5sign-infra sf cmd="doctrine:migrations:migrate --dry-run --no-interaction"
-```
+⛔ **No con `make sf`.** Tres razones: monta `../f5sign-backend`, así que en un worktree valida **otro
+árbol**; usa el rol `f5sign_app`, que no es superusuario (el target `migrate` del Makefile usa
+`$(PHP_ADMIN)`); y `--dry-run` **solo imprime SQL**, así que no dice nada de `down()`. Usa el contenedor
+puntual con la URL de admin, como en la precondición.
 
-- [ ] Sin errores, y reversible.
+- [ ] `up()` aplica sin errores contra un `postgres-test` recién migrado.
+- [ ] **`down()` se ejercita de verdad** — `--dry-run` no lo prueba; o se aplica y se revierte, o el report
+      dice explícitamente que la reversibilidad quedó sin comprobar.
 - [ ] Si la migración **escribe filas que el dominio luego lee**, es `doctrine-guard` quien lo audita
       (regla de autoría 6); aquí basta con marcarlo en el report para que no se pierda.
 
@@ -187,7 +243,7 @@ make -C ../f5sign-infra sf cmd="doctrine:migrations:migrate --dry-run --no-inter
 - Reglas relajadas en este diff: {ninguna | el delta en prosa + el ADR que lo declara}
 
 ## Propiedades declaradas y no probadas
-- {afirmación de §5} → el harness no la alcanza porque {razón}
+- {afirmación de la sección de verificación} → el harness no la alcanza porque {razón}
 
 ## Fuera de §Scope
 - {lista o "ninguno"}

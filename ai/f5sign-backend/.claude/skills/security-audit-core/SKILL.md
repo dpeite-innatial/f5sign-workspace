@@ -1,6 +1,6 @@
 ---
 name: security-audit-core
-description: Audit de seguridad genérico del código introducido por una tarea, independiente del stack. Cubre checks comunes (secretos hardcoded, PII en logs, dependencias con CVEs, autenticación/autorización a nivel conceptual, auth middleware presente, cross-tenant leaks) y delega los checks específicos del stack en security-audit-backend o security-audit-frontend según el repo. Si la tarea toca firma/crypto, delega también en eidas-compliance. Úsalo con /security-audit-core T{id}. Activar con "audit seguridad", "revisar security", "OWASP check", "auth/PII check".
+description: Audit de seguridad genérico del código introducido por una tarea, independiente del stack. Cubre checks comunes (secretos hardcoded, PII en logs, dependencias con CVEs, autenticación/autorización a nivel conceptual, auth middleware presente, cross-tenant leaks) y delega los checks específicos del stack en security-audit-backend o security-audit-frontend según el repo. Si el diff toca firma o cripto, delega también en eidas-compliance. Úsalo con /security-audit-core TASK-NNN. Activar con "audit seguridad", "revisar security", "OWASP check", "auth/PII check".
 ---
 
 # Security Audit Core
@@ -10,7 +10,7 @@ Gate duro de seguridad. Se invoca siempre. Ejecuta checks genéricos y delega en
 ## Invocación
 
 ```
-/security-audit-core T{id}
+/security-audit-core TASK-NNN
 ```
 
 ## Inputs
@@ -20,7 +20,7 @@ Gate duro de seguridad. Se invoca siempre. Ejecuta checks genéricos y delega en
 - Reports previos que existan en el workspace (`doctrine-guard.report.md`, `contract-check*.report.md`, etc.) para evitar redundancia
 - El `.md` de la task. **Las delegaciones se deciden por lo que toca el diff, no por tags** (este formato no los tiene)
 - Output de `composer audit` / `npm audit` provisto por task-runner
-- `.claude/skills-config.yaml` del repo (para saber el stack: `backend` | `frontend`)
+- `.claude/skills-config.yaml` del repo (para saber el stack: `backend` | `frontend`) — existe y declara `stack: backend`
 
 ## Outputs
 
@@ -54,9 +54,10 @@ Ejecutar sobre ficheros del diff. Saltar categorías cuyo scope no aparece en el
 #### PII
 - [ ] PII en logs: emails, teléfonos, DNI/NIE, IBAN, direcciones, nombres reales — redactados o fuera.
 - [ ] ⚑ **Afirmar el conjunto de claves cerrado, no hacer un spot-check.** Un "aquí no veo PII" pasa por alto
-      el campo nuevo: enumerar los campos que la superficie emite/persiste y decidir sobre **todos**. En el
-      backend, PII en reposo va cifrada por campo (ADR-0032/ADR-0033) y **fuera** del event log, cuyo payload
-      es pseudónimo (ADR-0031, Path B)
+      el campo nuevo: enumerar los campos que la superficie emite/persiste y decidir sobre **todos**.
+      ⚠ En el backend, PII fuera del event log es correcto y comprobable (ADR-0031, Path B), pero **PII en
+      reposo NO está cifrada hoy**: `FieldCipher` no tiene llamantes y ADR-0033 está `Proposed`. No dar por
+      hecha esa protección; si el diff añade una columna con PII, es hallazgo
 - [ ] PII en URLs: no está en path ni query string (va en body o headers)
 - [ ] Responses no exponen más PII de la necesaria para el endpoint
 
@@ -68,6 +69,12 @@ Ejecutar sobre ficheros del diff. Saltar categorías cuyo scope no aparece en el
 - [ ] Operaciones que requieren authz (no solo estar logueado, sino tener permiso sobre el recurso concreto) tienen check explícito
 - [ ] Tokens JWT / session tokens no se loguean ni devuelven en responses
 
+- [ ] ⚑ **Declarar un tipo de credencial no es lo mismo que estar protegido.** Comprobar que un `NONE` sea
+      **defendible y acotado por entorno**: hoy `GET /api/doc.json` declara `_authn: 'NONE'` —así que pasa
+      cualquier check de "está declarado"— y **no** tiene gate `when@dev`, de modo que publica toda la
+      superficie de la API, incluido el vocabulario de campos y cada bound de validación, en producción
+      (BL-63). Una ruta `NONE` nueva sin justificación y sin gate de entorno → `fail`.
+
 #### Aislamiento multi-tenant (conceptual)
 - [ ] Endpoints/operaciones nuevas que acceden a datos de un tenant respetan el contexto (verificación formal a nivel stack se hace en backend/frontend; aquí solo conceptual)
 - [ ] IDs de recursos no se confían del cliente sin verificación
@@ -75,9 +82,13 @@ Ejecutar sobre ficheros del diff. Saltar categorías cuyo scope no aparece en el
 
 #### Dependencias
 Input: output de `composer audit` (backend) o `npm audit` (frontend) provisto por task-runner.
-- [ ] Sin CVEs HIGH ni CRITICAL introducidas por esta tarea
-- MEDIUM → `warn`
-- LOW → `warn`
+- [ ] ⚠ **`composer audit` necesita red**: sin ella falla con `Could not resolve host: repo.packagist.org` y
+      no hay caché local de avisos, así que un run offline **no se distingue de uno limpio**. Declararlo.
+- [ ] Sin CVEs HIGH ni CRITICAL **introducidas por esta tarea** — y además **reportar el estado absoluto**:
+      hoy hay 1 HIGH viva (`symfony/http-kernel`) que el filtro por delta nunca dispara, y la regla 1 del repo
+      prohíbe regenerar `composer.lock` sin permiso, así que el remedio no está en manos de esta skill.
+- [ ] MEDIUM / LOW → `warn`. ⚑ Y hay avisos con `severity: null` (hoy uno, `symfony/runtime`): la escalera
+      necesita un brazo para ese caso o se cuelan en silencio.
 
 #### Errores y logging
 - [ ] Mensajes de error al usuario no filtran stack traces, paths internos, detalles de infraestructura

@@ -1,6 +1,6 @@
 ---
 name: contract-check-backend
-description: 'Valida los contratos publicados del backend (PHP/Symfony): anotaciones Nelmio #[OA\\*] frente a lo que el endpoint realmente emite (conjunto de claves cerrado, no solo "no falta ninguna"), eventos de Contract/Event (nombre en pasado, registro en EventTypeRegistry, reglas de payload aditivo) y la existencia del traspaso a frontal cuando el contrato cambia. AsyncAPI no tiene diana en este repo y se reporta como ausente en vez de fingirse. Úsalo con /contract-check-backend TASK-NNN. Activar con "validar contratos backend", "check API de la task", "revisar Nelmio y eventos".'
+description: 'Valida los contratos publicados del backend (PHP/Symfony): anotaciones Nelmio #[OA\\*] frente a lo que el endpoint realmente emite (conjunto de claves cerrado, no solo "no falta ninguna"), eventos de Contract/Event (el valor de EVENT_TYPE, que nada fija y cuyo cambio re-tipa historia ya escrita; reglas de payload aditivo; y por qué NO hay que comprobar el registro ni el routing, que son automáticos) y la existencia del traspaso a frontal cuando el contrato cambia. AsyncAPI no tiene diana en este repo y se reporta como ausente en vez de fingirse. Úsalo con /contract-check-backend TASK-NNN. Activar con "validar contratos backend", "check API de la task", "revisar Nelmio y eventos".'
 ---
 
 # Contract Check (backend)
@@ -17,9 +17,11 @@ cualquier `#[OA\`, o un `Contract/Event/`.
 ## Inputs
 
 - `var/task-runner/TASK-NNN/changes.diff` y `context-digest.md`
-- `var/task-runner/TASK-NNN/openapi-snapshot.json` — lo pre-genera `task-runner` con
-  `make -C ../f5sign-infra sf cmd="nelmio:apidoc:dump --format=json"`
-- El `.md` de la task: **§5 Verification** es lo que hace de criterios de aceptación (no hay `AC-NN`)
+- `var/task-runner/TASK-NNN/openapi-snapshot.json`. ⚠ **Dos trampas al generarlo.** El recipe `make sf` no
+  lleva `@`, así que la **primera línea de su stdout es el propio comando** y el fichero redirigido no es JSON
+  válido: descarta esa línea o usa el contenedor directamente. Y `make sf` corre en el php-fpm del stack, que
+  monta `../f5sign-backend` — en un worktree el snapshot es **el spec de otra rama**.
+- El `.md` de la task: su sección de **verificación** hace de criterios de aceptación (no hay `AC-NN`)
 
 ## Outputs
 
@@ -43,7 +45,18 @@ Por cada controlador del diff (`src/**/UI/Http/`):
       declarada también (una ruta de máquina que exige `F5Sign-Declared-Subject` y no lo publica deja al
       cliente de navegador sin poder mandarla, que es un fallo real ya ocurrido en CORS preflight).
 
-### Paso 2 — ⚑ El conjunto de claves, **cerrado**: el spec omitiendo lo que el endpoint sí emite
+### Paso 2 — El conjunto de claves cerrado: **ya hay un test que lo hace, ejecútalo**
+
+⚑ **Antes de enumerar nada a mano:**
+[`OpenApiSpecTest`](../../../tests/F5Sign/Acceptance/OpenApiSpecTest.php) ya cierra esto mecánicamente contra
+el spec **generado**: `published_response_schemas_declare_every_key_the_presenter_emits` compara en las dos
+direcciones sobre una vista completamente poblada **y lleva control positivo** (falla si el test podría pasar
+en vacío), y `every_published_enum_is_pinned_to_its_php_enum_or_classified` censa los enums y falla tanto por
+uno sin clasificar como por una clasificación obsoleta — incluidos los cuatro defectos históricos que se
+citan abajo. **Corre ese test y lee su salida.** Rehacerlo a mano y tomar el pase manual como red es
+exactamente el riesgo. Si crees que falta un caso, se añade **allí**, no aquí.
+
+Lo que sigue es el porqué, para saber qué estás leyendo cuando ese test falle:
 
 Este es el check que de verdad paga, y el que la versión anterior no tenía. La comprobación natural
 —*"¿está declarado todo lo que el AC pide?"*— **solo mira en una dirección**. El fallo real de este repo fue
@@ -59,19 +72,36 @@ Es la misma asimetría que en PHPStan nivel 9: **rechaza una clave que falta y a
       explícitamente como tales. Contar los `case` del enum PHP y comparar; no fiarse de la lista del spec.
 - [ ] Códigos HTTP alcanzables y no declarados → `fail`.
 
-### Paso 3 — Eventos: `Contract/Event/`, y el registro es el que muerde
+### Paso 3 — Eventos: `Contract/Event/`, y lo que muerde es el VALOR de `EVENT_TYPE`
 
 Los eventos publicados viven en `src/F5Sign/<BC>/Contract/Event/`, **no** en `Domain/Event/`.
 
 - [ ] Clase `final readonly`, constructor tipado.
-- [ ] **Nombre en pasado** (`EnvelopeCompleted`, no `CompleteEnvelope`) — ADR-0011.
-- [ ] ⚑ **Registrado en [`EventTypeRegistry`](../../../src/F5Sign/Foundation/Serialization/EventTypeRegistry.php).**
-      No es burocracia: un `event_type` que el registro no conoce **no se puede reconstruir**, el relay lo
-      cuenta como poison y a los cinco intentos lo **pone en cuarentena avanzando el cursor por encima** —
-      el hecho no llega nunca al broker y, para Notification, es una notificación que no se envía jamás.
-      Sin registrar → `fail`, categoría `unregistered-event-type`.
+- [ ] **Nombre en pasado** — ADR-0011, y con dos avisos. Primero: la forma superficial es la mitad que el
+      propio ADR llama **convención**; lo load-bearing es la **partición de propiedad del prefijo** (que
+      `Signature*` sea de SignatureExecution, `Envelope*` de Envelope) y el **espejo**, y su lint es
+      *candidate rule, not yet written* — así que hay excepciones legítimas por la corolaria del dueño del
+      acto (`Session/Contract/Event/SignatureCommitted.php`,
+      `SignatureExecution/Contract/Event/EnvelopeSealed.php`). Segundo: `EnvelopeReadyToSeal` **no** es un
+      verbo en pasado y **es conforme** (nombre de transición a estado objetivo). Y ADR-0011 está `Proposed`,
+      luego por la regla 7 aún no vincula: reportar como `warn`, nunca `fail`.
+- [ ] ⚠ **No compruebes que el evento está "registrado": el registro es automático.**
+      `RegisterDomainEventsPass` globea `*/Contract/Event/*.php`, filtra por subclase de `Event`, lee
+      `EVENT_TYPE` y se re-ejecuta al añadir o quitar ficheros (`GlobResource`). Un evento bien colocado **no
+      puede** quedar sin registrar, y uno malformado lanza `LogicException` **al compilar el contenedor**, o
+      sea que la suite entera se pone roja antes de llegar aquí. `LOAD-BEARING.md` §2 ya lo dice.
+      Lo que **sí** hay que comprobar es lo de abajo: el **valor** de `EVENT_TYPE`.
+- [ ] ⛔ **El valor de `EVENT_TYPE` no lo fija nada, y cambiarlo re-tipa historia ya escrita.** Hay 26
+      declarados y **ningún test asserta un valor**: el que los fijaba se retiró en el stage 2 del event log
+      y su reemplazo está *queued* en ADR-0031. Si el diff **cambia** un valor existente → `fail`, categoría
+      `event-type-rewrite`: el log es permanente y append-only, así que los bytes ya escritos dejan de
+      decodificarse y no hay reparación. Si **añade** uno nuevo, `pass` con nota.
 - [ ] Emitido de verdad: si el evento es nuevo, el diff contiene quien lo publica.
-- [ ] Si es async: rutado en `config/packages/messenger.yaml` y handler registrado.
+- [ ] ⚠ **No busques una entrada de `routing:` para un evento: está deliberadamente vacía.** El propio
+      `messenger.yaml` lo explica — *"No class is bus-routed to `async_events` directly: cross-BC events reach
+      the broker only through the event log + relay (ADR-0031), which forces the transport with a
+      `TransportNamesStamp`"*. Reportar que falta es un falso positivo; **añadirla contradice ADR-0031**. El
+      handler también se registra solo, por `_instanceof` de `MessengerEventSubscriber`.
 
 ### Paso 4 — Reglas de payload (evolución del log, ADR-0031)
 
@@ -79,8 +109,8 @@ El log es permanente y **la evolución es solo por upcast**: reescribir un paylo
 `sys_commitment`, así que está prohibido. De ahí tres reglas duras:
 
 - [ ] ⛔ **Nunca un campo obligatorio nuevo en un payload existente.** Se lee con
-      `Row::optionalString()` — su propio docblock lo dice, y hay precedente en cuatro eventos de cuatro
-      BCs. Campo obligatorio añadido → `fail`, categoría `payload-required-field`.
+      `Row::optionalString()` — su propio docblock lo dice, y hay precedente en cuatro eventos de **tres**
+      BCs (Session ×2, SignatureExecution, Envelope). Campo obligatorio añadido → `fail`, categoría `payload-required-field`.
 - [ ] ⛔ **Nunca renombrar un `event_type` en sitio.** Se añade el nuevo, se escriben ambos, se retira el
       viejo. Renombrado en sitio → `fail`: los bytes ya escritos dejan de decodificarse.
 - [ ] ⚠ **Y avisa de que hoy nada de esto tiene red.** El fixture de bytes canónicos por `event_type` está
@@ -91,8 +121,9 @@ El log es permanente y **la evolución es solo por upcast**: reescribir un paylo
 
 ### Paso 5 — Si el contrato cambió, tiene que haber traspaso al frontal
 
-- [ ] Existe `docs/frontend-handoff/*.md` en este changeset describiendo el cambio → si no:
-      `fail`, categoría `handoff-missing`. Convención en
+- [ ] Existe en **este diff** un fichero nuevo bajo `docs/frontend-handoff/` **que no sea `README.md`** → si
+      no: `fail`, categoría `handoff-missing`. ⚠ No uses el glob `docs/frontend-handoff/*.md` como condición:
+      el README vive ahí, así que el glob **siempre casa** y el check nunca falla. Convención en
       [`docs/frontend-handoff/README.md`](../../../docs/frontend-handoff/README.md); lo escribe `docs-sync`.
       Un cambio de contrato sin traspaso es el patrón que dejó al firmante esperando un `signed_copy_url`
       que nadie envía.

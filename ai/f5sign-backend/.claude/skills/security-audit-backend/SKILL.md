@@ -1,6 +1,6 @@
 ---
 name: security-audit-backend
-description: 'Checks de seguridad específicos del stack backend (PHP/Symfony). Complementa a security-audit-core con: inyección en SQL vía DBAL (no hay ORM), asserts de Symfony, el seam de autenticación real de este repo (Identity & Access con ruta que declara credencial, NO SecurityBundle: no está registrado), idempotencia por identidad derivada, CORS vía CorsListener propio, y la criptografía que sí existe aquí (credencial emitida, token de firma, cifrado de campo para PII). Nombra lo que NO está instalado —rate limiter— en vez de reportarlo endpoint por endpoint. Invocada por security-audit-core. Úsalo con /security-audit-backend T{id}. Activar con "security backend", "audit PHP", "check Symfony security".'
+description: 'Checks de seguridad específicos del stack backend (PHP/Symfony). Complementa a security-audit-core con: inyección en SQL vía DBAL (no hay ORM), asserts de Symfony, el seam de autenticación real de este repo (Identity & Access con ruta que declara credencial, NO SecurityBundle: no está registrado), idempotencia real (ADR-0042: el id NO es clave de reintento), CORS vía CorsListener propio, y la criptografía que sí existe (credencial emitida con enforcement parcial, token de firma). ⚠ Y dice en voz alta que la PII en reposo NO está cifrada hoy — FieldCipher no tiene llamantes y ADR-0033 está Proposed — en vez de afirmar una protección inexistente. Incluye los dos agujeros que una auditoría encontró aquí: el Content-Type que viene del cliente sin nosniff, y la credencial que sobrevive a su recurso. Nombra lo que NO está instalado —rate limiter— en vez de reportarlo endpoint por endpoint. Invocada por security-audit-core. Úsalo con /security-audit-backend TASK-NNN. Activar con "security backend", "audit PHP", "check Symfony security".'
 ---
 
 # Security Audit Backend
@@ -10,7 +10,7 @@ Checks específicos del stack PHP/Symfony. Normalmente invocada por `security-au
 ## Invocación
 
 ```
-/security-audit-backend T{id}
+/security-audit-backend TASK-NNN
 ```
 
 ## Inputs
@@ -91,11 +91,17 @@ repetirlo por cada ruta entierra el hecho en ruido.
 ### Idempotencia — identidad derivada, no una cabecera
 
 No hay formularios ni Twig, así que **CSRF no aplica**: la API se consume con credencial, no con cookie de
-sesión. Y la idempotencia de este repo **no** es un header `Idempotency-Key`: son las tres capas de
-ADR-0014, la primera de las cuales es **identidad derivada** (el id se mina de forma determinista, así que
-el reintento colisiona en vez de duplicar).
+sesión.
 
-- [ ] Una operación con efecto irreversible que se pueda reintentar tiene su id derivado, o dice por qué no.
+⛔ **Y ojo con la idempotencia, porque aquí es fácil pedir lo que un ADR prohíbe.** La capa 1 de ADR-0014 es
+*id-at-the-boundary* (un UUID preasignado), **no** una mina determinista; y **ADR-0042** —`Accepted`, y su
+título es literalmente *"the id is **not** a retry key"*— borró `field_id` del request de autoría y retiró el
+409, dejando escrito que *"retry safety is Layer 3's, and its absence is an accepted exposure"*. La capa 3
+(`Idempotency-Key`) **no está construida**.
+
+- [ ] **No** pedir un id derivado ni un id enviado por el cliente como clave de reintento: eso es exactamente
+      lo que ADR-0042 eliminó. Lo que sí se comprueba es que la exposición esté **declarada** donde toca, y
+      que nada nuevo la amplíe en silencio.
 - [ ] La convergencia se comprueba de verdad: el segundo intento **no** duplica. El patrón vivo es
       `if (!$delivery->isPending()) return;`.
 
@@ -104,7 +110,11 @@ el reintento colisiona en vez de duplicar).
 Genérico:
 
 - [ ] Random: `random_bytes()` / `random_int()`. Nunca `mt_rand()`/`rand()` en contexto de seguridad.
-- [ ] Comparación timing-safe: `hash_equals()`, jamás `===`/`==` sobre hashes o tokens.
+- [ ] Comparación timing-safe: `hash_equals()` para firmas y secretos. ⚠ **Con una excepción argumentada que
+      no se debe reportar:** `IssuedCredential` compara el *trailer* con `!==` a propósito, y su docblock
+      explica por qué — *"No `hash_equals` on the trailer, and its absence is deliberate… a constant-time
+      compare there would be cargo-cult, and would suggest to a later reader that the trailer carries
+      authority"*. Una regla en bloque produce ahí un falso positivo garantizado contra una decisión escrita.
 - [ ] Sin claves embebidas en el código: salen de configuración.
 - [ ] Si algún día hay contraseñas: `password_hash` con ARGON2ID/BCRYPT y `password_verify`. **Hoy no hay
       login por contraseña**, así que no reportar su ausencia como hallazgo.
@@ -112,19 +122,47 @@ Genérico:
 Y lo que sí existe aquí, que es donde de verdad hay que mirar:
 
 - [ ] **Credencial emitida** ([`IssuedCredential`](../../../src/F5Sign/Foundation/Credential/IssuedCredential.php),
-      ADR-0045): una gramática publicada para todo secreto que F5Sign entrega. Un secreto nuevo con formato
-      propio → `fail`, categoría `credential-format`.
-- [ ] **Token de firma** (`SigningTokenCodec`): verificación con `hash_equals`, y **el TTL vive en el caso de
-      uso que lo mina**, no en la copia. ⚑ Una promesa de retención en el copy sobre un token de 7 días fue
-      un fallo real ya corregido; no reintroducirla.
-- [ ] **PII cifrada en reposo** ([`FieldCipher`](../../../src/F5Sign/Foundation/Crypto/FieldCipher.php),
-      ADR-0032/ADR-0033): un campo nuevo con PII se clasifica y se cifra. ⚠ **El check es el conjunto de
-      claves cerrado**, no un spot-check: PHPStan nivel 9 rechaza una clave que falta y **acepta una de
-      más**, así que un "aquí no hay PII" pasa por alto el campo nuevo. Enumerar y afirmar el conjunto.
+      ADR-0045) — con dos matices que evitan un falso `fail`. ADR-0045 está `Accepted (enforcement partial)` y
+      su **Gate 1 sigue abierto**: *"nothing publishes the pattern yet"* (BL-80), así que "gramática
+      publicada" es el destino, no el estado. Y **el token de firma está fuera de la gramática a propósito**,
+      registrado como *known non-conformance* en su §2.3. `CredentialKind` tiene un solo caso hoy (`API_KEY`).
+      Un secreto nuevo con formato propio es `warn` citando ADR-0045, no `fail`.
+- [ ] **Token de firma** (`SigningTokenCodec`): verificación con `hash_equals` ✓. ⚠ **El TTL está duplicado
+      en dos sitios y ninguno es "el caso de uso que lo mina"**: `MintSigningTokenController` hace
+      `->modify('+7 days')` y `NotifyActivatedStepRecipientsUseCase` declara
+      `private const string TOKEN_TTL = '+7 days'`. Nada los mantiene juntos, así que si el diff toca uno,
+      comprobar el otro. ⚑ Y una promesa de retención en el copy sobre un token de 7 días fue un fallo real ya
+      corregido; no reintroducirla.
+- [ ] ⚠ **PII en reposo: hoy NO hay nada cifrado, y afirmar lo contrario es el peor error posible aquí.**
+      `FieldCipher` existe y está probado, pero tiene **cero llamantes en `src/`**, y ADR-0033 está
+      `Proposed`, diciéndolo con sus palabras: *"nothing calls them. No column is enciphered."* Hay plaintext
+      vivo — `envelope.recipient.email`, `full_name`, `notification.delivery.destination`. Así que el check
+      **no** es "¿está cifrado?" (la respuesta es no, siempre), es: **¿este diff añade una columna con PII?**
+      → entonces ADR-0033 es la decisión que la gobierna, nada la enforza, y eso se reporta como hallazgo con
+      su fila de BACKLOG. ⚑ Y el chequeo es sobre **conjunto de claves cerrado**: PHPStan nivel 9 rechaza una
+      clave que falta y **acepta una de más**, así que un "aquí no veo PII" se salta el campo nuevo.
 - [ ] **El event log es Path B**: PII en claro **fuera** del log; el payload es pseudónimo (ADR-0031). Un
       payload nuevo con PII en claro → `fail`, categoría `pii-in-log`.
-- [ ] `FIELD_ENCRYPTION_SECRET` no se commitea con valor, y su consumidor rechaza menos de 32 bytes: es la
-      única variable del patrón "presente y vacía" (regla 4 del repo).
+- [ ] `FIELD_ENCRYPTION_SECRET` no se commitea con valor, y su consumidor rechaza menos de 32 bytes. Es la
+      única **sensible** del patrón "presente y vacía" — `CORS_ALLOWED_ORIGINS=` también está vacía en `.env`
+      y no es un secreto, así que no la cuentes como excepción ni la rellenes.
+
+### Los dos agujeros que un audit encontró aquí, y que ninguna comprobación genérica ve
+
+- [ ] ⛔ **Nunca devolver un `Content-Type` que venga del cliente, y mandar `nosniff` siempre.**
+      `UploadDocumentContentController` guarda `$file->getClientMimeType()` —el **declarado**, no el
+      sniffeado— sin `Assert\File`, sin lista de tipos, sin tamaño máximo y sin magic bytes; y tres
+      controladores de descarga lo devuelven literal. **`X-Content-Type-Options: nosniff` no existe en
+      `src/`, `config/` ni el Caddyfile de infra.** Si el diff toca subida o descarga: exigir tipo derivado
+      del contenido, lista cerrada, y `nosniff` (+ `Content-Disposition: attachment` donde aplique).
+      ⚠ El bullet genérico *"Content-Type explícito, no autodetect"* **lo cumple este código defectuoso**:
+      por eso hace falta este check y no aquel.
+- [ ] ⛔ **Una credencial tiene que morir con su recurso.** El token de firma es stateless, con `exp` y sin
+      revocación, TTL de 7 días; **ningún fichero de `src/F5Sign/Session/` mira `EnvelopeStatus`** y
+      `DownloadSigningDocumentController` solo guarda contra `$content === null`. Resultado: tras anular un
+      sobre, quien tenga el token sigue leyendo documentos el resto de la semana (BL-61 abierto en el mismo
+      seam). Si el diff añade una ruta con token o un estado terminal nuevo: preguntar **qué invalida la
+      credencial**, no solo qué la valida.
 
 ### Persistencia — DBAL, no ORM
 
