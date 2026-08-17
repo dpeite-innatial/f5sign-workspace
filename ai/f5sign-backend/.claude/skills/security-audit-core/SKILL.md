@@ -18,7 +18,7 @@ Gate duro de seguridad. Se invoca siempre. Ejecuta checks genéricos y delega en
 - `var/task-runner/T{id}/changes.diff`
 - `var/task-runner/T{id}/context-digest.md`
 - Reports previos que existan en el workspace (`doctrine-guard.report.md`, `contract-check*.report.md`, etc.) para evitar redundancia
-- `.md` de la tarea (para tags, decide delegaciones)
+- El `.md` de la task. **Las delegaciones se deciden por lo que toca el diff, no por tags** (este formato no los tiene)
 - Output de `composer audit` / `npm audit` provisto por task-runner
 - `.claude/skills-config.yaml` del repo (para saber el stack: `backend` | `frontend`)
 
@@ -38,17 +38,33 @@ Ejecutar sobre ficheros del diff. Saltar categorías cuyo scope no aparece en el
 
 #### Secretos
 - [ ] No hay API keys, passwords, tokens hardcoded (grep patrones: `AWS_`, `API_KEY`, `SECRET`, `Bearer `, base64 largo, strings `sk_live_`, `pk_live_`, JWT-like)
-- [ ] No hay `.env` con valores reales commiteado
+- [ ] ⚑ **`.env`, `.env.dev` y `.env.test` SÍ están commiteados a propósito** (regla 4 del repo): llevan
+      defaults del stack local, que coinciden con el compose de infra y no son secretos. Lo que se busca no
+      es "hay un `.env` en git", es **una credencial real**: password de prod/staging, token de API real,
+      `APP_SECRET` real, la contraseña del keystore de DSS. Esas viven solo en `.env.local` / `.env.*.local`
+      (gitignorados) o en el vault de secretos.
+- [ ] ⛔ **Y un placeholder para una variable sensible es un hallazgo, no una solución.** `.env` viaja
+      **dentro de la imagen de producción**, así que una clave nombrada ahí siempre resuelve y producción
+      arrancaría con el valor commiteado. El patrón correcto es la **ausencia** (que `%env()%` falle al
+      construir el contenedor); la única excepción es `FIELD_ENCRYPTION_SECRET=` vacía, porque vacío no
+      puede funcionar y su consumidor rechaza menos de 32 bytes
 - [ ] No hay URLs internas commiteadas (endpoints privados, hostnames de prod)
 - [ ] Logs no imprimen variables sensibles (grep log statements con variables que contengan "token", "password", "secret", "key", "credential")
 
 #### PII
-- [ ] PII en logs: emails, teléfonos, DNI/NIE, IBAN, direcciones físicas, nombres reales. Si aparecen en log statements, deben estar redactados (ej. `***@domain.tld`) o no loggearse
+- [ ] PII en logs: emails, teléfonos, DNI/NIE, IBAN, direcciones, nombres reales — redactados o fuera.
+- [ ] ⚑ **Afirmar el conjunto de claves cerrado, no hacer un spot-check.** Un "aquí no veo PII" pasa por alto
+      el campo nuevo: enumerar los campos que la superficie emite/persiste y decidir sobre **todos**. En el
+      backend, PII en reposo va cifrada por campo (ADR-0032/ADR-0033) y **fuera** del event log, cuyo payload
+      es pseudónimo (ADR-0031, Path B)
 - [ ] PII en URLs: no está en path ni query string (va en body o headers)
 - [ ] Responses no exponen más PII de la necesaria para el endpoint
 
 #### Autenticación / Autorización (conceptual)
-- [ ] Endpoints/rutas nuevas que deberían requerir auth, la requieren (cualquier stack)
+- [ ] Rutas nuevas que deberían requerir auth, la requieren. ⚠ En el backend **no hay SecurityBundle
+      registrado**: el seam es la ruta que declara su tipo de credencial y un principal ya verificado
+      (ADR-0044/ADR-0048). El detalle lo comprueba `security-audit-backend`; aquí basta con que ninguna ruta
+      nueva quede sin declaración
 - [ ] Operaciones que requieren authz (no solo estar logueado, sino tener permiso sobre el recurso concreto) tienen check explícito
 - [ ] Tokens JWT / session tokens no se loguean ni devuelven en responses
 
@@ -85,7 +101,7 @@ Consolidar su report bajo sección "## security-audit-{stack}" del report propio
 
 ### Paso 3 — Delegar en eidas-compliance (si aplica)
 
-Si el `.md` tiene tags `signing`, `crypto` o `eidas`:
+Si el diff toca firma o cripto — `src/F5Sign/SignatureExecution/`, `Foundation/Crypto/`, DSS, PAdES, TSA:
 ```
 Agent({
   subagent_type: "general-purpose",
@@ -106,7 +122,9 @@ Si todo limpio → `status: pass`.
 ## Gravedad
 
 - **FAIL:** SQL/command injection detectada conceptualmente, endpoint sin auth cuando debería, cross-tenant leak, secreto hardcoded, PII en logs sin redactar, `security-audit-{stack}` o `eidas-compliance` devuelven fail
-- **WARN:** dependencia con CVE LOW/MEDIUM, mensaje de error ligeramente verbose, falta rate limit aparente
+- **WARN:** dependencia con CVE LOW/MEDIUM, mensaje de error algo verboso, y —una sola vez, no por
+  endpoint— que una superficie nueva pediría rate limiting: **el componente no está instalado en el
+  backend**, así que es una carencia de capacidad, no un defecto de la ruta
 
 ## Report
 
@@ -155,6 +173,6 @@ Si task-runner reintenta pasando este report a `implement-*`: instrucción "corr
 
 ## Referencias
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/common/06 - Security Audit Core.md`
+- <!-- OFFREPO --> Diseño original (prototipo, superado): `Implementación/Skills de Ejecución de Tareas/common/06 - Security Audit Core.md`
 - security-audit-backend: `.claude/skills/security-audit-backend/SKILL.md` (en repo backend)
 - security-audit-frontend: `.claude/skills/security-audit-frontend/SKILL.md` (en repo frontend)

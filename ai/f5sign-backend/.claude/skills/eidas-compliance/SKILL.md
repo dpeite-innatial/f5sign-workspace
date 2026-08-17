@@ -1,11 +1,13 @@
 ---
 name: eidas-compliance
-description: 'Valida cumplimiento eIDAS de código de firma electrónica: algoritmos permitidos (EC-P256, SHA-256+), formatos (PAdES/XAdES/CAdES/JAdES), niveles (B-B, B-T, B-LT, B-LTA), sellado de tiempo TSA, LTV, trust lists LOTL/TSL, certificados, integración con EU DSS v6.4, y alineación con las 12 decisiones de project_cloud_signing_decisions.md. Úsalo con /eidas-compliance T{id}. Activar con "compliance eIDAS", "revisar firma", "validar PAdES/XAdES", "check EU DSS".'
+description: 'Valida cumplimiento eIDAS del código de firma: algoritmos (EC-P256, SHA-256+), formatos (PAdES/XAdES/CAdES/JAdES), niveles (B-B, B-T, B-LT, B-LTA), sellado de tiempo TSA, LTV, trust lists LOTL/TSL, certificados e integración con EU DSS 6.4. Las decisiones vinculantes se leen de sus homes in-repo (ADR-0023 flujo de sellado servidor, ADR-0034 PAdES incremental secuencial, ADR-0016 modelo de almacenamiento WORM) y de las TASK-005/006/017/018, no del repo de diseño. Úsalo con /eidas-compliance T{id}. Activar con "compliance eIDAS", "revisar firma", "validar PAdES/XAdES", "check EU DSS".'
 ---
 
 # eIDAS Compliance
 
-Validación de cumplimiento eIDAS. Normalmente invocada por `security-audit` cuando tags incluyen `signing`, `crypto` o `eidas`. Directamente invocable por el usuario para debugging.
+Validación de cumplimiento eIDAS. La invoca `security-audit-core` cuando **el diff toca firma o cripto** —
+`src/F5Sign/SignatureExecution/`, `Foundation/Crypto/`, DSS, PAdES, TSA— y es invocable a mano para depurar.
+**Este formato de task no tiene tags**, así que la condición es el diff.
 
 ## Invocación
 
@@ -20,7 +22,16 @@ Validación de cumplimiento eIDAS. Normalmente invocada por `security-audit` cua
 - `.md` de la tarea
 
 Memoria y specs cargadas al inicio (obligatorias):
-- `memory/project_cloud_signing_decisions.md` (12 decisiones resueltas)
+- Las decisiones vinculantes, **en el repo**:
+  [`ADR-0023`](../../../docs/adr/ADR-0023-dss-server-signing-seal-flow.md) (flujo de sellado en servidor con
+  DSS), [`ADR-0034`](../../../docs/adr/ADR-0034-sequential-incremental-pades.md) (PAdES incremental
+  secuencial y sus marcas visibles), [`ADR-0016`](../../../docs/adr/ADR-0016-storage-model.md) (zonas WORM y
+  object-lock), y las tasks [`TASK-005`](../../../docs/tasks/TASK-005-dss-pades-signing-slice.md),
+  `TASK-006`, [`TASK-017`](../../../docs/tasks/TASK-017-sequential-incremental-pades.md), `TASK-018`
+  <!-- OFFREPO: la lista original de "12 decisiones" vivía en `project_cloud_signing_decisions.md`, del repo
+  de diseño, y no es alcanzable desde un checkout del backend. Todo lo que de ahí siga vigente está
+  restatado en los ADRs citados arriba; si una comprobación necesita una decisión que no está en ninguno de
+  ellos, **eso es el hallazgo**: la decisión no tiene home in-repo. -->
 - `Arquitectura/EU DSS - Guía de Integración.md`
 - `Arquitectura/Pilares/7. Infraestructura y Compliance.md` § D
 
@@ -34,7 +45,7 @@ Memoria y specs cargadas al inicio (obligatorias):
 
 ## Detección inicial
 
-Si tags incluye `signing`/`crypto`/`eidas` pero el diff NO toca código de firma (no hay imports de DSS, no hay clases con "Signature", "Signing", "Sign" en su nombre, no hay operaciones crypto) → `tagMismatches: ["signing"]` o el correspondiente, y devolver `status: pass` (nothing to check).
+Si el diff **no** toca código de firma (sin imports de DSS, sin clases con `Signature`/`Signing`/`Seal` en el nombre, sin operaciones cripto) → `status: pass`, `summary: "nothing to check"`. **Sin `tagMismatches`**: no hay tags que desmentir, y la condición de entrada la evalúa quien delega, sobre el diff.
 
 ## Ejecución
 
@@ -109,11 +120,17 @@ Documentar los valores detectados en el report.
   - timestamp, algoritmo, formato, nivel, certificado (thumbprint), TSA usada
 - [ ] Evento se persiste en audit log inmutable si proyecto lo exige
 
-### Paso 11 — Alineación con decisiones del proyecto
+### Paso 11 — Alineación con las decisiones que sí tienen home in-repo
 
-Por cada decisión de `project_cloud_signing_decisions.md`:
-- [ ] Si es aplicable a esta tarea (revisar tags/context-digest): verificar cumplimiento
-- [ ] Si el código diverge: `fail` con referencia a la decisión concreta (ej. "D7 exige EC-P256; código usa SHA1")
+- [ ] Contrastar contra **ADR-0023 / ADR-0034 / ADR-0016** y las TASK-005/006/017/018. Divergencia →
+      `fail`, citando el ADR y la sección.
+- [ ] ⚑ **Si una comprobación necesita una decisión que no está en ningún ADR ni task, el hallazgo es esa
+      ausencia**, no la divergencia: una decisión de firma sin home in-repo no puede vincular a nadie, y
+      pedirla es el gate de decisión de `implement-backend` Paso 2b. Reportar como `warn`, categoría
+      `decision-homeless`, nombrando qué falta.
+- [ ] Los hechos medidos contra el DSS vivo (origen de coordenadas arriba-izquierda, un `imageParameters`
+      = un widget = **una firma incremental**) están restatados en TASK-018 §1: usarlos de ahí, y si se
+      re-miden, añadir línea fechada en vez de editar la vieja.
 
 ### Paso 12 — Adversarios conocidos
 
@@ -173,5 +190,7 @@ Skill más cara del stack (Opus obligatorio). Se minimiza con:
 
 ## Referencias
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/backend/06 - eIDAS Compliance.md`
-- Decisiones vinculantes: `memory/project_cloud_signing_decisions.md`
+- <!-- OFFREPO --> Diseño original (prototipo, superado): `Implementación/Skills de Ejecución de Tareas/backend/06 - eIDAS Compliance.md`
+- Decisiones vinculantes **in-repo**: [`docs/adr/ADR-0023`](../../../docs/adr/ADR-0023-dss-server-signing-seal-flow.md),
+  [`ADR-0034`](../../../docs/adr/ADR-0034-sequential-incremental-pades.md),
+  [`ADR-0016`](../../../docs/adr/ADR-0016-storage-model.md), y `docs/tasks/TASK-005|006|017|018`

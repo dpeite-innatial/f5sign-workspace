@@ -1,9 +1,28 @@
 ---
 name: perf-smoke-backend
-description: 'Smoke test de performance en backend (PHP/Symfony) sobre código crítico: detecta N+1, falta de índices efectivos, endpoints lentos (p95), throughput de workers y consumo de memoria anómalo. Requiere fixtures perf cargadas previamente (composer perf:seed). Emite warnings, no bloquea. Solo para repositorios con stack PHP/Symfony. Úsalo con /perf-smoke-backend T{id}. Activar con "smoke perf backend", "benchmark API PHP", "check N+1".'
+description: 'Smoke de performance en backend (PHP/Symfony). Su mitad ESTÁTICA sí corre hoy y es la útil: N+1 por lectura de código, índice efectivo para las consultas nuevas, trabajo pesado (o llamadas de red) dentro de una transacción o un lock, y trabajo síncrono en el camino HTTP que debería ir por Messenger. La mitad DINÁMICA (p95, throughput, memoria) no es ejecutable: depende de composer perf:seed, que no existe en este repo, y se reporta como skipped con su razón, nunca como verde. Emite warnings, no bloquea. Solo para repositorios con stack PHP/Symfony. Úsalo con /perf-smoke-backend T{id}. Activar con "smoke perf backend", "benchmark API PHP", "check N+1".'
 ---
 
-# Perf Smoke
+# Perf Smoke (backend)
+
+⛔ **La mitad dinámica no es ejecutable hoy.** Depende de `composer perf:seed`, que **no existe**: los
+scripts de este repo son `test`, `coverage`, `coverage:text`, `coverage:clover`, `phpstan`, `arch`, `lint`,
+`format`, `infection`, `qa` (comprobar con `composer run-script --list`, no fiarse de esta lista). Sin
+fixtures no hay p95, ni throughput, ni consumo comparable, y **`task-runner` la salta declarándolo en
+`run.log` como `skipped` con su razón — nunca como verde**.
+
+✅ **La mitad estática sí vale, y es la que más ha pagado en este repo.** Se puede hacer sin fixtures:
+
+- [ ] **N+1 por lectura del código**: un bucle que consulta por elemento en vez de una consulta por lote.
+- [ ] **Índice efectivo para las consultas que el diff añade**: que exista uno cuyo prefijo sea el `WHERE`
+      real (en tablas de tenant, empezando por `tenant_id`), no un índice cualquiera sobre la columna.
+- [ ] **Trabajo pesado dentro de una transacción**: sobre todo una llamada de red dentro de un lock. ⚑
+      `BL-17` está abierto justo por eso — nada acota la ventana de lock durante DSS: `lock_timeout` y
+      `statement_timeout` no aparecen en `src/`, `config/` ni en infra, mientras la transacción de firma
+      abarca N documentos a través de la latencia de DSS. Si el diff amplía ese tramo, decirlo.
+- [ ] **Trabajo síncrono en el camino HTTP** que debería ir por Messenger (regla 3 del repo).
+
+Lo estático emite `warn`, no bloquea. Lo dinámico se reporta como no ejecutado.
 
 Smoke test de performance. Solo si tags incluye `critical-path`. NO es gate duro — emite warnings.
 
@@ -15,7 +34,7 @@ Smoke test de performance. Solo si tags incluye `critical-path`. NO es gate duro
 
 ## Precondición
 
-`task-runner` ha ejecutado `composer perf:seed` antes de invocar esta skill. Si los fixtures no están cargados → `status: warn, summary: "perf seed not loaded, skipped"`. No bloquea.
+⚠ **No hay `composer perf:seed` en este repo**, así que los fixtures nunca están cargados: la parte dinámica se reporta `skipped` con esa razón literal y se ejecuta solo la estática de arriba. No bloquea. Crear el seed es una decisión (y una fila de BACKLOG), no algo que esta skill improvise.
 
 ## Inputs
 
@@ -48,9 +67,9 @@ Umbrales por defecto (overridables en el `.md`):
 Según tags y diff:
 - Si tag `api`: identificar endpoints nuevos/modificados (buscar Controllers en el diff, extraer paths)
 - Si tag `worker`: identificar handlers nuevos/modificados
-- El tag `ui` NO aplica en backend — si aparece aquí, es un error del `.md` (señalar como tagMismatch)
+- No hay tags que validar: la condición de entrada es lo que toca el diff, y la evalúa quien delega.
 
-Si no hay nada medible → `status: warn, summary: "tag critical-path pero nada medible en el diff"`, añadir `tagMismatches: ["critical-path"]`.
+Si no hay nada medible → `status: pass`, `summary: "nada medible en el diff"`. Sin `tagMismatches`: no hay tags en este formato.
 
 ### Paso 2 — Análisis estático de queries (si hay código de persistencia en diff)
 
@@ -126,5 +145,5 @@ Nunca dispara reintento automático. Si modo supervised y hay WARN alta, task-ru
 
 ## Referencias
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/backend/07 - Perf Smoke Backend.md`
+- <!-- OFFREPO --> Diseño original (prototipo, superado): `Implementación/Skills de Ejecución de Tareas/backend/07 - Perf Smoke Backend.md`
 - Fixtures perf: T26.2.3 (provee `composer perf:seed`)

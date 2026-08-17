@@ -1,141 +1,137 @@
 ---
 name: contract-check-backend
-description: 'Valida contratos externos desde el lado backend (PHP/Symfony): anotaciones Nelmio #[OA\\*] en endpoints, OpenAPI generado coherente con los AC, definición correcta de domain events y sincronización con docs/asyncapi/. Solo para repositorios con stack PHP/Symfony. Úsalo con /contract-check-backend T{id}. Activar con "validar contratos backend", "check API PHP de tarea", "revisar Nelmio/AsyncAPI".'
+description: 'Valida los contratos publicados del backend (PHP/Symfony): anotaciones Nelmio #[OA\\*] frente a lo que el endpoint realmente emite (conjunto de claves cerrado, no solo "no falta ninguna"), eventos de Contract/Event (nombre en pasado, registro en EventTypeRegistry, reglas de payload aditivo) y la existencia del traspaso a frontal cuando el contrato cambia. AsyncAPI no tiene diana en este repo y se reporta como ausente en vez de fingirse. Úsalo con /contract-check-backend TASK-NNN. Activar con "validar contratos backend", "check API de la task", "revisar Nelmio y eventos".'
 ---
 
-# Contract Check
+# Contract Check (backend)
 
-Validación de contratos API y eventos. Solo si tags incluye `api` o `event`.
+Contratos publicados: HTTP y eventos. Se invoca si el diff toca `src/**/UI/Http/`, `config/routes/`,
+cualquier `#[OA\`, o un `Contract/Event/`.
 
 ## Invocación
 
 ```
-/contract-check T{id}
+/contract-check-backend TASK-NNN
 ```
 
 ## Inputs
 
-- `var/task-runner/T{id}/changes.diff`
-- `var/task-runner/T{id}/context-digest.md`
-- `var/task-runner/T{id}/openapi-snapshot.json` (si tag `api` — lo pre-genera task-runner)
-- `.md` de la tarea
-- README de la story padre (para AC)
-
-Del repo:
-- Controladores, DTOs de HTTP, Domain events, Messages, `docs/asyncapi/*.yaml` si existe
+- `var/task-runner/TASK-NNN/changes.diff` y `context-digest.md`
+- `var/task-runner/TASK-NNN/openapi-snapshot.json` — lo pre-genera `task-runner` con
+  `make -C ../f5sign-infra sf cmd="nelmio:apidoc:dump --format=json"`
+- El `.md` de la task: **§5 Verification** es lo que hace de criterios de aceptación (no hay `AC-NN`)
 
 ## Outputs
 
-- `var/task-runner/T{id}/contract-check.report.md`
-- JSON:
-  ```json
-  {"status":"pass|fail|warn","summary":"...","issues":[...],"tagMismatches":[]}
-  ```
+- `var/task-runner/TASK-NNN/contract-check.report.md`
+- JSON: `{"status":"pass|fail|warn","summary":"...","issues":[...],"surfacesAbsent":[...]}`
 
 ## Ejecución
 
-### Paso 1 — Detectar tag mismatch
+### Paso 1 — HTTP: los strings de `#[OA\*]` son contrato, no comentarios
 
-- Si tag `api` y el diff no contiene ficheros bajo `src/**/Infrastructure/Http/` ni `src/**/Application/*/DTO/` → `tagMismatches: ["api"]`
-- Si tag `event` y el diff no contiene `Domain/Event/`, `Application/Message/`, ni handlers → `tagMismatches: ["event"]`
+⚠ **Se emiten literalmente al spec que ratifica el equipo de frontal.** Uno de ellos llegó a decir a los
+clientes que enviaran un valor que el endpoint no acepta. Entran en el barrido de la regla de autoría 1.
 
-### Paso 2 — Checks tag `api`
+Por cada controlador del diff (`src/**/UI/Http/`):
 
-#### Anotaciones Nelmio
-Para cada Controller modificado:
-- [ ] Cada método público (endpoint) tiene `#[OA\Response(response=X, ...)]` para cada HTTP status listado en AC de la story
-- [ ] Si el método acepta body: `#[OA\RequestBody(required=true, content=...)]`
-- [ ] Si el endpoint es protegido: security scheme declarado (bearer/oauth2)
+- [ ] `#[OA\Response]` por cada código HTTP **alcanzable** — no los que "tocaría" devolver, los que el
+      código puede producir de verdad, incluidos los 404/409 que salen de una excepción de dominio mapeada
+      (ADR-0029).
+- [ ] `#[OA\RequestBody]` si acepta body; DTOs con `#[OA\Property]` tipadas y coherentes con la firma PHP.
+- [ ] Esquema de seguridad declarado si la ruta está autenticada, y la cabecera obligatoria de la ruta
+      declarada también (una ruta de máquina que exige `F5Sign-Declared-Subject` y no lo publica deja al
+      cliente de navegador sin poder mandarla, que es un fallo real ya ocurrido en CORS preflight).
 
-Para cada DTO request/response:
-- [ ] Cada propiedad tiene `#[OA\Property(type="...", description="...")]`
-- [ ] Tipos concordantes con la firma PHP
+### Paso 2 — ⚑ El conjunto de claves, **cerrado**: el spec omitiendo lo que el endpoint sí emite
 
-#### OpenAPI generado
-- [ ] `openapi-snapshot.json` existe y es JSON válido
-- [ ] Contiene el path del endpoint modificado
-- [ ] Todos los `$ref` resuelven a schemas presentes en `components.schemas`
-- [ ] Sin warnings ni errors en la generación (si task-runner capturó stderr)
+Este es el check que de verdad paga, y el que la versión anterior no tenía. La comprobación natural
+—*"¿está declarado todo lo que el AC pide?"*— **solo mira en una dirección**. El fallo real de este repo fue
+el contrario: los endpoints devolvían `signing_mode` y `recipients[].document_assignments` desde siempre y
+**el spec los omitía**; `Envelope.status` no publicaba `READY_TO_SEAL`/`ROUTING_FAILED`/`SEALING_FAILED`, y
+`Recipient.role` se dejaba fuera `IN_PERSON_HOST`/`CERTIFIED_DELIVERY`.
 
-#### Coherencia con AC
-Para cada `AC-\d+` en la story que describa request/response/errores HTTP:
-- [ ] HTTP status declarado en AC ∈ responses del OpenAPI
-- [ ] Error code aplicación (ej. `ENVELOPE_ALREADY_CLOSED`) aparece en el schema del response del código HTTP correspondiente
-- [ ] Path y método del AC = path y método en Nelmio
-- [ ] Campos del request descritos en AC = `#[OA\Property]` del DTO request
-- [ ] Campos del response descritos en AC = `#[OA\Property]` del DTO response
+Es la misma asimetría que en PHPStan nivel 9: **rechaza una clave que falta y acepta una de más**. Así que:
 
-Divergencias → `fail` categoría `ac-mismatch`.
+- [ ] Enumerar lo que el controlador/DTO **emite de verdad** y compararlo con lo que el spec declara, **en
+      las dos direcciones**. Campo emitido y no declarado → `fail`, categoría `undeclared-emission`.
+- [ ] Para cada enum que sale por la API: **todos** sus `case` publicados, o los no soportados marcados
+      explícitamente como tales. Contar los `case` del enum PHP y comparar; no fiarse de la lista del spec.
+- [ ] Códigos HTTP alcanzables y no declarados → `fail`.
 
-### Paso 3 — Checks tag `event`
+### Paso 3 — Eventos: `Contract/Event/`, y el registro es el que muerde
 
-#### Definición del evento
-Para cada fichero modificado en `src/**/Domain/Event/`:
-- [ ] Clase es `final readonly`
-- [ ] Nombre en tiempo pasado (`EnvelopeClosed`, no `CloseEnvelope`, no `Closing`)
-- [ ] Constructor tipado en todas las propiedades
-- [ ] Implementa la interfaz de domain event del proyecto si existe (ej. `DomainEventInterface`)
+Los eventos publicados viven en `src/F5Sign/<BC>/Contract/Event/`, **no** en `Domain/Event/`.
 
-#### Emisión
-- [ ] Si el evento es nuevo → grep en el diff por uso (dispatch): debe haberse añadido llamada a `$this->eventBus->dispatch(new {Event}(...))` o `$entity->recordEvent(new ...)` en algún Handler o Entity
-- [ ] Si el evento aparece en `context-digest.md § Eventos de dominio / Emite` → confirmar que está listado en `Implementación/Skills de Ejecución de Tareas/` o en el catálogo oficial (`/.claude/skills/planning-detail/references/domain-events-catalog.md` si existe)
-  - Si no aparece → `warn` categoría `catalog`: "añadir al catálogo"
+- [ ] Clase `final readonly`, constructor tipado.
+- [ ] **Nombre en pasado** (`EnvelopeCompleted`, no `CompleteEnvelope`) — ADR-0011.
+- [ ] ⚑ **Registrado en [`EventTypeRegistry`](../../../src/F5Sign/Foundation/Serialization/EventTypeRegistry.php).**
+      No es burocracia: un `event_type` que el registro no conoce **no se puede reconstruir**, el relay lo
+      cuenta como poison y a los cinco intentos lo **pone en cuarentena avanzando el cursor por encima** —
+      el hecho no llega nunca al broker y, para Notification, es una notificación que no se envía jamás.
+      Sin registrar → `fail`, categoría `unregistered-event-type`.
+- [ ] Emitido de verdad: si el evento es nuevo, el diff contiene quien lo publica.
+- [ ] Si es async: rutado en `config/packages/messenger.yaml` y handler registrado.
 
-#### AsyncAPI
-Si existe `docs/asyncapi/`:
-- [ ] Parsear YAML relevante
-- [ ] Para cada evento emitido/consumido por esta tarea: schema en `components.schemas` con propiedades idénticas al evento PHP
-- [ ] Channel/queue name coincide con configuración Messenger
-- [ ] Si el evento emitido es nuevo y no aparece en AsyncAPI → `fail` categoría `asyncapi-missing`
+### Paso 4 — Reglas de payload (evolución del log, ADR-0031)
 
-Si NO existe `docs/asyncapi/`: emitir warn "AsyncAPI no presente, contratos de eventos sin documentar" y seguir. No bloquear.
+El log es permanente y **la evolución es solo por upcast**: reescribir un payload almacenado rompe su
+`sys_commitment`, así que está prohibido. De ahí tres reglas duras:
 
-#### Messenger (si mensaje async)
-- [ ] Rutado definido en `config/packages/messenger.yaml` (grep)
-- [ ] Handler registrado (clase con `AsMessageHandler` u otra convención del proyecto)
-- [ ] Si puede fallar: retry strategy definida
+- [ ] ⛔ **Nunca un campo obligatorio nuevo en un payload existente.** Se lee con
+      `Row::optionalString()` — su propio docblock lo dice, y hay precedente en cuatro eventos de cuatro
+      BCs. Campo obligatorio añadido → `fail`, categoría `payload-required-field`.
+- [ ] ⛔ **Nunca renombrar un `event_type` en sitio.** Se añade el nuevo, se escriben ambos, se retira el
+      viejo. Renombrado en sitio → `fail`: los bytes ya escritos dejan de decodificarse.
+- [ ] ⚠ **Y avisa de que hoy nada de esto tiene red.** El fixture de bytes canónicos por `event_type` está
+      registrado en ADR-0031 como *"Not enforced — queued, not built"*, y el round-trip que existe
+      serializa y deserializa **con el mismo código**, así que nunca puede detectar un `fromPayload()`
+      incompatible: los dos lados se mueven juntos y se alejan a la vez de los bytes que ya están en el log.
+      Un cambio de payload sin ese fixture es `warn` con esta frase, no un pass silencioso.
 
-### Paso 4 — Intersección (tags `api` + `event`)
+### Paso 5 — Si el contrato cambió, tiene que haber traspaso al frontal
 
-Si la tarea tiene ambos:
-- [ ] Para cada AC que diga "endpoint emite evento X": verificar que el Handler del comando del endpoint efectivamente dispatcha X
-- [ ] Verificar que existe test E2E que valida la emisión del evento tras llamar al endpoint
+- [ ] Existe `docs/frontend-handoff/*.md` en este changeset describiendo el cambio → si no:
+      `fail`, categoría `handoff-missing`. Convención en
+      [`docs/frontend-handoff/README.md`](../../../docs/frontend-handoff/README.md); lo escribe `docs-sync`.
+      Un cambio de contrato sin traspaso es el patrón que dejó al firmante esperando un `signed_copy_url`
+      que nadie envía.
+
+### Paso 6 — Superficies ausentes
+
+**`docs/asyncapi/` no existe en ninguna rama de este repo** (comprobado 2026-08-17). No fallar por ello y
+**no crearlo**: reportar en `surfacesAbsent` qué evento queda sin documentación legible por máquina y decir
+dónde vive mientras tanto (su clase `Contract/Event/`, su entrada en `EventTypeRegistry`, y el ADR que lo
+gobierna). Si la carencia es real y repetida, es una fila de `docs/BACKLOG.md`, no un fichero fantasma.
 
 ## Report
 
 ```markdown
-# contract-check — T{id}
+# contract-check-backend — TASK-NNN
 
-**Status:** {PASS|FAIL|WARN}
-**Tags evaluados:** {api, event}
-**Issues:** {B} bloqueantes, {W} warnings
+**Status:** {PASS|FAIL|WARN} · **Issues:** {B} bloqueantes, {W} warnings
 
-## Bloqueantes
-- [{categoría}] {fichero:línea} {mensaje}
+## Contrato HTTP
+- Declarado y no emitido: {lista}
+- **Emitido y no declarado: {lista}**  ← la dirección que se olvida
+- Enums: {enum} {n} cases en PHP / {m} publicados
 
-## Warnings
-- [{categoría}] {mensaje}
+## Eventos
+- {Evento}: pasado ✓ · registrado en EventTypeRegistry ✓ · payload aditivo ✓
 
-## Tag mismatches
-- {lista o "ninguno"}
-```
+## Sin red
+- {cambio de payload sin fixture de bytes canónicos, si aplica}
 
-## JSON de retorno
+## Traspaso a frontal
+- {fichero, o "AUSENTE"}
 
-```json
-{"status":"fail","summary":"1 bloqueante en AsyncAPI","issues":[{"severity":"fail","category":"asyncapi-missing","message":"Evento EnvelopeClosed sin schema en docs/asyncapi/envelope.yaml"}],"tagMismatches":[]}
+## Superficies ausentes (no creadas a propósito)
+- docs/asyncapi/: {evento} sin contrato legible por máquina; vive en {clase} + ADR-NNNN
 ```
 
 ## Qué NO hace
 
-- No valida lógica de negocio (task-validate)
-- No audita seguridad de endpoints (security-audit)
-- No actualiza AsyncAPI (docs-sync lo hace)
-- No genera OpenAPI (Nelmio lo hace inline)
-- No detecta breaking changes (eso es CI comparando contra main)
-- No analiza performance (perf-smoke)
-
-## Referencias
-
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/backend/03 - Contract Check Backend.md`
-- Estrategia docs: `memory/project_api_docs_strategy.md`
+- No valida lógica de negocio (`task-validate-backend`).
+- No audita seguridad de endpoints (`security-audit-*`).
+- No escribe el traspaso ni el OpenAPI (`docs-sync` el primero; Nelmio genera el segundo inline).
+- No detecta breaking changes comparando contra `develop` (eso es CI, y hoy no existe).

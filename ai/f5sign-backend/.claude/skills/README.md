@@ -15,12 +15,12 @@ La adaptación va por fases. Esta tabla es el estado real, medido el **2026-08-1
 | `pr-ready` | ✅ adaptada | — |
 | `task-runner` | ✅ adaptada | — |
 | `task-close` | ✅ adaptada | — |
-| `doctrine-guard` | ⚠ pendiente | Valida mapeos `*.orm.xml` y "entidades Doctrine": **0 ficheros `*.orm.xml`** en el árbol y el ORM se retiró (ADR-0018). Lo que sí aplica y hay que conservar: reversibilidad de migraciones, índices, RLS (ADR-0017), convenciones de esquema (ADR-0019), coherencia ENUM SQL↔PHP, y la regla de autoría 6 |
-| `contract-check-backend` | ⚠ pendiente | La mitad Nelmio `#[OA\*]` vale tal cual; la mitad AsyncAPI **no tiene diana**: `docs/asyncapi/` no existe. O se ficha crearlo, o se recorta la skill a la mitad que existe |
-| `perf-smoke-backend` | ⛔ no ejecutable | Depende de `composer perf:seed`, que no existe (`composer run-script --list`: `test`, `coverage*`, `phpstan`, `arch`, `lint`, `format`, `infection`, `qa`). `task-runner` la salta **declarándolo** en `run.log`, no la da por verde |
+| `doctrine-guard` | ✅ adaptada | — |
+| `contract-check-backend` | ✅ adaptada | — |
+| `perf-smoke-backend` | ◑ mitad estática adaptada | La dinámica (p95, throughput, memoria) sigue sin diana: no existe `composer perf:seed`. Crear el seed es una decisión, no un arreglo de la skill |
 | `docs-sync` | ✅ adaptada | — |
-| `security-audit-core` / `security-audit-backend` | ⚠ pendiente | Revisar referencias a rutas y namespaces del prototipo (`Innasign\`) |
-| `eidas-compliance` | ⚠ pendiente | Cita `project_cloud_signing_decisions.md`, que vive en el repo de docs. Cada hecho que tome de ahí debe quedar **restatado** aquí |
+| `security-audit-core` / `security-audit-backend` | ✅ adaptadas | — |
+| `eidas-compliance` | ✅ adaptada | — |
 | `v1-touched-file-hygiene` | ✅ nativa | Escrita para este repo. Se usa antes de commitear |
 
 ## Dos reglas para quien siga la adaptación

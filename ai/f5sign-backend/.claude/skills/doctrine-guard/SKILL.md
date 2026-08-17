@@ -1,151 +1,141 @@
 ---
 name: doctrine-guard
-description: 'Validación mecánica de la capa de persistencia tras una tarea: entidades Doctrine (pureza hexagonal), mapeos orm.xml, migrations (reversibilidad, índices, multi-tenancy), políticas RLS y coherencia SQL↔PHP de ENUMs. Úsalo con /doctrine-guard T{id}. Activar con "validar migration", "revisar persistencia de tarea", "check doctrine", "auditar RLS".'
+description: 'Validación mecánica de la capa de persistencia tras una task: migraciones (reversibilidad, índices, SQL publicado que no se edita), RLS (ENABLE + FORCE + policy sobre current_tenant_id(), con la excepción documentada del event log), coherencia entre enums PHP y lo que la columna acepta, y —lo más caro de equivocarse— las filas que una migración escribe y el dominio luego lee. Sin ORM: doctrine/orm se retiró (ADR-0018) y no hay ningún *.orm.xml. Úsalo con /doctrine-guard TASK-NNN. Activar con "validar migration", "revisar persistencia de task", "auditar RLS".'
 ---
 
 # Doctrine Guard
 
-Validación mecánica de persistencia. Solo se invoca si tags incluye `db`, `migration`, `rls` o `tenancy`.
+Validación mecánica de persistencia. Se invoca si el diff toca `migrations/`,
+`src/**/Infrastructure/Persistence/`, o SQL/RLS en cualquier fichero.
+
+⛔ **Este repo no tiene ORM.** `doctrine/orm` no es dependencia y **no existe ni un `*.orm.xml`**
+(ADR-0018, DBAL puro). Todo lo que esta skill comprobaba sobre mapeos y triangulación entidad↔XML↔tabla no
+tiene diana. Si el diff **añade** `doctrine/orm` o un `.orm.xml`, eso revierte un ADR aceptado → `fail`,
+categoría `retired-mechanism`, y es el gate de decisión de `implement-backend` Paso 2b.
 
 ## Invocación
 
 ```
-/doctrine-guard T{id}
+/doctrine-guard TASK-NNN
 ```
-
-Si la tarea no tiene ninguno de los tags relevantes pero igual se invoca: emitir warn y terminar con `status: pass, summary: "nothing to check for these tags"`.
 
 ## Inputs
 
-- `var/task-runner/T{id}/changes.diff` (obligatorio; si no existe → `status: fail, summary: "missing changes.diff"`)
-- `var/task-runner/T{id}/context-digest.md` (opcional; usar para saber qué tablas se tocaron)
-- `.md` de la tarea (para leer tags)
-
-Ficheros del repo a consultar (solo los que aparecen en el diff):
-- `src/**/Domain/Entity/*.php`
-- `src/**/Infrastructure/Persistence/Mapping/*.orm.xml`
-- `migrations/Version*.php`
+- `var/task-runner/TASK-NNN/changes.diff` (sin él: `fail`, `missing changes.diff`)
+- `migrations/Version*.php` y `src/**/Infrastructure/Persistence/*` del diff
+- [`docs/LOAD-BEARING.md`](../../../docs/LOAD-BEARING.md) §1.7 y su lista **Never**
 
 ## Outputs
 
-- `var/task-runner/T{id}/doctrine-guard.report.md`
-- JSON:
-  ```json
-  {"status":"pass|fail|warn","summary":"...","issues":[...],"tagMismatches":["db"?]}
-  ```
+- `var/task-runner/TASK-NNN/doctrine-guard.report.md`
+- JSON: `{"status":"pass|fail|warn","summary":"...","issues":[...]}`
 
 ## Ejecución
 
-### Paso 1 — Detectar tag mismatch
+### Paso 1 — Qué se puede editar de una migración
 
-Si tags incluye `db`/`migration`/`rls`/`tenancy` pero el diff NO toca:
-- `migrations/*.php`, ni
-- `src/**/Domain/Entity/*.php`, ni
-- `*.orm.xml`
+- [ ] **SQL de una migración ya publicada (pusheada): no se toca.** Se supersede con otra. Editarla es
+      `fail`, categoría `published-migration`.
+- [ ] **Comentarios y docblocks: siempre en alcance**, publicada o no. La regla de autoría 1 los llama la
+      superficie que más daño hace al podrirse, porque nadie re-lee una migración aplicada salvo para
+      reconstruir *por qué* el esquema es así — y ahí una razón falsa cuesta lo máximo. Corregirlos no
+      re-ejecuta nada.
+- [ ] **En una rama local sin pushear el set es tuyo:** se puede reordenar o condensar. "Aplicada en tu
+      volumen de dev" no es "publicada".
 
-→ añadir `"db"` (o el tag correspondiente) a `tagMismatches` del JSON final. No es bloqueante.
+### Paso 2 — Reversibilidad e índices
 
-### Paso 2 — Entidades Doctrine (si diff toca `Domain/Entity/`)
+- [ ] `up()` y `down()` presentes; `down()` con operaciones reales, no vacío ni un throw genérico.
+- [ ] Toda FK con su índice (en la definición o un `CREATE INDEX`).
+- [ ] Tabla con datos de cliente → columna **`tenant_id`**. ⚠ **No exigir `workspace_id`: no existe.**
+      Aparece una sola vez en todo el repo, en un docblock que describe un modelo futuro de claves
+      dual-scoped. Pedirlo sería inventar el esquema.
+- [ ] Índice compuesto que empiece por `tenant_id` para las consultas filtradas por tenant → si falta:
+      `warn`.
 
-Por cada fichero `src/**/Domain/Entity/*.php` modificado:
+### Paso 3 — RLS
 
-- [ ] No tiene `use Symfony\` ni `use Doctrine\` (grep) → `fail`, categoría `hexagonal-violation`
-- [ ] Todas las propiedades tienen tipo (no hay `private $x` sin tipo) → `fail`, categoría `typing`
-- [ ] IDs usan VO (no `string $id`, sino `TenantId $id` o similar)
-- [ ] Valores monetarios, fechas, emails: VO en lugar de primitivos
+Grep de `ENABLE ROW LEVEL SECURITY`, `FORCE ROW LEVEL SECURITY`, `CREATE POLICY`:
 
-Determinar Aggregate Root vs subordinate:
-- Aggregate Root: existe `src/{Module}/Domain/Repository/{Name}RepositoryInterface.php`
-- Subordinate: no existe esa interfaz y la entidad es referenciada desde otra entidad
+- [ ] `ENABLE` **y** `FORCE` presentes. `FORCE` es lo que hace que el dueño de la tabla también obedezca.
+- [ ] La policy se apoya en **`current_tenant_id()`** (la función fail-closed que envuelve
+      `current_setting('app.current_tenant_id')`), no en el setting a pelo.
+- [ ] Cubre lectura y escritura, **o dice explícitamente por qué no**. ⚑ Hay una excepción documentada y
+      legítima: `platform.event_log` es **write-check-only** (`WITH CHECK`, sin `USING`) porque sus
+      lectores son proyectores cross-tenant de confianza (ADR-0031, con el carve-out recíproco en
+      ADR-0017 §7). Antes de marcar `fail` por falta de `USING`, comprobar si la tabla es de ese caso.
 
-- [ ] Si es Aggregate Root → verificar repo interface existe
-- [ ] Si no es Aggregate Root → NO debe existir repo propia para ella → `fail` categoría `ddd-violation`
+### Paso 4 — ⚠ Una migración corre como superusuario, así que la RLS no la protege
 
-### Paso 3 — Mapping ORM (`*.orm.xml`)
+Las migraciones conectan como el **superusuario de bootstrap** (`POSTGRES_USER`), nunca como el rol de la
+app — **en todos los entornos, producción incluida** (`docs/LOAD-BEARING.md` §1.7). Un superusuario
+**bypassea RLS por completo**, con `FORCE` o sin él. Dos consecuencias que hay que comprobar:
 
-Por cada `.orm.xml` en el diff:
+- [ ] ⛔ **Ningún `NO FORCE ROW LEVEL SECURITY` alrededor de una escritura de datos.** Es un **no-op que se
+      lee como una guarda**: la RLS ya no aplicaba. Está en la lista **Never** de `LOAD-BEARING.md` §2,
+      junto con por qué la reparación obvia también es incorrecta si algún día se estrecha ese rol.
+      Presencia → `fail`, categoría `false-guard`.
+- [ ] La corrección de una escritura de datos tiene que venir del **SQL mismo** (su `WHERE`), no de la RLS.
 
-- [ ] El nombre del fichero coincide con una entidad en `Domain/Entity/`
-- [ ] Parsear XML con DOMDocument
-- [ ] Propiedades mapeadas = propiedades de la entidad (reflexión)
-- [ ] Tipos XML coherentes con tipos PHP (`uuid` ↔ `UuidInterface`, `datetime_immutable` ↔ `DateTimeImmutable`, `string` ↔ `string`, `integer` ↔ `int`)
-- [ ] Nullable del XML concuerda con nullable de la propiedad
-- [ ] VOs embebidos usan `<embedded>` correctamente
-- [ ] Si la tabla es multi-tenant (heurística: nombre no empieza por `tenant_` ni `workspace_`; está en el Bounded Context de datos del cliente): columnas `tenant_id` y `workspace_id` presentes
+### Paso 5 — Filas que el dominio luego lee (regla de autoría 6)
 
-### Paso 4 — Migrations (`migrations/Version*.php`)
+El check más caro de saltarse: en la última revisión, el único hallazgo bloqueante salió de aquí.
 
-Por cada migration en el diff:
+- [ ] **Enumerar los estados del agregado sobre los que cae la fila** — draft, en vuelo, terminal,
+      superseded — y decir qué significa la fila **en cada uno**, en el lado de **escritura** además del de
+      lectura. Razonar solo sobre "qué puede ver ahora un destinatario" es exactamente cómo se colló ese
+      bloqueante.
+- [ ] **Predicado que enuncie la propiedad, no enumeración de los estados de hoy.** `sent_at IS NOT NULL`
+      pregunta lo real (*"¿pudo alguien leer esto ya?"*); `status <> 'DRAFT'` reabre el agujero el día que
+      se añada un estado pre-envío. Enumeración → `warn` con el predicado propuesto.
+- [ ] **Modelo append-only sin vía de revocación ⇒ una fila mal escrita es permanente e irreparable por
+      API.** Si el backfill no lleva predicado de estado, `fail`: el precedente es un backfill que convirtió
+      cada par no declarado de un borrador preexistente en un 409 permanente, dejando esos envelopes ni
+      enviables ni reparables.
 
-- [ ] Método `up()` presente
-- [ ] Método `down()` presente (reversibilidad)
-- [ ] `down()` no está vacío ni lanza excepción genérica; debe tener operaciones reales
-- [ ] Si `up()` crea tabla multi-tenant → `CREATE TABLE` incluye `tenant_id` + `workspace_id`
-- [ ] Toda FK tiene su `CREATE INDEX` correspondiente (o `INDEX` en la definición de la tabla)
-- [ ] Para queries típicas multi-tenant, existe índice compuesto `(tenant_id, workspace_id, <columna-filtro>)` — si falta pero la tabla es multi-tenant: `warn`
+### Paso 6 — Enums PHP ↔ lo que la columna acepta
 
-### Paso 5 — RLS (si migration toca tabla multi-tenant)
+**No hay ENUMs SQL en este repo** (`CREATE TYPE ... AS ENUM`: cero). Los estados viajan como `TEXT` y el
+tipo vive en un backed enum de PHP. Así que la comprobación no es "¿coinciden los dos enums?" sino:
 
-Grep en la migration por `CREATE POLICY`, `ENABLE ROW LEVEL SECURITY`, `FORCE ROW LEVEL SECURITY`:
+- [ ] Si la columna lleva `CHECK (... IN (...))`, sus valores coinciden con los `case` del enum PHP.
+- [ ] **Un `case` nuevo en PHP no rompe la columna** (es `TEXT`), y eso es precisamente el riesgo: lo que se
+      comprueba es que **el lado de lectura sabe parsearlo** — el mapeo del repositorio, la proyección y
+      cualquier `match` exhaustivo. Un valor escribible que el read-side no reconoce es `fail`, categoría
+      `unparseable-value`.
+- [ ] Si el enum es parte de un contrato publicado (sale por la API), el `#[OA\*]` correspondiente lo lista
+      → si no: es cosa de `contract-check-backend`, se reporta y se pasa el dato.
 
-- [ ] `CREATE POLICY` presente
-- [ ] `ENABLE ROW LEVEL SECURITY` presente
-- [ ] `FORCE ROW LEVEL SECURITY` presente (superuser también respeta)
-- [ ] Policy usa `app.current_tenant_id` (o la variable de sesión del proyecto)
-- [ ] Policy cubre SELECT/INSERT/UPDATE/DELETE (o comenta explícitamente por qué no)
+### Paso 7 — Entidades y repositorios
 
-Ausencia de cualquiera → `fail` categoría `rls`.
+Sin re-hacer lo que ya vigilan Deptrac y las reglas PHPStan propias (pureza de capa, colocación en kernel):
 
-### Paso 6 — ENUMs
+- [ ] Aggregate root ⇒ tiene repositorio; entidad subordinada ⇒ **no** tiene el suyo, se modifica por su
+      root.
+- [ ] ⚑ **`EntityReference` no extiende `EntityId`, y eso no es duplicación que limpiar** — está en
+      `LOAD-BEARING.md`. Igual que el row lock que no se estrecha por debajo del write-set de `save()`.
+      Antes de "simplificar" cualquier cosa de persistencia, ese documento primero.
 
-Si migration crea `CREATE TYPE ... AS ENUM`:
-
-- [ ] Extraer valores del ENUM SQL
-- [ ] Buscar backed enum PHP correspondiente en `src/**/Domain/Enum/*.php` o similar
-- [ ] Comparar valores: deben ser idénticos (strings, orden puede variar)
-
-Divergencia → `fail` categoría `enum-mismatch`.
-
-### Paso 7 — Coherencia cruzada
-
-Triangular:
-- [ ] Tabla definida en migration = tabla en `<orm.xml>` correspondiente
-- [ ] Columnas del orm.xml ⊆ columnas de la migration
-- [ ] Propiedad en entidad → mapeada en orm.xml → columna en migration
-
-## Generación del report
+## Report
 
 ```markdown
-# doctrine-guard — T{id}
+# doctrine-guard — TASK-NNN
 
-**Status:** {PASS|FAIL|WARN}
-**Issues:** {B} bloqueantes, {W} warnings
-**Tag mismatches:** {lista o "ninguno"}
+**Status:** {PASS|FAIL|WARN} · **Issues:** {B} bloqueantes, {W} warnings
 
 ## Bloqueantes
-- [{categoría}] {fichero:línea si aplica} {mensaje}
+- [{categoría}] {fichero} {mensaje}
+
+## Filas escritas y su lectura futura
+- {tabla}: estados del agregado enumerados {sí/no} · predicado {el usado} · reparable por API {sí/no}
 
 ## Warnings
-- [{categoría}] {mensaje}
-
 ## Checks superados
-- {resumen de lo que pasó OK}
-```
-
-## JSON de retorno
-
-Última línea:
-```json
-{"status":"fail","summary":"2 bloqueantes en RLS","issues":[{"severity":"fail","category":"rls","file":"migrations/Version20260413120000.php","message":"CREATE POLICY ausente"}],"tagMismatches":[]}
 ```
 
 ## Qué NO hace
 
-- No ejecuta migrations contra la DB
-- No valida lógica de negocio de la entidad (eso es task-validate vía unit tests)
-- No audita SQL injection ni authz (eso es security-audit)
-- No mide performance real (eso es perf-smoke)
-
-## Referencias
-
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/backend/02 - Doctrine Guard.md`
+- No ejecuta migraciones contra la DB (eso es `task-validate-backend`, con `--dry-run`).
+- No valida lógica de negocio (tests unitarios).
+- No audita inyección SQL ni authz (`security-audit-*`).
+- No mide performance (`perf-smoke-backend`).
