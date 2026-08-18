@@ -9,8 +9,16 @@
 # subrepos y no van en .gitignore de arriba: se crean con `git worktree add`,
 # los cubre bin/sync-ai.sh, y nombrarlos aquí evita commitear un árbol de
 # producto entero dentro del repo raíz por un `git add -A` despistado.
+#
+# ⚑ Esta lista se mantiene A MANO, así que un worktree nuevo NO está cubierto
+# hasta que alguien lo añade — y mientras tanto sale untracked, que es
+# exactamente el estado que el `git add -A` despistado necesita. Le pasó a
+# f5sign-backend-docs, que estuvo fuera de la lista; el mismo día, y por la
+# misma razón, otra sesión arrastró .playwright-cli/ a un commit accidental
+# sobre f5sign-infra. Si creas un worktree, añádelo aquí en el mismo momento.
 /f5sign-backend-develop/
 /f5sign-signer-develop/
+/f5sign-backend-docs/
 
 # IDE / OS / local
 .idea/
