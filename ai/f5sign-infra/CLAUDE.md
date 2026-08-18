@@ -214,10 +214,31 @@ Como funciona (`scripts/wt-validate.sh` + `docker-compose.wt.{signer,backend}.ym
   solo NO basta — los recursos llevan `name:` atado a `STACK_NS`.)
 - **Lanes SIN puertos al host** → cero colision; todo va por la red interna del lane. Los agentes no
   hacen browsing manual, asi que no se publica nada.
-- **Backend ligero (2 contenedores)**: en test, messenger es `in-memory`, cache=filesystem, lock=flock
-  → **sin Redis, sin RabbitMQ, sin eu-dss**. BD = `postgres-test` tmpfs **por lane** (reusa
-  `docker/postgres/init-*.{sql,sh}`); migra como `f5sign` (superuser), testea como `f5sign_app`
+- **Backend con paridad de dependencias (6 contenedores)**: `backend/.env.test` resuelve **cinco**
+  hosts por DNS (`postgres-test`, `minio`, `rabbitmq`, `mailpit`, `eu-dss`) y la suite **no tiene ni un
+  `markTestSkipped`** → lo que no resuelve **no se salta, falla**. El lane levanta cuatro de los cinco
+  **por lane**, porque los cuatro guardan estado que los tests mutan y compartirlos reproduce BL-138 en
+  otro sustrato: postgres (xmin es de **cluster**), minio (los 5 `S3_BUCKET_*` son nombres fijos → dos
+  lanes se pisan las claves), mailpit (buzon unico acumulativo) y rabbitmq (colas compartidas). Redis
+  sigue fuera: cache=filesystem y lock=flock, los tests no lo tocan. BD = `postgres-test` tmpfs por lane
+  (reusa `docker/postgres/init-*.{sql,sh}`); migra como `f5sign` (superuser), testea como `f5sign_app`
   (non-superuser, RLS real). `var/` y `vendor/` van a volumenes por-lane (no contaminan el worktree).
+- **`eu-dss` es el unico COMPARTIDO**, y por lo que **es**, no por lo que cuesta: peticion/respuesta pura,
+  su unico estado es la cache de Trusted Lists (solo lectura, identica para todos). Se alcanza con
+  `eu-dss-proxy` (socat), el **unico** contenedor del lane en las dos redes: si el contenedor de php
+  estuviera en ambas, `minio`/`rabbitmq`/`mailpit` resolverian **ambiguamente** y un lane acabaria
+  escribiendo en el MinIO del stack principal. `wt-validate.sh` **aborta con mensaje explicito** si el
+  stack compartido no esta arriba (`SHARED_NS`, por defecto `f5sign`); `WT_REQUIRE_DSS=0` corre igual, a
+  sabiendas de que los tests de sellado iran en rojo.
+- **`mem_limit` y `cpus` explicitos en TODOS los servicios del lane** (`WT_*_MEM` / `WT_*_CPUS`). Techo
+  con los defaults: **~3.0 GiB y ~9.25 CPUs** por lane backend; uso real medido en reposo, ~280 MiB. El
+  tope importa sobre todo en minio: sin el se queda ~950 MiB de holgura del runtime de Go (medido en el
+  stack principal) frente a **84 MiB** bajo un cap de 512m.
+- **Pasos separados, no un `sh -lc` encadenado**: `composer install` / migraciones / `composer test` son
+  tres `run` distintos, para que un fallo diga **cual** murio. Ademas se fija
+  `COMPOSER_PROCESS_TIMEOUT` (`WT_COMPOSER_TIMEOUT`, default 1800): `composer test` es un *script* de
+  Composer y Composer mata sus scripts a los **300 s** por defecto — el backend no fija
+  `config.process-timeout`, asi que sin esto la suite muere por reloj sin que falle nada.
 - **Cachas CAS compartidas** entre lanes (volumenes external `f5sign-pnpm-store`, `f5sign-composer-cache`)
   → installs rapidos; `wt-down`/`wt-gc`/teardown NUNCA las borran.
 - **Cap de concurrencia** (flock): signer=2, backend=1 (`WT_CAP_SIGNER`/`WT_CAP_BACKEND`). **En WSL no
@@ -225,8 +246,9 @@ Como funciona (`scripts/wt-validate.sh` + `docker-compose.wt.{signer,backend}.ym
 - **Teardown automatico** con `trap` (`down -v --remove-orphans`). `make wt-gc` es la red de seguridad.
 
 Para integrarlo con `/task-runner`: cuando un agente valida un worktree, en vez de `make test-signer`
-usa `make wt-signer src=<worktree>` (idem backend). El stack compartido (eu-dss para tests PAdES) es
-**Fase 3** (aun no implementada; ver el handoff en la raiz del workspace).
+usa `make wt-signer src=<worktree>` (idem backend). El stack compartido para los tests PAdES **ya
+existe**: es el propio stack de dev (`make up` + `make dss-wait-tl`), del que el lane consume solo
+`eu-dss` por proxy — ver los dos puntos de arriba.
 
 ## Workers (Symfony Messenger)
 
