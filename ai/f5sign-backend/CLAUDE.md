@@ -39,6 +39,7 @@ The architectural contracts are the **kernel categories** in `src/F5Sign/Kernel/
 - PHPUnit 11.5 (with `dama/doctrine-test-bundle` for transactional isolation)
 - PHPStan ≥ 2.1 level 9 + custom architecture rules
 - Deptrac ≥ 4.6 (visibility contract; the core-five BC layer-sets plus Notification are declared in [`deptrac.yaml`](deptrac.yaml) — count them there rather than here)
+- Twig 3 (`twig/twig` + `symfony/twig-bundle`, direct `require` since ADR-0052) — **layout composition for one channel's email markup only**; see the bundle note below before reaching for it anywhere else
 - PHP-CS-Fixer
 - Xdebug (mode=off by default; coverage / step-debug via env override)
 
@@ -53,8 +54,11 @@ The architectural contracts are the **kernel categories** in `src/F5Sign/Kernel/
 | MakerBundle | dev |
 | DAMADoctrineTestBundle | test |
 | NelmioApiDocBundle | all |
+| TwigBundle | all |
 
-Not enabled (out of scope): SecurityBundle, LexikJWTAuthenticationBundle, TwigBundle, WebProfilerBundle, DebugBundle.
+⛔ **TwigBundle is NOT a view layer here, and the scoping is the decision** ([ADR-0052](docs/adr/ADR-0052-twig-layout-composition.md)). It exists to compose the `EMAIL` channel's HTML chrome at authoring time: `config/packages/twig.yaml` points `default_path` at `templates/notification/` rather than the conventional `templates/`, sets `strict_variables: true`, and the line the ADR draws is **no HTTP route renders Twig** — unenforced today ([BL-136](docs/BACKLOG.md)), so it holds by nobody having done it rather than by a gate. ⚑ Twig **composes**; it never **interpolates**. The markup it emits still carries the `{{token}}` slots, and `NativeTemplateEngine` stays the sole implementation of `TemplateEngine::interpolate()` — the only thing that ever meets a recipient's value. Unifying the two engines is the plausible cleanup that would break ADR-0038 decision 9; ADR-0052 is the record that the split is deliberate.
+
+Not enabled (out of scope): SecurityBundle, LexikJWTAuthenticationBundle, WebProfilerBundle, DebugBundle.
 
 ## Running tests + tooling — always via the infra Makefile
 
