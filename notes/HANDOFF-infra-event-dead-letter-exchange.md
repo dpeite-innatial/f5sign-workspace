@@ -1,6 +1,9 @@
 # HANDOFF → `f5sign-infra` — dead-letter exchange para las colas de eventos
 
-**Estado:** decidido, sin implementar. Repo que ejecuta: **`f5sign-infra`**.
+**Estado:** **implementado en `f5sign-infra` el 2026-08-18** (working tree, sin commitear al escribir esto) y
+**aplicado al broker de dev**, verificado de punta a punta. Repo que ejecuta: **`f5sign-infra`**.
+⚑ **La sección "La trampa" de abajo quedó falsificada al implementarlo** y está corregida in situ: el fallo
+no es ruidoso como decía, es callado. Si solo vas a leer un párrafo de este documento, que sea ese.
 **Contraparte en backend:** `f5sign-backend/docs/tasks/TASK-026-event-path-silent-drops.md` §3.3 y §4 D4–D6.
 **Fecha:** 2026-08-17. Todas las medidas de abajo son contra el árbol de esa fecha; re-comprueba antes de tocar.
 
@@ -53,10 +56,33 @@ broker se puede volver a publicar. Esa es la otra mitad de TASK-026 (§3.1, coma
 explícitamente por objeto, y el fichero es JSON puro sin comentarios, así que el efecto de una policy sería
 invisible para quien lea la lista de colas.
 
-## ⚠ La trampa: los argumentos de una cola son inmutables
+## ⚠ La trampa: los argumentos de una cola son inmutables, y **nadie te lo dice**
 
-Volver a declarar una cola existente con argumentos distintos falla con `PRECONDITION_FAILED`. Es decir:
-**hay que borrar y recrear las cuatro colas de eventos** para que el argumento entre.
+⛔ **CORRECCIÓN, medida al implementarlo el 2026-08-18 contra RabbitMQ 4.0.** Este documento decía que
+volver a declarar una cola existente con argumentos distintos *"falla con `PRECONDITION_FAILED`"*. **No
+falla.** `rabbitmqctl import_definitions` se queda con los argumentos **viejos**, no emite warning y
+reporta éxito, con el log del broker limpio (`Importing concurrently 15 queues...`, cero errores). Medido:
+tras el import, el exchange nuevo y la cola nueva **sí** se habían creado, y el `x-dead-letter-exchange` de
+las cuatro colas de eventos **no había entrado**.
+
+*(`PRECONDITION_FAILED` es lo que devuelve un `queue.declare` de un cliente AMQP. El importador de
+definiciones es otro camino y no se comporta igual — de ahí el error de este documento.)*
+
+**Esto cambia la naturaleza del riesgo, no solo un detalle.** La premisa entera de arriba es que infra va
+primero para no cambiar un fallo escandaloso por uno callado. Pero el propio despliegue de infra falla
+callado: `make reload-rabbitmq` sale **en verde** con el desvío sin poner. Quien revise el PR de backend y
+compruebe que "infra está desplegado" mirando el import, está mirando un verde que no significa nada.
+
+Por eso el cambio implementado **no se queda en el fichero**:
+- `make rabbit-check-dlx` afirma que las cuatro colas llevan el argumento y se pone rojo si no
+  (`docker/scripts/check-event-dlx.sh`).
+- `make reload-rabbitmq` lo ejecuta **después** de importar y falla si no está — así "desplegado" es
+  comprobable en vez de declarativo.
+- `make rabbit-recreate-event-queues` hace el borrado+recreado, con `--if-empty --if-unused` por defecto
+  para que el broker impida perder mensajes, y `FORCE=1` como decisión explícita.
+
+Sigue siendo cierto lo esencial: **hay que borrar y recrear las cuatro colas de eventos** para que el
+argumento entre.
 
 - **Hoy es gratis**: en dev es un reset de volumen.
 - **El día que haya un entorno de vida larga es una operación de verdad**, y hay que drenar antes:
@@ -66,6 +92,16 @@ Volver a declarar una cola existente con argumentos distintos falla con `PRECOND
   Está registrado como escotilla en TASK-026 §6.3; cambiar a ella no es un rediseño.
 
 ## Cómo se verifica
+
+> **Resultado al implementarlo (2026-08-18), sobre el stack de dev.** Publicado en `f5sign.events` con
+> `App.Session.Event.DlxSmoke` y rechazado sin requeue: aterriza en `queue.events.dead-letter` con
+> `x-death: queue=queue.session.events, reason=rejected` — o sea, la procedencia que D4 daba por buena se
+> conserva de verdad. **Control negativo**, que es lo que lo convierte en prueba: cola desechable *sin* el
+> argumento, mismo rechazo, el mensaje **desaparece** y la cola de descartes no se mueve. El desvío es lo
+> que lo captura, y no otra cosa.
+>
+> Coste real del recreado en dev: se descartaron **54** mensajes pendientes de `queue.session.events`
+> (decisión explícita del usuario, `FORCE=1`); las otras tres estaban a 0.
 
 - `make worker-status` corre `rabbitmqctl list_queues name messages consumers`, que lista **todas** las
   colas con su profundidad — así que la cola de descartes nueva se reporta sola, sin comando nuevo. Por eso
