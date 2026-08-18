@@ -108,6 +108,8 @@ Todos los comandos se ejecutan desde la raiz de **este** repo:
 | Tests signer E2E (Playwright, 4 perfiles) | `make test-signer-e2e` |
 | Tests signer E2E (smoke mobile) | `make test-signer-e2e-mobile` |
 | Reset BD (drop+create+migrate+fixtures) | `make reset-db` |
+| Deshacer la ultima migracion (NO destruye la BD) | `make migrate-prev` |
+| Migrar a una version concreta (arriba o abajo) | `make migrate-to v=Version...` |
 | Build imagenes | `docker compose build` o `make build` |
 | Setup inicial | `make install` (build + up + init-db) |
 | Build+push las imagenes propias de prod (GHCR) | `make release-prod TAG=v1.2.3` |
