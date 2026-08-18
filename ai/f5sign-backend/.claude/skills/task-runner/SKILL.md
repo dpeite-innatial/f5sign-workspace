@@ -48,10 +48,19 @@ Verificar y **parar con mensaje claro** si falla:
    - Contenedor puntual sobre la red del stack, que es la vía que sí completa la suite (medido: 1489 tests
      en ~74 s). ⚠ **Migra primero contra `postgres-test`**, que es tmpfs y arranca vacío — sin ese paso los
      tests de DB fallan con `could not translate host name` o tabla inexistente, y parece un fallo de código:
+     ⛔ **Esta imagen arranca con `memory_limit=128M`; el contenedor `php-fpm` que usan los targets del
+     Makefile arranca con 512M** (medido 2026-08-18: `docker exec f5sign-php-fpm php -r 'echo
+     ini_get("memory_limit");'` → 512M, contra 128M aquí). O sea que esta ruta te da **un cuarto de la
+     memoria** que la documentada, y nada te lo advierte. **Pon `php -d memory_limit=-1` en TODO comando
+     PHP que metas por aquí**, no solo en los dos de abajo — `composer infection` murió por esto y el
+     diagnóstico apuntaba a la herramienta, no al contenedor ([BL-135](../../../docs/BACKLOG.md)).
+     ⚑ `mkdir` y demás comandos de shell no lo necesitan: no son procesos PHP. La regla es *PHP sí, shell no*.
+     ⚠ Y ojo, `-d` **no se hereda por los hijos**: `infection` lanza su propio `phpunit`, que vuelve a 128M.
+     Para esos casos hace falta un `php.ini` montado, no la bandera.
      ```
      docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html \
        -e DATABASE_URL='postgresql://f5sign:f5sign_test_pw@postgres-test:5432/f5sign_test?serverVersion=16&charset=utf8' \
-       f5sign/backend:dev sh -c 'php bin/console doctrine:migrations:migrate --env=test --no-interaction --allow-no-migration'
+       f5sign/backend:dev sh -c 'php -d memory_limit=-1 bin/console doctrine:migrations:migrate --env=test --no-interaction --allow-no-migration'
      docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html \
        f5sign/backend:dev sh -c 'php -d memory_limit=-1 bin/phpunit --no-progress'
      ```
