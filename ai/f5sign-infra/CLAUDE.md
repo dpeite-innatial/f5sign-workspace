@@ -236,8 +236,16 @@ Como funciona (`scripts/wt-validate.sh` + `docker-compose.wt.{signer,backend}.ym
   con los defaults: **~3.0 GiB y ~9.25 CPUs** por lane backend; uso real medido en reposo, ~280 MiB. El
   tope importa sobre todo en minio: sin el se queda ~950 MiB de holgura del runtime de Go (medido en el
   stack principal) frente a **84 MiB** bajo un cap de 512m.
-- **Pasos separados, no un `sh -lc` encadenado**: `composer install` / migraciones / `composer test` son
-  tres `run` distintos, para que un fallo diga **cual** murio. Ademas se fija
+- **Los cinco gates en el lane, seleccionables con `WT_GATES`** (default `lint arch phpstan test`;
+  `infection` es **opt-in** porque tarda ordenes de magnitud mas). Dos cosas que no eran cableado:
+  **PHPStan** falla en el lane por el motivo CONTRARIO al del arbol principal — alli el dump del
+  contenedor esta rancio, aqui **no existe**, porque `var/` es un volumen por lane que nace vacio y el
+  `composer install` limpia cache en `env=test`, no en dev. El gate lo genera y **comprueba que esta**
+  antes de analizar. **Infection** necesita el limite de memoria en un `.ini` montado
+  (`docker/php/wt-infection.ini`), no en un `php -d`: relanza phpunit como hijo y la bandera no se
+  hereda. Su valor es un punto de partida, no una medicion.
+- **Pasos separados, no un `sh -lc` encadenado**: install / migraciones / cada gate son `run`
+  distintos, para que un fallo diga **cual** murio. Ademas se fija
   `COMPOSER_PROCESS_TIMEOUT` (`WT_COMPOSER_TIMEOUT`, default 1800): `composer test` es un *script* de
   Composer y Composer mata sus scripts a los **300 s** por defecto — el backend no fija
   `config.process-timeout`, asi que sin esto la suite muere por reloj sin que falle nada.
