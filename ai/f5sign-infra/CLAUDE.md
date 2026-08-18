@@ -255,6 +255,28 @@ Como funciona (`scripts/wt-validate.sh` + `docker-compose.wt.{signer,backend}.ym
   abuses** (riesgo OOM; ya colgo la maquina con 2 backend). Hay `mem_limit` como backstop.
 - **Teardown automatico** con `trap` (`down -v --remove-orphans`). `make wt-gc` es la red de seguridad.
 
+⛔ **No te fabriques un `docker run` ad-hoc en lugar del lane.** Es la alternativa que la gente
+improvisa cuando el lane le parece de mas, y cuesta horas por tres motivos ya medidos (sesion de
+backend, 2026-08-18), los tres invisibles mientras pasan:
+
+- **Se bloquea en `var/cache`.** Un `docker run` a mano monta `var/` desde el arbol de trabajo, asi
+  que **dos corridas concurrentes se quedan esperando el lock**: 40+ minutos sin una sola linea de
+  salida, y se lee como *"los tests son lentos"*. El lane no lo sufre porque `var/` es el volumen
+  `wt-backend-var`, propio de cada lane. Si aun asi necesitas el `docker run`, anadele
+  `--tmpfs /var/www/html/var/cache`.
+- **Un `timeout` del HOST sobre `docker run` no mata el contenedor**, solo al cliente: el contenedor
+  sigue vivo sosteniendo locks, y se acumulan zombis (nueve, en el caso medido). El `timeout` tiene
+  que ir DENTRO: `sh -c "timeout 420 php ..."`. `wt-validate.sh` no tiene este problema — su `trap`
+  hace el `down -v` tambien con TERM, verificado cortando una corrida con `timeout`.
+- **Limpiarlos luego es peor que el problema.** `docker ps --filter ancestor=f5sign/backend:dev`
+  empareja **tambien el `php-fpm` del stack compartido**, que corre esa misma imagen: un `xargs
+  docker kill` sobre ese filtro tumba el stack de todo el mundo (paso, ~40 s).
+
+Y el argumento definitivo, medido sobre el mismo arbol y el mismo commit: contenedor ad-hoc con BD
+aislada pero **cluster compartido** -> 1681 tests, **5 fallos** (todos del relay); `make wt-backend`
+con **cluster propio** -> 1681 tests, **OK**. Aislar la base no basta; hay que aislar el cluster
+(BL-138). Es el contrafactual que las corridas verdes del lane, por si solas, no demuestran.
+
 Para integrarlo con `/task-runner`: cuando un agente valida un worktree, en vez de `make test-signer`
 usa `make wt-signer src=<worktree>` (idem backend). El stack compartido para los tests PAdES **ya
 existe**: es el propio stack de dev (`make up` + `make dss-wait-tl`), del que el lane consume solo
