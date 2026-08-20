@@ -61,6 +61,35 @@ Si el proyecto define CSP estricta:
 - [ ] Datos sensibles (PII, números de tarjeta, DNI) no se persisten en storage cliente
 - [ ] Si se usa localStorage para state no crítico: documentar qué se guarda y por qué
 
+### Veredicto de sesion en pantallas que no lo revalidan
+
+Aplica a apps con middleware de ruta que solo corre en una ruta raiz (el signer:
+`session.global.ts` corta con `if (!isIndexRoute) return` para no reentrar en SSR). Las
+SUB-RUTAS se pintan enteras desde el store persistido, que puede ser de una sesion ya
+muerta, y **nadie revalida nada**.
+
+- [ ] Toda pantalla que renderice desde la sesion valida que sigue viva **contra el
+      backend**, no solo comprobando que el store tenga datos
+  - El caso que muerde no es el store vacio: es el store POBLADO y rancio, donde
+    `session` existe y no dice nada
+- [ ] Un **401 de una llamada de sesion** se ENRUTA (descartar sesion + volver a la ruta
+      de arranque), nunca se pinta como error local dentro de un componente
+  - Grep: manejadores de error que solo hacen `errorMessage.value = ...` sobre un 401
+  - Un error confinado dentro de un visor/panel deja el resto de la pantalla **viva**:
+    el usuario sigue operando sobre una sesion que el backend ya no reconoce
+- [ ] Antes de rebotar se DESCARTA el estado invalido
+  - Si el middleware tiene rama de reutilizacion (`session !== null && !error`), rebotar
+    sin limpiar devuelve a la misma pantalla → bucle
+- [ ] El rebote esta acotado a una vez por carga
+
+⛔ **Por que es FAIL y no WARN, con un caso real:** en el signer se podia entrar a `/view`
+y a `/sign` con la sesion caducada y recorrer la ceremonia entera —rieles, campos y boton
+de firmar— con el fallo escondido en una tarjeta dentro del recuadro del PDF. Un firmante
+puede llegar al final y **creer que firmo**. Lo encontro un usuario, no una revision: los
+tests unitarios no lo ven porque vive en la interaccion entre pagina, middleware y store
+persistido, asi que **este check se verifica en NAVEGADOR** con la sesion invalidada a
+mano, no leyendo codigo.
+
 ### URLs externas y redirects
 
 - [ ] Nuevos dominios en `fetch`/`axios`/`$fetch` están documentados (permite CSP connect-src)
@@ -113,6 +142,8 @@ Si el diff introduce dependencias nuevas:
   - Open redirect
   - postMessage sin validación de origin
   - `innerHTML` / `document.write` con input externo
+  - Sesion invalidada que deja operable una pantalla de accion (firma, pago, envio):
+    el usuario puede completar un acto que el backend ya no reconoce
 - **WARN:**
   - Dependencia pesada nueva
   - Dependencia con mantenimiento abandonado
