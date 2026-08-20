@@ -115,11 +115,28 @@ f5sign-signer/
 ## Reglas especificas del repo
 
 1. **Privacidad — CRITICO**: no loggear datos biometricos (trazos [x,y,t,p] del canvas), ni contenido del documento, ni el `access_token` del enlace. Ningun `console.log` de datos sensibles en produccion.
-2. **No regenerar `pnpm-lock.yaml`** sin peticion explicita.
-3. **Compatibilidad movil**: testear siempre en **Safari iOS** y Chrome Android antes de cerrar una task con cambios de UI. Chrome DevTools mobile no sustituye al dispositivo real.
-4. **Rendimiento como requisito, no optimizacion posterior**: lazy-load, code-splitting, sin dependencias innecesarias. Presupuesto objetivo: bundle inicial < 200KB gzipped.
-5. **Accesibilidad con fallback textual**: todo paso que requiera canvas o gestos complejos debe tener un equivalente por teclado o boton.
-6. **Runtime config**: mismas reglas que dashboard (`NUXT_PUBLIC_*`, nada de secretos). `apiMode` por defecto es `'real'` para que un deploy sin override no sirva fixtures de mock.
-7. **White-label (Dedicated)**: el branding se resuelve por `Host` header en middleware (F3). El skeleton deja estructura lista pero no implementa logica.
-8. **No commitees `.env`.** Solo `.env.example`.
-9. **Dos dominios simbolicamente distintos** (`sign.f5sign.com` y `firma.<tenant>.com`) apuntan a la misma app con middleware de branding; no duplicar codigo.
+2. **El veredicto de sesion se ENRUTA, nunca se pinta en un rincon — CRITICO.** El
+   middleware global corta en la primera linea de cualquier sub-ruta
+   (`if (!isIndexRoute) return`, para no reentrar en SSR), asi que en `/view`, `/sign`,
+   `/review`, `/decline` y `/click-sign` **nadie revalida nada**: se pintan enteras desde
+   el store persistido, que puede ser de una sesion muerta. Toda pantalla de ceremonia
+   debe usar `useSessionVerdict`, y valen estas tres reglas:
+   - **Comprobar contra el backend, no contra el store.** El caso que muerde no es el
+     store vacio, es el store POBLADO y rancio: ahi `session.session` existe y no dice
+     nada.
+   - **Ante un 401, `clear()` antes de rebotar.** El middleware tiene una rama de
+     reutilizacion (`session.session !== null && !error`) que se salta el arranque y solo
+     recalcula el destino; con el store rancio devuelve a la misma pantalla y se entra en
+     bucle. Medido: cinco rebotes sin moverse.
+   - **Nunca confinar el fallo dentro de un componente.** Un 401 mostrado como tarjeta
+     dentro del visor deja la ceremonia viva alrededor — rieles, campos y boton de
+     firmar—, y un firmante puede recorrerla entera y **creer que firmo**. Paso de
+     verdad con un usuario, en `/view` y en `/sign`.
+3. **No regenerar `pnpm-lock.yaml`** sin peticion explicita.
+4. **Compatibilidad movil**: testear siempre en **Safari iOS** y Chrome Android antes de cerrar una task con cambios de UI. Chrome DevTools mobile no sustituye al dispositivo real.
+5. **Rendimiento como requisito, no optimizacion posterior**: lazy-load, code-splitting, sin dependencias innecesarias. Presupuesto objetivo: bundle inicial < 200KB gzipped.
+6. **Accesibilidad con fallback textual**: todo paso que requiera canvas o gestos complejos debe tener un equivalente por teclado o boton.
+7. **Runtime config**: mismas reglas que dashboard (`NUXT_PUBLIC_*`, nada de secretos). `apiMode` por defecto es `'real'` para que un deploy sin override no sirva fixtures de mock.
+8. **White-label (Dedicated)**: el branding se resuelve por `Host` header en middleware (F3). El skeleton deja estructura lista pero no implementa logica.
+9. **No commitees `.env`.** Solo `.env.example`.
+10. **Dos dominios simbolicamente distintos** (`sign.f5sign.com` y `firma.<tenant>.com`) apuntan a la misma app con middleware de branding; no duplicar codigo.
