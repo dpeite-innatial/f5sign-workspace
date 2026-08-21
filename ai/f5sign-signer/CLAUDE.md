@@ -118,9 +118,10 @@ f5sign-signer/
 2. **El veredicto de sesion se ENRUTA, nunca se pinta en un rincon — CRITICO.** El
    middleware global corta en la primera linea de cualquier sub-ruta
    (`if (!isIndexRoute) return`, para no reentrar en SSR), asi que en `/view`, `/sign`,
-   `/review`, `/decline` y `/click-sign` **nadie revalida nada**: se pintan enteras desde
-   el store persistido, que puede ser de una sesion muerta. Toda pantalla de ceremonia
-   debe usar `useSessionVerdict`, y valen estas tres reglas:
+   `/review`, `/decline`, `/click-sign` **y tambien las terminales** (`/done`,
+   `/declined`, `/expired`, `/unavailable`) **nadie revalida nada**: se pintan enteras
+   desde el store persistido, que puede ser de una sesion muerta —o de otro enlace, o de
+   ninguna—. Toda sub-ruta debe usar `useSessionVerdict`, y valen estas reglas:
    - **Comprobar contra el backend, no contra el store.** El caso que muerde no es el
      store vacio, es el store POBLADO y rancio: ahi `session.session` existe y no dice
      nada.
@@ -132,6 +133,26 @@ f5sign-signer/
      dentro del visor deja la ceremonia viva alrededor — rieles, campos y boton de
      firmar—, y un firmante puede recorrerla entera y **creer que firmo**. Paso de
      verdad con un usuario, en `/view` y en `/sign`.
+   - **La ausencia de datos NO es prueba de nada, y la prueba tiene que ser de ESTE
+     enlace.** Ninguna pantalla puede afirmar un estado del sobre con el store vacio: se
+     exige veredicto (`requireVerdictFor`) o read-model (`requireSessionFor`) para el
+     token de la URL, y sin el no se pinta —al indice, que pregunta y enruta—. Dos formas
+     de meter la pata, las dos medidas en navegador: (1) `/done` con el store vacio caia
+     en su variante `v-else` y decia **"Firma completada"** a quien abria un token que no
+     existe, con 200 y cero llamadas de red; (2) el store vive en `sessionStorage` bajo
+     una sola clave, asi que un segundo enlace en la misma pestana pintaba los datos del
+     primero —documento, remitente, fecha de firma— bajo la URL del segundo. Corolarios:
+     el `v-else` de una pantalla de estado se convierte en `v-else-if="proven"` (si no, la
+     rama de exito se come el hueco), y `/invalid` NUNCA lleva puerta: es el destino
+     honesto al que rebota todo lo demas.
+   - **Pero enrutar no es siempre la respuesta: un fallo con remedio EN EL SITIO se
+     resuelve en el sitio.** El 401 `AUTH_NO_OPEN_CHALLENGE` de `commit` (puerta de FIRMA
+     declarada y sin responder) se atiende con el modal sobre `/sign`, no navegando a
+     `/auth`: la firma y las evidencias viven en RAM y no sobreviven al salto de pagina.
+     Medido: el firmante recorria la ceremonia **dos veces** —codigo, aterrizar en
+     `/view`, volver a pulsar Firmar, recopilar evidencias otra vez— para una sola firma.
+     Su hermano `AUTH_REAUTH_REQUIRED` si va a `/auth`, porque es la puerta de ACCESO
+     caducada por inactividad y el modal no la sirve. Distinguirlos es el trabajo.
 3. **No regenerar `pnpm-lock.yaml`** sin peticion explicita.
 4. **Compatibilidad movil**: testear siempre en **Safari iOS** y Chrome Android antes de cerrar una task con cambios de UI. Chrome DevTools mobile no sustituye al dispositivo real.
 5. **Rendimiento como requisito, no optimizacion posterior**: lazy-load, code-splitting, sin dependencias innecesarias. Presupuesto objetivo: bundle inicial < 200KB gzipped.
