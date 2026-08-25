@@ -17,6 +17,7 @@
 # misma razón, otra sesión arrastró .playwright-cli/ a un commit accidental
 # sobre f5sign-infra. Si creas un worktree, añádelo aquí en el mismo momento.
 /f5sign-backend-develop/
+/f5sign-backend-readable-envelope/
 /f5sign-signer-develop/
 /f5sign-backend-docs/
 
