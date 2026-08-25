@@ -100,7 +100,6 @@ Verificar y **parar con mensaje claro** si falla:
        ya lo había corregido el 08-19 — esta skill se enteró una semana después. La moraleja no es el dato
        sino el desfase: esta skill va por detrás del lane, así que enumera `scripts/wt-validate.sh` antes
        de fiarte de esta lista.
-       de esta lista.
      - **Dos costes reales:** el teardown es `down -v`, que se lleva el volumen de vendor del lane, así que
        **cada corrida rehace `composer install`**; y `flock` limita el backend a **un lane a la vez**. Medido
        2026-08-18: la corrida entera (install + migraciones + suite) tarda unos minutos, de los cuales la
