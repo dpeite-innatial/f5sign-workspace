@@ -56,6 +56,43 @@ Nota: **sin `chart.js`** ni **`@headlessui/vue`** en el signer — el flujo es t
 > es Alpine y Playwright no lo soporta). No hace falta `pnpm test:e2e:install` en el
 > host: los navegadores vienen en la imagen oficial. Detalle en `../f5sign-infra/CLAUDE.md` § "Tests frontend en Docker".
 
+### Worktrees: esos targets validan el arbol de OTRO, y reportan verde por el
+
+⛔ **Antes de correr nada de la tabla de arriba: comprueba si estas en un worktree enlazado.**
+`f5sign-infra/docker-compose.override.yml` bind-montea `../f5sign-signer` — el checkout **principal**,
+escrito a mano — en el contenedor `signer`. Un worktree **no se monta nunca**, asi que `make test-signer`
+y sus hermanos corren contra la rama en la que el principal este sentado. Tus ediciones no estan dentro
+del contenedor y **nada te avisa**: la corrida pasa, los numeros son plausibles y la respuesta es sobre
+otra rama.
+
+- **Comprobar:** `git rev-parse --git-dir` — si el path contiene `/worktrees/`, estas en uno.
+  `git worktree list` nombra el checkout principal, que es el arbol que esos targets validan de verdad.
+- **Desde un worktree, el lane efimero**, que si monta *tu* arbol:
+
+  ```
+  make -C ../f5sign-infra wt-signer src=$(pwd)
+  ```
+
+  Levanta un lane aislado por `STACK_NS=wt-<lane>` (red y volumenes propios, **sin puertos al host**, cero
+  colision con el stack de dev ni con otro lane), corre lint + typecheck + unit + e2e en un contenedor
+  Playwright que auto-hostea su dev server, y lo destruye al terminar. `flock` limita a **2 lanes de
+  signer** en paralelo (`WT_CAP_SIGNER`). Detalle en `../f5sign-infra/CLAUDE.md` § "Validacion efimera por
+  worktree".
+- **Declarar en el report que ruta usaste.** Una validacion cuya diana no era tu arbol es peor que
+  ninguna, porque se lee como verde.
+
+⚑ **Asi es como muerde, y el fallo es confiado, no silencioso.** Medido en el backend el 2026-08-17 —
+mismo mecanismo, mismo `override.yml`: una sesion en un worktree corrio la suite, obtuvo `OK (16 tests)`
+y **dedujo de ese numero** que 8 tests del fichero que acababa de editar no se estaban recogiendo. Lo
+reporto como defecto que tumbaba la barra de aceptacion de una tarea. El contenedor estaba corriendo otra
+rama, cuya copia de ese fichero tiene 6 tests. Esa misma sesion ya habia reportado un gate estatico en
+verde para ediciones que el gate nunca vio.
+
+⚠ **Anadido 2026-08-25.** `make wt-signer` existe desde el 2026-08-18 y este fichero no lo mencionaba:
+`f5sign-infra` habia construido el lane del signer **y escrito el punto de integracion con
+`/task-runner`**, mientras que un grep de "worktree" sobre toda la config de IA solo daba resultados en
+el backend y en infra. Cero aqui.
+
 ## Estructura del codigo
 
 Nuxt 4 default layout (`srcDir: 'app/'`):

@@ -43,6 +43,25 @@ Frontend de administracion del producto F5Sign. Panel que usan los remitentes pa
 > correran en un contenedor dedicado con la imagen oficial de Playwright (el contenedor
 > `dashboard` es Alpine y Playwright no lo soporta).
 
+### Worktrees: hoy no hay ruta de validacion aislada
+
+⛔ **El dashboard no tiene lane efimero.** El signer y el backend si
+(`make -C ../f5sign-infra wt-signer` / `wt-backend`): levantan un stack propio que monta *tu* arbol y lo
+destruyen al terminar. **`wt-dashboard` no existe**, y `docker-compose.override.yml` bind-montea
+`../f5sign-dashboard`, el checkout **principal**, escrito a mano — asi que un worktree no se monta nunca.
+
+- **Comprobar donde estas:** `git rev-parse --git-dir` — si el path contiene `/worktrees/`, estas en uno.
+- **Desde un worktree del dashboard**, cualquier cosa que corra en el contenedor `dashboard` valida el
+  arbol del checkout principal. Hoy eso importa poco porque no hay suite; **importara en cuanto EP26 la
+  traiga**, y entonces esto se convierte en la misma trampa que el backend documenta en cinco sitios: la
+  corrida pasa, los numeros son plausibles y la respuesta es sobre otra rama.
+- **Mientras tanto: declararlo.** Si trabajas en un worktree del dashboard, el report dice *"sin validar
+  en contenedor"*, no un verde prestado del checkout principal.
+
+▶ **Lo que haria falta:** un `docker-compose.wt.dashboard.yml` + entrada en `scripts/wt-validate.sh`,
+calcados del signer, que ya resuelve el caso frontend entero. Va con EP26, no antes: sin suite no hay
+nada que aislar. Anotado aqui el 2026-08-25 para que EP26 no se cierre sin ello.
+
 ## Estructura del codigo
 
 Convenciones Nuxt estandar en la raiz del repo (sin monorepo):
