@@ -31,6 +31,28 @@ de vida, y **no debe contener rastro de IA** (lo recibe por symlink, ignorado lo
    al store `ai/`. Edítalos ahí (o a través del symlink). Tras clonar/actualizar un subrepo,
    re-ejecuta `bin/sync-ai.sh`. Skills de usuario en `~/.claude/`.
 
+## Cómo se escribe la config IA
+
+Estos tres hábitos ya están en las partes mejor escritas del store. Quedan aquí como regla porque
+lo que se pudre no es el criterio, es acordarse.
+
+1. **Cita, no repliques.** Si el hecho vive en otro fichero —un target del Makefile, un servicio de
+   compose, el default de un script— **enlázalo y di dónde enumerarlo**; no copies la lista. Un texto
+   que dice *"enumera los gates de `scripts/wt-validate.sh`"* no puede quedarse atrás. El que los
+   listaba sí: el 2026-08-18 a las 16:11 una skill escribió que el lane corría un solo gate, a las
+   18:18 `f5sign-infra` le metió cuatro, y la skill no se enteró hasta el 08-25 — su propio
+   `CLAUDE.md` ya lo había corregido el 08-19.
+2. **Fecha la corrección el día que la haces, y di qué decía antes.** No el día en que cambió lo que
+   corriges — eso ya lo cuenta el commit del otro repo. Fechar con la fecha ajena hace que el texto
+   afirme que ya estaba corregido cuando no lo estaba, que es exactamente el desfase que la marca
+   existe para registrar (cometido y arreglado aquí mismo: `b487991` → `2d8e4a6`).
+3. **Todo `make`, ruta, variable o `BL-`/`ADR-` que nombres tiene que existir, y seguir queriendo
+   decir lo mismo.** Se comprueba en un segundo y falla en las dos direcciones: el `task-runner`
+   genérico mandaba a `f5sign-docs/skills-library/` y a `sync-skills.sh` como fuente viva de las
+   skills —los dos ficheros existen, pero llevaban retirados desde junio, y correr el segundo habría
+   roto el secreto—; y `make migrate-status` existió cuatro días sin que la tabla de `f5sign-infra`
+   lo nombrara, ofreciendo en su lugar las dos formas que mienten sobre el estado de la BD.
+
 ## Worktrees
 
 Varios `git worktree` del mismo subrepo conviven en el workspace (hoy tres del backend). Tres reglas,
