@@ -31,6 +31,31 @@ de vida, y **no debe contener rastro de IA** (lo recibe por symlink, ignorado lo
    al store `ai/`. Edítalos ahí (o a través del symlink). Tras clonar/actualizar un subrepo,
    re-ejecuta `bin/sync-ai.sh`. Skills de usuario en `~/.claude/`.
 
+## Worktrees
+
+Varios `git worktree` del mismo subrepo conviven en el workspace (hoy tres del backend). Tres reglas,
+las tres aprendidas a golpes:
+
+1. **Van como hermanos de su repo, no dentro de él**: `f5sign-backend-<slug>/`, al lado de
+   `f5sign-backend/`. ⛔ Un worktree **dentro** del checkout principal (`f5sign-backend/worktrees/…`)
+   queda dentro del bind-mount `../f5sign-backend` del stack y aparece como `?? worktrees/` en el
+   `git status` del principal. Añade el nombre nuevo a `.gitignore` de la raíz.
+2. **`bin/sync-ai.sh` después de crear uno.** El script ya cubre worktrees enlazados, pero hay que
+   correrlo: un worktree sin sincronizar **sirve los ficheros de IA trackeados en el historial** —viejos,
+   y commiteables—, que es justo lo que prohíbe la regla de cero rastro. `skip-worktree` es por índice y
+   cada worktree tiene el suyo, así que ponerlo en el clon principal no hace nada por ellos.
+3. **Los targets normales de test validan el checkout PRINCIPAL, no el tuyo.**
+   `f5sign-infra/docker-compose.override.yml` monta `../f5sign-backend`, `../f5sign-signer` y
+   `../f5sign-dashboard` a mano. Desde un worktree hay que usar el lane efímero
+   (`make -C ../f5sign-infra wt-backend|wt-signer src=$(pwd)`), que monta *tu* árbol y se destruye al
+   terminar. ⛔ **`wt-dashboard` no existe** (sin suite hasta EP26): desde un worktree del dashboard hoy
+   no hay ruta aislada, y eso se declara en vez de tomar prestado el verde del principal.
+   Detalle en `f5sign-infra/CLAUDE.md` § *Validación efímera por worktree*.
+
+⚠ **Un directorio con pinta de worktree no es un worktree.** `git worktree list` en el subrepo es la
+única respuesta; el listado de la raíz miente. A 2026-08-25, `f5sign-signer-develop/` es un huérfano sin
+`.git` que `sync-ai.sh` salta —correctamente— y que sigue ahí pareciendo lo que no es.
+
 ## Flujo típico para una tarea
 
 1. Localizar la spec en `f5sign-docs/` (la tarea debería indicar la ruta).
@@ -54,3 +79,7 @@ de vida, y **no debe contener rastro de IA** (lo recibe por symlink, ignorado lo
 - No commitear ficheros de IA dentro de los subrepos (rompe el secreto).
 - No mezclar cambios de varios subrepos en una misma sesión sin delimitarlos.
 - No duplicar specs dentro de los repos de código: enlazar a `f5sign-docs/`.
+- **No correr `f5sign-docs/scripts/sync-skills.sh`.** Fue el mecanismo de distribución antes de `ai/` y
+  está **retirado y bloqueado** desde 2026-08-25: hacía `rm -rf` del destino y `cp -r`, o sea borrar los
+  symlinks, dejar ficheros de IA **reales** dentro del subrepo y revertir las skills a junio, con
+  `exit 0`. `skills-library/` se conserva como lectura histórica; la fuente es `ai/`.
