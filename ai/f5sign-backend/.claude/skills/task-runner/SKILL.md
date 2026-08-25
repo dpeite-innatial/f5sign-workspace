@@ -29,7 +29,13 @@ Verificar y **parar con mensaje claro** si falla:
 1. El `.md` de la task existe en `docs/tasks/TASK-NNN-*.md` y es legible.
 2. `git status` limpio en la rama actual.
 3. La rama base es **`develop`**, no `master`. El trabajo de producto se integra en `develop`; `master`
-   es la rama de publicación. Si no estás en `develop`, hacer checkout antes de crear la rama de la task.
+   es la rama de publicación. ⚑ **Ramificar desde la *ref*, no desde el checkout**:
+   `git checkout -b <rama> develop`. Es equivalente en cualquier entorno y es la única forma que funciona
+   en un **worktree enlazado** —el entorno del que habla la precondición 5—: allí `git checkout develop`
+   es *imposible*, porque el checkout principal ya tiene esa rama tomada y git se niega a tener la misma
+   rama dos veces. Redactada como *"hacer checkout de `develop` primero"*, esta precondición se bloqueaba
+   a sí misma justo donde más falta hace (medido 2026-08-18, corrida de TASK-029 en
+   `f5sign-backend-develop`).
 4. **El stack está arriba, y se comprueba desde `../f5sign-infra`, nunca con `docker compose` desde este
    repo** (regla 5 del repo: Symfony Flex genera `compose.yaml` que está deshabilitado y gitignorado).
    Comprobación: `make -C ../f5sign-infra worker-status` responde, o `docker ps` muestra `f5sign-php-fpm`.
@@ -38,15 +44,98 @@ Verificar y **parar con mensaje claro** si falla:
    `f5sign-infra/docker-compose.override.yml` monta `../f5sign-backend`. Si estás trabajando en un
    **worktree enlazado** (p. ej. `f5sign-backend-develop`), `make test` y `make phpstan` validan el otro
    árbol y su verde no dice nada de tu código. Rutas válidas en ese caso, en orden de preferencia:
-   - `make -C ../f5sign-infra wt-backend src=$(pwd)` — lane efímero por worktree. ⚠ Hoy levanta **solo
-     postgres** (`docker-compose.wt.backend.yml` declara `postgres-test` + `php-fpm-wt` y nada más): los
-     tests de storage **fallan** (`Could not resolve host: minio`) y los de broker se saltan. Observado
-     además que la corrida muere en el *process timeout* de 300 s de Composer — pero **la causa no es la
-     duración de la suite**: medida aparte tarda ~74 s y los fallos de storage caen en ~28 s. El lane mete
-     `composer install` + migraciones + suite en el mismo proceso, que es la explicación probable. Si lo usas
-     y muere, no lo leas como "los tests son lentos".
-   - Contenedor puntual sobre la red del stack, que es la vía que sí completa la suite (medido: 1489 tests
-     en ~74 s). ⚠ **Migra primero contra `postgres-test`**, que es tmpfs y arranca vacío — sin ese paso los
+   - **① `make -C ../f5sign-infra wt-backend src=$(pwd)`** — lane efímero por worktree, y **la única ruta
+     que aísla de verdad**. ⚠ **Reconstruido 2026-08-18 por la sesión de `f5sign-infra`; esta entrada decía
+     *"hoy levanta solo postgres"* y las tres consecuencias que sacaba de ahí ya no valen.** El lane levanta
+     **su propio juego de todo servicio con estado que los tests mutan** — hoy `postgres-test`, `minio` +
+     `minio-init` (los 5 buckets, con Object Lock), `rabbitmq` y `mailpit`, más su `php-fpm-wt`. El criterio
+     es *por lane si un test puede escribir en él*, así que enumera `docker-compose.wt.backend.yml` en vez de
+     fiarte de esta lista. **Los tests de storage y los de broker pasan ahí.**
+     - `eu-dss` es el **único compartido**, y por lo que es, no por lo que cuesta: petición/respuesta pura, y
+       su único estado es la caché de Trusted Lists, de solo lectura. Se alcanza por un proxy `socat` que es
+       el **único** contenedor en las dos redes — si el contenedor de php estuviera en ambas, los nombres
+       `minio`/`rabbitmq`/`mailpit` resolverían **ambiguamente** (el DNS de Docker une las entradas de todas
+       las redes a las que estás conectado) y un lane podría acabar escribiendo en el MinIO del stack
+       compartido.
+     - `scripts/wt-validate.sh` hace **preflight** de que ese `eu-dss` compartido está vivo y **aborta con el
+       motivo escrito** si no (escape hatch `WT_REQUIRE_DSS=0`, que corre igual y deja esos tests en rojo a
+       sabiendas). Lo que obliga al preflight es la corrección anterior de esta entrada, que **sigue intacta**:
+       ⚠ **Corregido 2026-08-18 por la sesión de `f5sign-infra`, y esta línea decía "se saltan"**: grep sobre
+       `tests/` da **cero** llamadas a `markTestSkipped` — las dos apariciones que quedan son prosa
+       afirmando justamente esta regla. No hay mecanismo en la suite que salte nada. La distinción importa
+       porque "se salta" y "falla" llevan a diagnósticos distintos, y además la lista de hosts era corta:
+       `.env.test` resuelve **cinco** (`postgres-test`, `minio`, `rabbitmq`, `mailpit`, `eu-dss`), no tres.
+       De esos cinco, el lane sirve cuatro **por lane** y proxya el quinto.
+       ⚠ **Corregido 2026-08-20: esta línea decía además que `phpunit.dist.xml` "no filtra ningún grupo" y
+       que su único `<exclude>` era de *cobertura*.** TASK-030 añadió
+       `<groups><exclude><group>sandbox</group>`, el único grupo excluido — y lo añadió **por esta misma
+       regla**: esa tier llama a `api.twilio.com` de verdad y, como el repo no salta, un host que no
+       resuelve la pondría roja en cualquier `composer test` offline. Los demás grupos (`eIDAS-*`, `bl38`)
+       son **selectores** para un humano, no exclusiones: corren todos por defecto.
+       ⛔ Añadir un nombre a ese `<exclude>` hace que el gate reporte sobre menos código **sin decirlo**;
+       es la edición de este repo que más se parece a fabricar un verde.
+     - **Memoria: el lane monta `./docker/php/php.ini`, o sea 512M**, y encima `zz-wt-infection.ini`, que lo
+       sube a 1536M — existe porque el gate `infection` relanza `phpunit` como proceso hijo y un `php -d` no
+       se hereda. ⚠ Ese 1536M es **un punto de partida, no una medición**: nadie ha medido el pico real de
+       Infection en esta suite, y el propio fichero lo dice. Si muere por memoria, súbelo ahí **y** en
+       `WT_PHP_MEM`. La trampa de los 128M ([BL-135](../../../docs/BACKLOG.md)) es del contenedor **a mano**
+       de ② , no del lane.
+     - **`COMPOSER_PROCESS_TIMEOUT=1800`**: la observación anterior de *"muere en el process timeout de 300 s
+       de Composer"* está **arreglada**, y su diagnóstico era correcto — no era la duración de la suite. Y ya
+       no empaqueta los pasos en un proceso: son **`docker compose run` separados** —`composer install`,
+       migraciones como superuser, y después **uno por gate** como el rol de app—, así que un fallo dice
+       **qué paso** murió en vez de tumbar la corrida sin nombre.
+     - **Gates: el lane corre cuatro por defecto, no solo la suite.** `WT_GATES` los elige y su default es
+       `lint arch phpstan test`; `infection` es **opt-in** (`WT_GATES="lint arch phpstan test infection"`)
+       porque tarda órdenes de magnitud más y haría el lane inservible para iterar, y `WT_GATES="test"`
+       reproduce el comportamiento antiguo.
+       ⚑ El gate `phpstan` del lane hace `cache:warmup --env=dev` y **comprueba que el dump del contenedor
+       existe antes de analizar**: en un lane `var/` es un volumen propio y nace vacío, y un PHPStan sin ese
+       dump reporta servicios **sin registrar que sí lo están** — que se lee exactamente como un defecto de
+       tu rama. Ojo al modo de fallo, que es el contrario al del árbol principal: allí el dump está
+       *rancio*, aquí *no está*.
+       ⚠ **Corregido 2026-08-18, y esta entrada decía que el lane corría "`composer test` y nada más" y que
+       las estáticas no tenían ruta worktree-aware.** Era cierto a las 16:11, cuando se escribió;
+       `f5sign-infra` metió los cuatro gates a las 18:18 del mismo día. La moraleja no es el dato sino el
+       desfase: esta skill va por detrás del lane, así que enumera `scripts/wt-validate.sh` antes de fiarte
+       de esta lista.
+     - **Dos costes reales:** el teardown es `down -v`, que se lleva el volumen de vendor del lane, así que
+       **cada corrida rehace `composer install`**; y `flock` limita el backend a **un lane a la vez**. Medido
+       2026-08-18: la corrida entera (install + migraciones + suite) tarda unos minutos, de los cuales la
+       suite son **1:46**. ⚠ Esa cifra es de **la suite sola**: con el default de `WT_GATES` corren además
+       `lint`, `arch` y `phpstan`, así que no la cites como el coste del lane completo.
+   - ⛔ **Una *base de datos* aparte dentro del clúster compartido NO es aislamiento — y es justo el apaño
+     que uno se monta al llegar aquí.** `EventRelay` filtra por
+     `sys_transaction_id < pg_snapshot_xmin(pg_current_snapshot())`, y **`pg_snapshot_xmin` es de CLÚSTER**:
+     una transacción abierta en *cualquier* base del clúster —incluida `postgres`, que no contiene ninguna
+     tabla nuestra— para el relay, **y el relay reporta éxito sin drenar nada**
+     ([BL-138](../../../docs/BACKLOG.md), que probó el mecanismo con un A/B/C controlado). **La regla es un
+     clúster por sesión, no una base por sesión**: lo que comparte clúster está expuesto por muchas bases en
+     que lo partas. El lane aísla porque levanta **su propio** contenedor `postgres-test`.
+     ⚑ **Confirmado 2026-08-18** sobre el mismo árbol, el mismo commit y sin una sola edición, **n=1 por
+     brazo** — confirmación consistente con BL-138, **no** prueba independiente del mecanismo:
+
+     | Brazo | Clúster | Resultado |
+     |---|---|---|
+     | contenedor puntual, base aislada `f5sign_test_wt` | **compartido** | 1681 tests, 7177 asserts, **5 fallos** |
+     | `make -C ../f5sign-infra wt-backend src=$(pwd)` | **propio** | 1681 tests, 7210 asserts, **OK** |
+
+     Mismo número de tests en los dos brazos, así que no se saltó ni se filtró nada: el delta es puro
+     pass/fail. Los cinco rojos caían todos en relay / event-log (`EventLogBrokerRoundTripTest`,
+     `EventRelayTest`, `ReplayEventLogEventCommandTest`) y dos llevaban las firmas documentadas de BL-138 al
+     pie de la letra (`0 is identical to 2`, `-1 is identical to 1`).
+   - **② Contenedor puntual sobre la red del stack — degradado 2026-08-18 a segunda opción.** Esta entrada lo
+     presentaba como *"la vía que sí completa la suite"* (medido entonces: 1489 tests en ~74 s); es la ruta
+     que produjo los cinco rojos falsos de arriba, porque comparte el clúster de `postgres-test` con las
+     demás sesiones. **No se borra, se degrada** — sigue siendo la ruta correcta para: (a) corridas acotadas
+     mientras iteras (`--filter`, un solo fichero de PHPStan), porque el lane corre siempre el gate entero y
+     rehace `composer install` en cada arranque; y (b) fallback si el lane no está disponible — sin stack
+     compartido no hay `eu-dss` que proxyar, y `flock` sólo da **un** lane de backend a la vez.
+     ⚠ **Corregido 2026-08-18: aquí decía que las estáticas *"no tienen ninguna otra ruta desde un
+     worktree"*, y el lane ya las corre** (`WT_GATES`, arriba).
+     ⛔ Lo que ya no vale es correr la **suite entera** por aquí y declarar el resultado como validación de
+     tu rama.
+     ⚠ **Migra primero contra `postgres-test`**, que es tmpfs y arranca vacío — sin ese paso los
      tests de DB fallan con `could not translate host name` o tabla inexistente, y parece un fallo de código:
      ⛔ **Esta imagen arranca con `memory_limit=128M`; el contenedor `php-fpm` que usan los targets del
      Makefile arranca con 512M** (medido 2026-08-18: `docker exec f5sign-php-fpm php -r 'echo
@@ -56,13 +145,19 @@ Verificar y **parar con mensaje claro** si falla:
      diagnóstico apuntaba a la herramienta, no al contenedor ([BL-135](../../../docs/BACKLOG.md)).
      ⚑ `mkdir` y demás comandos de shell no lo necesitan: no son procesos PHP. La regla es *PHP sí, shell no*.
      ⚠ Y ojo, `-d` **no se hereda por los hijos**: `infection` lanza su propio `phpunit`, que vuelve a 128M.
-     Para esos casos hace falta un `php.ini` montado, no la bandera.
+     Para esos casos hace falta un `php.ini` montado, no la bandera. ⚑ Esto es de **esta** ruta: en el lane
+     de ① no pasa, porque monta el `php.ini` de 512M.
      ```
      docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html \
        -e DATABASE_URL='postgresql://f5sign:f5sign_test_pw@postgres-test:5432/f5sign_test?serverVersion=16&charset=utf8' \
        f5sign/backend:dev sh -c 'php -d memory_limit=-1 bin/console doctrine:migrations:migrate --env=test --no-interaction --allow-no-migration'
      docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html \
        f5sign/backend:dev sh -c 'php -d memory_limit=-1 bin/phpunit --no-progress'
+     ```
+     Las estáticas no necesitan ni `--network` ni migraciones:
+     ```
+     docker run --rm -v $(pwd):/var/www/html -w /var/www/html \
+       f5sign/backend:dev sh -c 'php -d memory_limit=-1 "$(command -v composer)" arch'
      ```
    Elegir una y **declararla en el report**; una validación cuya diana no era tu árbol es peor que
    ninguna, porque se lee como verde.
@@ -96,8 +191,18 @@ Verificar y **parar con mensaje claro** si falla:
 5. **Rama**: la convención real de este repo es `<tipo>/<slug>` — `feat/notification-email-html`,
    `docs/task-conventions`, `chore/dockerfile-dev-target`. ⚠ **Ninguna rama en la historia del repo ha
    llevado el id de la task en el nombre**, así que no inventes `feat/TASK-NNN-…`: el id va en el cuerpo del
-   PR y en el `Status` del `.md`. Kebab-case, ASCII, desde `develop`.
+   PR y en el `Status` del `.md`. Kebab-case, ASCII, desde `develop` — con `git checkout -b <rama> develop`
+   (precondición 3), no haciendo checkout de `develop` primero.
 6. **Inicializar `run.log`** (JSON lines) con `{phase: "prepare", status: "pass", at: ISO8601}`.
+7. ⚑ **Baseline verde, antes de tocar una sola línea.** Correr la suite completa **por el harness que
+   declaraste en la precondición 5** y anotar el **número exacto de tests y de asserts**, en `run.log` y
+   en el resumen final. Sin ese número no se pueden separar los rojos propios de los preexistentes, y una
+   corrida se pone roja por motivos de entorno más a menudo de lo que parece (medido 2026-08-18, corrida
+   de TASK-029: `1619 tests / 6704 assertions` verdes antes de la primera edición — y esa corrida sí se
+   puso roja después por entorno; ese número fue lo único que permitió decirlo sin dudar).
+   ⚠ **Un baseline rojo no aborta la task: se declara.** Lo que no vale es descubrirlo a mitad de la
+   Fase 3 y atribuirlo al diff.
+   Registrar en `run.log` como `{"phase":"baseline","status":"pass","tests":N,"assertions":M,"harness":"…"}`.
 
 ### Fase 1 — `spec-lint` [GATE]
 
@@ -149,8 +254,35 @@ es "todo lo que aún no está en la lista". Derivar del `changes.diff`:
 | `contract-check-backend` | `src/**/UI/Http/`, `config/routes/`, cualquier `#[OA\`, o un `Contract/Event/` |
 | `task-validate-backend` | **siempre** |
 
+⚑ **Si el diff añade un event listener, un middleware o un servicio etiquetado, comprobar que está
+registrado de verdad** — no que la clase existe. Un comando por superficie:
+`make -C ../f5sign-infra sf cmd="debug:event-dispatcher kernel.controller"` (o el evento que toque),
+`debug:container --tag=<tag>`, `debug:messenger`. Un listener sin cablear es un **no-op silencioso**: no
+hay error, no hay excepción, y la suite puede seguir verde porque los tests unitarios de controlador
+suelen fijar los atributos de la request a mano y **saltarse el listener** — así que su verde no dice
+nada de que el listener corra. Ningún gate de este stack lo cubre. Cuesta un comando (comprobado
+2026-08-18 en TASK-029: los dos listeners nuevos salían registrados y disparando).
+
 En paralelo (varias llamadas Agent en un solo mensaje). Prerequisito de `contract-check-backend` si hay
 endpoints: `make -C ../f5sign-infra sf cmd="nelmio:apidoc:dump --format=json"` → guardar en el workspace.
+
+⛔ **Cada Agent en paralelo recibe una lista explícita de rutas que puede tocar, y la orden de reportar
+—no editar— cualquier cosa que encuentre fuera de ella.** Varios agentes escriben a la vez sobre **el
+mismo árbol de trabajo**; sin esa lista no hay forma de saber de quién es cada delta.
+
+- **Lo que pasó** (2026-08-18, TASK-029): un `git add -A` del orquestador se llevó por delante las
+  ediciones **en vuelo** de un agente de validación. El agente reportó después que sus entregables
+  "estaban en HEAD aunque él nunca commiteó", y que HEAD **no** estaba verde sin el delta que todavía
+  tenía en el árbol. Ninguna de las dos cosas se ve desde el diff.
+- **Con agentes vivos, `git add -A` es siempre incorrecto**: commitea trabajo ajeno a medias. Añadir
+  rutas explícitas, o commitear cuando no quede ningún agente corriendo.
+- **Sabotear un fichero ajeno es legítimo, y hay que pedirlo bien.** Dos agentes necesitaron sabotear
+  ficheros del orquestador para ver una guarda fallar por su propio motivo; salió bien **solo** porque
+  el brief les exigía restaurar de inmediato y demostrarlo con un `git diff` vacío. Esa exigencia va en
+  el brief, no en la buena voluntad del agente.
+- ⚑ **La lista no es solo defensiva.** *"Reporta lo que veas fuera de tu lista"* fue lo que produjo el
+  hallazgo más valioso de esa corrida: un mecanismo decidido en un ADR y **nunca construido**, que
+  ningún test podía cazar porque ninguna barra de aceptación lo nombraba.
 
 Después, secuencial: `security-audit-core` [GATE] — **siempre**. Delega en `security-audit-backend`, y en
 `eidas-compliance` si el diff toca firma/crypto (`src/F5Sign/SignatureExecution/`, `Foundation/Crypto/`,
