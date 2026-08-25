@@ -108,6 +108,7 @@ Todos los comandos se ejecutan desde la raiz de **este** repo:
 | Tests signer E2E (Playwright, 4 perfiles) | `make test-signer-e2e` |
 | Tests signer E2E (smoke mobile) | `make test-signer-e2e-mobile` |
 | Reset BD (drop+create+migrate+fixtures) | `make reset-db` |
+| **Estado de las migraciones** | **`make migrate-status`** — ⛔ no lo consultes de otra forma, ver abajo |
 | Deshacer la ultima migracion (NO destruye la BD) | `make migrate-prev` |
 | Migrar a una version concreta (arriba o abajo) | `make migrate-to v=Version...` |
 | Build imagenes | `docker compose build` o `make build` |
@@ -119,6 +120,17 @@ Todos los comandos se ejecutan desde la raiz de **este** repo:
 | Deploy completo en host de prod | `make deploy-prod` (pull + up, req. `.env.prod`) |
 | Deploy SOLO backend (php-fpm+worker) | `make deploy-backend` (bumpea `BACKEND_TAG` en `.env.prod`) |
 | Deploy SOLO signer | `make deploy-signer` (bumpea `SIGNER_TAG` en `.env.prod`) |
+
+⛔ **El estado de las migraciones SOLO se consulta con `make migrate-status`, y el motivo es peor que el
+de `migrate-prev`.** Preguntarlo con `make sf` o un `docker compose exec php-fpm` pelado corre como
+`f5sign_app`, que **no ve `doctrine_migration_versions`**. No falla: responde tan tranquilo `Executed 0` y
+marca las 26 migraciones como *not migrated* sobre una base que esta al dia. Donde `migrate-prev` revienta
+ruidosamente con *permission denied* y te enteras, esto te contesta una cifra falsa. ⚠ **Y la reaccion
+natural a "la BD esta vacia" es `make reset-db`, que la vacia de verdad y se lleva la API key
+aprovisionada, que solo se muestra una vez.** Medido el 2026-08-21: el mismo comando decia `0 de 26` como
+`f5sign_app` y *"Already at latest version"* como owner.
+⚑ **Anadido 2026-08-25.** El target existe desde el 2026-08-21 (`07b29b1`) y esta tabla, escrita el 08-18,
+no lo listaba — o sea que documentaba las dos formas ruidosas y no la unica que dice la verdad.
 
 > **Los tests SIEMPRE corren en Docker, nunca en local** (no contaminar la
 > maquina con dependencias). Ver "Tests frontend en Docker" abajo.
