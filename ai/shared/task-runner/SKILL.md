@@ -24,9 +24,45 @@ Antes de empezar, verificar (y parar con mensaje claro si falla):
 
 1. El `.md` de la tarea existe y es legible
 2. `git status` está limpio (no hay cambios sin commitear en la rama actual)
-3. Estás en rama `master` (o la rama base del proyecto) — si no, checkout a base antes de crear rama nueva
-4. Docker Compose está up: `docker compose ps` muestra los servicios esenciales (postgres, rabbitmq, redis) en estado `running`
-   - Si no lo están → parar con "entorno no disponible: levantar con `docker compose up -d` antes de continuar"
+3. **La rama base del proyecto** — hoy `develop` en backend y signer, `master` en infra y docs; léela del
+   `CLAUDE.md` del repo en vez de asumirla. ⚑ **Ramificar desde la *ref*, no desde el checkout**:
+   `git checkout -b <rama> <base>`. Es equivalente en cualquier entorno y es la única forma que funciona en
+   un **worktree enlazado** —el entorno del que habla la precondición 5—: allí `git checkout <base>` es
+   *imposible*, porque el checkout principal ya tiene esa rama tomada y git se niega a tener la misma rama
+   dos veces. ⚠ **Corregido 2026-08-25, y esta precondición decía "checkout a base antes de crear rama
+   nueva"**: redactada así se bloqueaba a sí misma justo donde más falta hace.
+4. **El stack está arriba, y se comprueba desde `../f5sign-infra`, nunca con `docker compose` desde este
+   repo.** ⚠ **Corregido 2026-08-25: esto decía `docker compose ps` y listaba «postgres, rabbitmq, redis»
+   como los servicios esenciales.** Las dos mitades eran falsas. El stack lo define `f5sign-infra` y sus
+   targets, no cada repo — y en el backend, Symfony Flex genera además un `compose.yaml` propio que está
+   deshabilitado y gitignorado, así que un `docker compose` desde el repo apunta a otra cosa. Y **redis no
+   es esencial**: sus dos consumidores son el pool `cache.rate_limiter` y `LOCK_DSN`, y en `test` ese pool
+   se sustituye por `cache.adapter.array`, así que ninguna corrida de tests lo necesita.
+   Comprobación: `make -C ../f5sign-infra worker-status` responde, o `docker ps` muestra los contenedores
+   `f5sign-*`. Si no → parar con *"entorno no disponible: `make -C ../f5sign-infra up`"*.
+5. ⚑ **¿Estás en un worktree enlazado? Entonces los targets normales validan el árbol de OTRO, y reportan
+   verde por él.** `f5sign-infra/docker-compose.override.yml` bind-montea `../f5sign-signer` y
+   `../f5sign-dashboard` — los checkouts **principales**, escritos a mano. Un worktree no está montado
+   nunca, así que `make test-signer` y sus hermanos corren contra la rama en la que el principal esté
+   sentado: tus ediciones no están dentro del contenedor y **nada te avisa**. La corrida pasa, los números
+   son plausibles y la respuesta es sobre otra rama.
+   - **Comprobar antes de fiarte de una corrida:** `git rev-parse --git-dir` — un path que contiene
+     `/worktrees/` significa que estás en uno. `git worktree list` nombra el checkout principal, que es el
+     árbol que esos targets validan de verdad.
+   - **Desde un worktree, el lane efímero, que sí monta *tu* árbol:**
+     `make -C ../f5sign-infra wt-signer src=$(pwd)`. Levanta un lane aislado por `STACK_NS=wt-<lane>`, sin
+     puertos al host, corre lint + typecheck + unit + e2e y lo destruye al terminar. `flock` limita a **2
+     lanes de signer** a la vez (`WT_CAP_SIGNER`). El equivalente del backend es `wt-backend`, con cap 1 y
+     `WT_GATES` para elegir gates; su `/task-runner` propio lo documenta en detalle.
+   - ⛔ **`wt-dashboard` no existe.** El dashboard no tiene lane ni suite todavía (llega con EP26), así que
+     desde un worktree suyo **no hay ruta de validación aislada hoy**. Decláralo así en el report; no
+     corras `test-signer` desde ahí y lo llames verde.
+   - **Elegir una ruta y declararla en el report.** Una validación cuya diana no era tu árbol es peor que
+     ninguna, porque se lee como verde. Medido en el backend 2026-08-17: una sesión en un worktree corrió
+     la suite, obtuvo `OK (16 tests)` y **dedujo de ese número** que 8 tests del fichero que acababa de
+     editar no se recogían — y lo reportó como defecto que tumbaba la barra de aceptación de una tarea. El
+     contenedor estaba corriendo otra rama, cuya copia de ese fichero tiene 6 tests. La misma sesión ya
+     había reportado "PHPStan verde" para ediciones que PHPStan no vio.
 
 ## Flujo de ejecución
 
@@ -101,8 +137,24 @@ Generar `changes.diff`: `git diff {base}..HEAD > var/task-runner/T{id}/changes.d
 
 Antes de invocar los gates, el orquestador corre la suite pesada del repo **una vez** y guarda los artefactos en el workspace para que las skills hijas los reutilicen (principio de rendimiento 1). Comandos según el CLAUDE.md del repo, **siempre en el contenedor, nunca en el host**:
 
-- **Frontend** (f5sign-signer/dashboard): `make -C ../f5sign-infra test-signer` (lint + typecheck + unit con cobertura) → volcar a `var/task-runner/T{id}/docker-validate.log`; y el `build` en el contenedor de la app → deja `.output/` para `perf-smoke`.
-- **Backend**: el equivalente `composer test` / `bin/console` dentro del contenedor PHP.
+Despachar por el `stack:` de `.claude/skills-config.yaml`, y por **si estás o no en un worktree**
+(precondición 5) — no por el nombre del repo:
+
+| `stack` | Checkout principal | Worktree enlazado |
+|---|---|---|
+| `frontend` (signer) | `make -C ../f5sign-infra test-signer` + `build` en el contenedor | `make -C ../f5sign-infra wt-signer src=$(pwd)` |
+| `frontend` (dashboard) | ⛔ sin suite todavía (EP26) | ⛔ sin lane; declarar "sin validar" |
+| `backend` | `make -C ../f5sign-infra test` | `make -C ../f5sign-infra wt-backend src=$(pwd)` |
+| `common` (infra) | n/a — no hay suite de app | n/a |
+
+Volcar a `var/task-runner/T{id}/docker-validate.log`; el `build` deja `.output/` para `perf-smoke`.
+
+⚠ **Corregido 2026-08-25: esto decía «Frontend (f5sign-signer/dashboard): `make -C ../f5sign-infra
+test-signer`».** Metía al dashboard en un target que sólo existe para el signer — `test-dashboard` no
+está en el Makefile de infra, y el propio `CLAUDE.md` del dashboard dice que su suite llega con EP26 —, y
+no contemplaba el worktree, que es el caso en el que ese comando valida el árbol de otro. Y este fichero
+es también el `/task-runner` de `f5sign-infra`, que no tiene ni frontend ni suite PHP: con `stack: common`
+esta fase **no aplica** y se salta declarándolo, en vez de buscarle un comando.
 
 Si esta corrida ya falla en lint/typecheck/unit/build → es un fallo de gate duro: tratarlo como tal (parar/reintentar) sin gastar agentes en gates que dependen de un build sano.
 
@@ -198,14 +250,32 @@ Tras cada fase, append entrada JSON al `run.log`:
 - No inventa tags, complejidad ni dependencias
 - No crea tareas (eso es `/planning-scaffold`)
 - No mergea PRs
-- No edita las copias por-repo de las skills (`<repo>/.claude/skills/`): son **generadas**. La fuente es `f5sign-docs/skills-library/` y se propaga con `scripts/sync-skills.sh <stack> <repo>`. Editar la copia se pierde en el siguiente sync.
+- No edita las copias por-repo de las skills (`<repo>/.claude/skills/`): son **symlinks** al store del
+  workspace. La fuente es `ai/shared/<skill>/` (o `ai/<repo>/.claude/skills/<skill>/` si es propia del
+  repo) en el repo raíz del workspace, y se distribuye con `bin/sync-ai.sh`. Editar a través del symlink
+  escribe el fichero real, que es correcto — pero **el cambio pertenece al repo raíz**, así que `git add`
+  desde el subrepo no ve nada.
+  ⛔ **Corregido 2026-08-25, y esta línea decía que las copias son "generadas", que la fuente es
+  `f5sign-docs/skills-library/` y que se propaga con `scripts/sync-skills.sh`.** Los dos ficheros existen
+  todavía, y por eso hay que decirlo aquí: `skills-library/` está **retirado y congelado desde el
+  2026-06-01**, y `sync-skills.sh` hace `rm -rf` del destino seguido de `cp -r`. Correrlo hoy **borra los
+  symlinks, escribe ficheros de IA reales dentro del subrepo** —lo que rompe la regla de cero rastro de IA
+  que justifica toda esta arquitectura— **y revierte las skills a junio**. No lo corras. El propio script
+  aborta desde el 2026-08-25 si se intenta.
 
 ## Entorno (monorepo F5Sign)
 
-- **Tests/lint/typecheck/build SIEMPRE en el contenedor, nunca en el host** (ver CLAUDE.md del repo). Frontend: `make -C ../f5sign-infra test-signer*`; los E2E corren en una imagen Playwright dedicada (el contenedor de la app es Alpine).
+- **Tests/lint/typecheck/build SIEMPRE en el contenedor, nunca en el host** (ver CLAUDE.md del repo).
+  Frontend: `make -C ../f5sign-infra test-signer*` desde el checkout principal, `wt-signer` desde un
+  worktree (precondición 5); los E2E corren en una imagen Playwright dedicada, porque el contenedor de la
+  app es Alpine y Playwright no lo soporta.
 - **El `.md` de la tarea vive en `f5sign-docs`** (repo de specs), no en el repo de código → cerrar Seguimiento y actualizar `PR/Branch` son commits en `f5sign-docs`, separados del commit de código (regla cross-repo).
 - **`gh` puede no estar instalado** en el host: `pr-ready` hace `push` y devuelve el enlace `…/pull/new/<rama>` para abrir el PR a mano; no asumir `gh pr create`.
-- **Skills sincronizadas**: para cambiar una skill, editar `f5sign-docs/skills-library/{common,backend,frontend}/<skill>/SKILL.md` y re-sincronizar con `sync-skills.sh`. `task-runner` es **common** (presente en los 4 repos).
+- **Skills centralizadas**: para cambiar una skill, editar el store del workspace —`ai/shared/<skill>/`
+  para las compartidas, `ai/<repo>/.claude/skills/<skill>/` para las propias— y re-ejecutar
+  `bin/sync-ai.sh`. `task-runner` es **compartida** por dashboard, infra y signer; el backend tiene la
+  suya, que divergió y es otra skill. ⚑ Este fichero es uno solo para tres repos: antes de escribir algo
+  específico de un stack, mira si va en la tabla de la Fase 3.0 o si el `CLAUDE.md` del repo es su sitio.
 
 ## Referencias
 
