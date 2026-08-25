@@ -66,7 +66,7 @@ Verificar y **parar con mensaje claro** si falla:
        porque "se salta" y "falla" llevan a diagnósticos distintos, y además la lista de hosts era corta:
        `.env.test` resuelve **cinco** (`postgres-test`, `minio`, `rabbitmq`, `mailpit`, `eu-dss`), no tres.
        De esos cinco, el lane sirve cuatro **por lane** y proxya el quinto.
-       ⚠ **Corregido 2026-08-20: esta línea decía además que `phpunit.dist.xml` "no filtra ningún grupo" y
+       ⚠ **Corregido 2026-08-25: esta línea decía además que `phpunit.dist.xml` "no filtra ningún grupo" y
        que su único `<exclude>` era de *cobertura*.** TASK-030 añadió
        `<groups><exclude><group>sandbox</group>`, el único grupo excluido — y lo añadió **por esta misma
        regla**: esa tier llama a `api.twilio.com` de verdad y, como el repo no salta, un host que no
@@ -94,10 +94,12 @@ Verificar y **parar con mensaje claro** si falla:
        dump reporta servicios **sin registrar que sí lo están** — que se lee exactamente como un defecto de
        tu rama. Ojo al modo de fallo, que es el contrario al del árbol principal: allí el dump está
        *rancio*, aquí *no está*.
-       ⚠ **Corregido 2026-08-18, y esta entrada decía que el lane corría "`composer test` y nada más" y que
+       ⚠ **Corregido 2026-08-25, y esta entrada decía que el lane corría "`composer test` y nada más" y que
        las estáticas no tenían ruta worktree-aware.** Era cierto a las 16:11, cuando se escribió;
-       `f5sign-infra` metió los cuatro gates a las 18:18 del mismo día. La moraleja no es el dato sino el
-       desfase: esta skill va por detrás del lane, así que enumera `scripts/wt-validate.sh` antes de fiarte
+       `f5sign-infra` metió los cuatro gates a las 18:18 del mismo día, y el backend `CLAUDE.md`
+       ya lo había corregido el 08-19 — esta skill se enteró una semana después. La moraleja no es el dato
+       sino el desfase: esta skill va por detrás del lane, así que enumera `scripts/wt-validate.sh` antes
+       de fiarte de esta lista.
        de esta lista.
      - **Dos costes reales:** el teardown es `down -v`, que se lleva el volumen de vendor del lane, así que
        **cada corrida rehace `composer install`**; y `flock` limita el backend a **un lane a la vez**. Medido
@@ -131,7 +133,7 @@ Verificar y **parar con mensaje claro** si falla:
      mientras iteras (`--filter`, un solo fichero de PHPStan), porque el lane corre siempre el gate entero y
      rehace `composer install` en cada arranque; y (b) fallback si el lane no está disponible — sin stack
      compartido no hay `eu-dss` que proxyar, y `flock` sólo da **un** lane de backend a la vez.
-     ⚠ **Corregido 2026-08-18: aquí decía que las estáticas *"no tienen ninguna otra ruta desde un
+     ⚠ **Corregido 2026-08-25: aquí decía que las estáticas *"no tienen ninguna otra ruta desde un
      worktree"*, y el lane ya las corre** (`WT_GATES`, arriba).
      ⛔ Lo que ya no vale es correr la **suite entera** por aquí y declarar el resultado como validación de
      tu rama.
