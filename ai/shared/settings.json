@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=$PWD; while [ \"$d\" != / ]; do [ -x \"$d/bin/ai-doctor.sh\" ] && exec bash \"$d/bin/ai-doctor.sh\"; d=$(dirname \"$d\"); done; exit 0",
+            "timeout": 20,
+            "statusMessage": "Comprobando integridad de la config IA..."
+          }
+        ]
+      }
+    ]
+  }
+}

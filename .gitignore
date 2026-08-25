@@ -20,6 +20,7 @@
 /f5sign-backend-readable-envelope/
 /f5sign-signer-develop/
 /f5sign-backend-docs/
+/f5sign-backend-census/
 
 # IDE / OS / local
 .idea/
