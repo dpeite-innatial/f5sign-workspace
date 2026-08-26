@@ -62,7 +62,7 @@ f5sign-infra/
 │   │   ├── Dockerfile
 │   │   ├── conf/logback.xml
 │   │   └── scripts/{entrypoint,generate-self-signed-keystore,wait-for-tl}.sh
-│   └── scripts/{agent-smoke,wait-for-healthy}.sh
+│   └── scripts/{agent-smoke,check-event-dlx,wait-for-healthy}.sh
 └── scripts/
     └── wt-validate.sh             ← driver de los lanes `wt-*`
 ```
@@ -117,9 +117,19 @@ Todos los comandos se ejecutan desde la raiz de **este** repo:
 | Release SOLO backend | `make release-backend BACKEND_TAG=v1.2.4` |
 | Validar merge de prod | `make config-prod PROD_ENV=.env.prod.example` |
 | Crear los roles de cluster en un volumen ya existente | `make init-roles` |
-| Deploy completo en host de prod | `make deploy-prod` (pull + up, req. `.env.prod`) |
-| Deploy SOLO backend (php-fpm+worker) | `make deploy-backend` (bumpea `BACKEND_TAG` en `.env.prod`) |
+| Deploy completo en host de prod | `make deploy-prod` (preflight + pull + up, req. `.env.prod`) |
+| Deploy SOLO backend (php-fpm+worker) | `make deploy-backend` — ⚠ **NO incluye el relay**, ver abajo |
 | Deploy SOLO signer | `make deploy-signer` (bumpea `SIGNER_TAG` en `.env.prod`) |
+| **Copia de seguridad de prod** | **`make backup-prod LABEL=...`** — ⛔ el UNICO rollback que existe |
+| **Migraciones en prod** | **`make migrate-prod`** — ⛔ no va dentro de `deploy-prod`, ver abajo |
+| Estado de las migraciones en prod | `make migrate-status-prod` (mismo motivo que `migrate-status`) |
+| Roles de cluster en el host de prod | `make init-roles-prod` — ANTES de migrar si el release trae roles |
+| Solo descargar las imagenes del release | `make pull-prod` (sin tocar lo que corre) |
+
+> **No enumero aqui los 21 targets `*-prod`**, que es la lista que se queda atras.
+> `make help` los lista todos; **`README.md` § *Despliegue en preprod / produccion* §5 da la SECUENCIA**,
+> que es lo que de verdad hace falta y no cabe en una tabla: hay dos, una para releases aditivos y otra
+> para los que no lo son.
 
 ⛔ **El estado de las migraciones SOLO se consulta con `make migrate-status`, y el motivo es peor que el
 de `migrate-prev`.** Preguntarlo con `make sf` o un `docker compose exec php-fpm` pelado corre como
@@ -132,6 +142,29 @@ aprovisionada, que solo se muestra una vez.** Medido el 2026-08-21: el mismo com
 ⚑ **Anadido 2026-08-25.** El target existe desde el 2026-08-21 (`07b29b1`) y esta tabla, escrita el 08-18,
 no lo listaba — o sea que documentaba las dos formas ruidosas y no la unica que dice la verdad.
 
+⛔ **`migrate-prod` NO va dentro de `deploy-prod`, y el orden entre los dos depende del release.**
+Con migraciones **aditivas** (todas las que hubo hasta 2026-07) el orden es `deploy-prod` -> `migrate-prod`:
+el codigo viejo no ve la columna nueva y aguanta. Con una migracion **NO aditiva** (`RENAME`, `DROP COLUMN`,
+`SET NOT NULL`, `ALTER COLUMN ... TYPE`) el orden **se invierte** y la ventana entre ambos es un corte duro,
+no una degradacion. Quien prepara el release es quien tiene que decirlo. La secuencia completa de las dos,
+con la ventana de corte, esta en `README.md` §5; no la dupliques aqui.
+
+⚑ **Anadido 2026-08-26, y con esto se cae una frase que hasta hoy era la recomendada.** `migrate-prod` corre
+la consola en un contenedor **efimero de la imagen NUEVA** (`docker compose run --rm --no-deps -u www-data`),
+sin tocar el que sirve trafico — que es lo que hace posible migrar ANTES de desplegar. Hasta el 2026-08-26 era
+un `exec` sobre el contenedor **en marcha**, y eso no solo impedia ese orden: lo hacia **invisible**. Las
+migraciones viajan dentro de la imagen, asi que `exec` antes de desplegar solo veia el juego VIEJO y respondia
+*"Already at latest version"* con exit 0. Un no-op que se lee como verde, y despues el deploy dejaba la API en
+500 hasta que alguien volvia a migrar. **Si lees un runbook que diga "migrate-prod va siempre despues de
+deploy-prod", es anterior a esta fecha.**
+
+⛔ **Y antes de migrar en prod, `make backup-prod`.** No hay `restore-prod` ni ningun target de rollback:
+`migrate-prev` y `migrate-to` son **dev-only** (van contra el stack de desarrollo), y el `down()` de una
+migracion no aditiva es destructivo por definicion — el de un `DROP COLUMN` no devuelve los datos. El target
+verifica lo que produce y **borra el fichero si no pasa**, para que no quede nada con pinta de copia. En una
+ventana de corte van **dos** copias con `LABEL=` distinto y solo la de despues del corte es la que se
+restaura; el porque esta en `README.md` §5.
+
 > **Los tests SIEMPRE corren en Docker, nunca en local** (no contaminar la
 > maquina con dependencias). Ver "Tests frontend en Docker" abajo.
 
@@ -141,7 +174,13 @@ no lo listaba — o sea que documentaba las dos formas ruidosas y no la unica qu
   bind-mounts de codigo, sin xdebug, sin MinIO, sin puertos de debug.
 - **`docker-compose.override.yml`** — **dev**, se auto-carga con `docker compose up`
   (`make up`). Aqui viven los servicios dev-only (caddy dev, dashboard, signer,
-  minio/minio-init), los bind-mounts del codigo, xdebug y los puertos publicados.
+  minio/minio-init, **mailpit**), los bind-mounts del codigo, xdebug y los puertos
+  publicados. Enumeralos en el propio fichero, que es donde no se quedan atras.
+
+  ⚑ **Mailpit es el sumidero SMTP de dev, y hasta 2026-08-26 este documento solo lo nombraba como
+  dependencia del lane de worktree** — o sea que un agente que quisiera comprobar un email de
+  notificacion no tenia donde mirar. `MAILER_DSN` apunta ahi en dev; en prod **no hay Mailpit** y esa
+  variable es un `:?` que tiene que llevar un transporte real.
 - **`docker-compose.prod.yml`** — **prod**, explicito (`-f docker-compose.yml -f
   docker-compose.prod.yml`, no carga el override). Imagenes propias desde GHCR
   (`image:` + `pull_policy: always`), `APP_ENV=prod`, object storage en AWS/Linode
@@ -165,6 +204,15 @@ ambos fijados en `.env.prod`. Asi se puede deployar solo backend
 (`deploy-backend`) o solo signer (`deploy-signer`) sin tocar el otro. `rabbitmq` y
 `eu-dss` van pineadas (`4.0` / `6.4`).
 
+⚠ **`BACKEND_TAG` gobierna TRES imagenes pero `deploy-backend` redespliega DOS: el `relay` se queda
+con la vieja.** Las dos frases de arriba son ciertas por separado y juntas son una trampa — el target
+hace `pull php-fpm worker` + `up -d php-fpm worker`, y su nombre lo dice ("SOLO backend (php-fpm +
+worker)"), pero quien lea "BACKEND_TAG = php-fpm + worker + relay" dara por hecho que bumpear el tag y
+correr `deploy-backend` mueve los tres. **Si el release cambia el esquema, usa `deploy-prod`**: un
+relay con codigo viejo contra un esquema migrado no falla ruidosamente — drena el event-log y publica
+mal. (Anotado 2026-08-26 preparando el despliegue de 28 migraciones; el desajuste llevaba ahi desde
+que existe el target.)
+
 ## Puertos publicados (host → contenedor)
 
 | Servicio | Host | Contenedor | Notas |
@@ -181,6 +229,7 @@ ambos fijados en `.env.prod`. Asi se puede deployar solo backend
 | MinIO API (S3) | `127.0.0.1:9100` | `9000` | `minioadmin` / `minioadmin` |
 | MinIO Console | `http://127.0.0.1:9101` | `9001` | UI web |
 | EU DSS | `127.0.0.1:8080` | `8080` | Expuesto solo en dev (override); healthy != TL cargadas |
+| Mailpit (UI + SMTP sink) | `http://127.0.0.1:8025` | `8025` | **Donde aterrizan los emails en dev.** Sin credenciales |
 
 Atajos: `make psql`, `make redis-cli`, `make rabbit-console`, `make minio-console`, `make mc cmd="ls local/"`, `make agent-smoke`.
 
@@ -323,6 +372,28 @@ Ciclo de vida:
 | Logs en tiempo real | `make worker-logs` |
 | Estado + colas pendientes | `make worker-status` |
 
+## RabbitMQ — como llega (y como NO llega) la topologia
+
+La declara `docker/rabbitmq/definitions.json`, que es la fuente de verdad: el backend corre con
+`auto_setup: false` y no declara nada. Llega al contenedor por **bind-mount**, y de ahi salen las dos
+trampas, las dos silenciosas:
+
+1. ⛔ **Un `up -d` NO recarga `definitions.json`.** Su contenido no entra en el hash de configuracion
+   del contenedor, asi que `make deploy-prod` no se entera de que cambio. Hace falta
+   `make reload-rabbitmq`, que ademas lo pasa **por STDIN desde el host**: un bind-mount de fichero
+   UNICO se ata al inode y git reemplaza por rename, asi que tras un `git pull` el contenedor en marcha
+   sigue viendo el fichero VIEJO — para siempre. Sin esto una cola nueva no existe y el worker muere en
+   bucle con `NOT_FOUND - no queue '...' in vhost '/'`.
+2. ⛔ **Los argumentos de una cola son INMUTABLES, y el import no falla: se queda con los viejos y
+   reporta exito.** Redeclarar una cola existente con otro `x-dead-letter-exchange` no cambia nada y no
+   avisa. Por eso `reload-rabbitmq` no termina en el import: verifica con
+   `docker/scripts/check-event-dlx.sh` y se pone rojo si el desvio no esta. Arreglarlo exige **borrar y
+   recrear** las colas — `make rabbit-check-dlx-prod` para mirar, `make rabbit-recreate-event-queues-prod`
+   para arreglar (exige profundidad 0 y cero consumidores; `FORCE=1` asume la perdida).
+
+⚠ Por que importa: sin desvio, un mensaje indescifrable se rechaza contra ningun destino, y rechazar
+sin desvio es **descartar**. Con la pila entera en verde.
+
 ## EU DSS (Trusted Lists)
 
 `eu-dss` puede estar **"healthy" sin ser utilizable**. El healthcheck de Compose valida que Tomcat responde (endpoint `/server-signing/keys`, ~20-30s tras arrancar), pero validar firmas eIDAS requiere ademas tener cargadas:
@@ -347,7 +418,18 @@ Tests de firma PAdES B-LT y validacion eIDAS **deben** depender de `dss-wait-tl`
 - **Versiones pineadas** en `docker-compose.yml`. Nada de `latest` en imagenes (excepcion: `minio/mc` como init efimero).
 - **Healthchecks** obligatorios en servicios de los que otros dependen (PostgreSQL, RabbitMQ, EU DSS).
 - **Red unica** `f5sign-net` (bridge). Servicios se comunican por nombre DNS interno.
-- **Volumenes nombrados** para datos persistentes (`pg-data`, `rabbitmq-data`, `redis-data`, `minio-data`, `dss-tl-cache`).
+- **Volumenes nombrados** para datos persistentes **en dev**. Los declara el bloque `volumes:` de cada
+  fichero compose (base, override y prod declaran los suyos): enumeralos ahi, no aqui.
+  ⛔ **En PROD los datos de Postgres NO son un volumen nombrado: son un bind mount del host**
+  (`PGDATA_HOST_DIR`, por defecto `/srv/f5sign/pgdata`), y esa es justo la propiedad que se compro —
+  Docker no gestiona la ruta, asi que ni `docker compose down -v`, ni `docker volume prune`, ni
+  `docker system prune --volumes` pueden llevarse la BD por descuido; solo un `rm` explicito.
+  ⚑ **Corregido 2026-08-26**: esta linea decia "Volumenes nombrados para datos persistentes
+  (`pg-data`, ...)" sin distinguir dev de prod, o sea que afirmaba lo contrario de la propiedad de
+  seguridad que introdujo `09ec6e2` — y lo afirmaba justo donde alguien va a mirar si es seguro correr
+  un `prune`. ⚠ Migrar un prod anterior a ese commit no es automatico: `make deploy-prod` corre antes
+  `preflight-prod`, que se pone rojo si el bind mount esta vacio y el volumen viejo sigue existiendo, e
+  imprime la receta de copia.
 - **Puertos externos documentados** en README o directamente en comentarios del compose (mapa completo en `../f5sign-docs/Planning/F0-Infraestructura/EP01-Docker-y-Entorno/S01.1-Docker-Compose-para-Desarrollo/README.md`).
 - **Variables de entorno**: `.env` nunca se commitea; `.env.example` si, con valores validos para desarrollo local.
 - **Modos de despliegue**: `DEPLOYMENT_MODE=saas|dedicated` controla que bundles y servicios extras se activan. Detalle en `../f5sign-docs/Arquitectura/Modos de Despliegue - SaaS vs Dedicated.md`.

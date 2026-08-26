@@ -17,7 +17,7 @@ de vida, y **no debe contener rastro de IA** (lo recibe por symlink, ignorado lo
 - `f5sign-backend/` — API y lógica de servidor.
 - `f5sign-dashboard/` — Frontend de administración.
 - `f5sign-signer/` — App de firma para el firmante final.
-- `f5sign-infra/` — Infraestructura y entorno local (stack de desarrollo).
+- `f5sign-infra/` — Infraestructura: stack local **y orquestacion de produccion** (despliegue, migraciones y copias de prod salen de aqui).
 
 ## Reglas de trabajo
 
