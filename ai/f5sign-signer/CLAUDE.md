@@ -4,11 +4,11 @@ Frontend de firma del firmante en F5Sign. Experiencia publica (no requiere cuent
 
 ## Stack
 
-- **Nuxt** 4.x con **Vue** 3.5+ (Composition API + `<script setup>`). Layout nuevo: codigo de app en `app/`, configs y `tests/`/`public/`/`server/`/`types/` en raiz.
+- **Nuxt** 4.x con **Vue** 3.5+ (Composition API + `<script setup>`). Layout nuevo: codigo de app en `app/`, configs y `tests/`/`public/`/`types/`/`i18n/` en raiz.
 - **TypeScript** 5.x en modo estricto
 - **Pinia** 3.x (via `@pinia/nuxt` 0.11.x) para state management
 - **Tailwind CSS** 3.x con reset mobile-safe (anti-zoom iOS)
-- **vue-i18n** (via `@nuxtjs/i18n` 10.x) — locales `es` y `en` en MVP, deteccion por `navigator.language` y query `?lang=`. Propiedad `language` (sustituye `iso` de v8).
+- **vue-i18n** (via `@nuxtjs/i18n` 10.x) — locales `es` y `en` en MVP (en `i18n/locales/`, no en `app/`), deteccion por `navigator.language` y query `?lang=`. Propiedad `language` (sustituye `iso` de v8).
 - **@vueuse/core** 11.x para composables utility
 - **zod** para validacion
 - **pdfjs-dist** para renderizado de PDF inline
@@ -29,13 +29,20 @@ Nota: **sin `chart.js`** ni **`@headlessui/vue`** en el signer — el flujo es t
 | Lint                     | `pnpm lint`                                        |
 | Typecheck                | `pnpm typecheck`                                   |
 | Format check             | `pnpm format:check`                                |
-| Tests unitarios          | `pnpm test` (Vitest)                               |
+| Tests unitarios          | `pnpm test` (Vitest **con cobertura**)             |
 | E2E                      | `pnpm test:e2e` (Playwright)                       |
 | E2E (modo UI)            | `pnpm test:e2e:ui`                                 |
 | Instalar navegadores E2E | `pnpm test:e2e:install` (ejecutar una vez antes de E2E) |
 | Clean                    | `pnpm clean`                                       |
 
 > El puerto 3001 esta fijado para evitar colision con el dashboard (3000) cuando ambos corren simultaneamente via `docker compose`.
+
+> **`pnpm test` mide cobertura, y el umbral del 80 % rompe la corrida.** Anadido 2026-08-26:
+> `vitest.config.ts` declaraba umbrales de 80 % en lines/functions/branches/statements desde
+> siempre, pero `pnpm test` era `vitest run` a secas y `make test-signer` lo hereda — o sea que
+> los umbrales solo se aplicaban si alguien se acordaba de escribir `test:coverage` a mano, cosa
+> que no hace ningun target ni ningun runbook. Era un gate declarado y nunca ejecutado. Ahora el
+> gate esta en el comando que ya corres.
 
 > **CRITICO — los tests SIEMPRE corren en Docker, NUNCA en local.** No ejecutes
 > `pnpm install` ni los `pnpm test*`/`pnpm lint`/`pnpm typecheck`/`pnpm build`
@@ -107,25 +114,34 @@ f5sign-signer/
 ├── app/                         ← srcDir (Nuxt 4)
 │   ├── app.vue                  ← <NuxtLayout><NuxtPage/>
 │   ├── assets/css/tailwind.css  ← reset mobile (anti-zoom iOS)
-│   ├── components/
+│   ├── components/              ← base/ · layout/ · signer/ (+ fields/, workspace/) · status/
 │   ├── composables/
 │   │   └── api/                 ← SigningApi mock/real + types + fixtures loader
-│   ├── layouts/
-│   │   └── default.vue          ← layout mobile-first, sin sidebar
-│   ├── middleware/              ← session.global.ts se anade en F3
+│   ├── layouts/                 ← default.vue (mobile-first, sin sidebar) + workspace.vue
+│   ├── middleware/              ← session.global.ts
 │   ├── pages/
 │   ├── plugins/
 │   ├── stores/
-│   └── locales/
-│       ├── es.json
-│       └── en.json
-├── server/                      ← endpoints Nitro si los hay
+│   └── utils/                   ← scrub/redact de Sentry, signingToken, errorReporter
+├── i18n/locales/                ← ⚠ NO en app/: restructureDir de @nuxtjs/i18n v10
+│   ├── es.json
+│   └── en.json
+├── scripts/                     ← check-bundle · check-contract · inject-csp · copy-pdfjs-worker
+├── docker/                      ← Caddyfile (sirve la SPA estatica; CSP y cache viven ahi)
 ├── public/                      ← assets estaticos
 ├── types/                       ← d.ts globales (runtime-config, etc.)
 └── tests/
     ├── fixtures/signing-session/  ← JSONs + sample-contract.pdf
-    └── unit/
+    ├── helpers/ · setup.ts
+    ├── unit/
+    └── e2e/                       ← Playwright (4 perfiles)
 ```
+
+⚠ **Corregido 2026-08-26.** Este bloque situaba los locales en `app/locales/` y listaba un
+`server/` de Nitro. Ninguno de los dos existe: los locales viven en `i18n/locales/` desde que
+`@nuxtjs/i18n` v10 impuso `restructureDir` (el `nuxt.config.ts` lo dice, y `createWrapper.ts`
+importa de ahi), y no hay endpoints Nitro — la app se sirve estatica por su propio Caddy.
+Faltaban ademas `app/utils/`, `scripts/`, `docker/` y `tests/e2e/`, que si existen.
 
 ## Convenciones de codigo
 

@@ -21,6 +21,7 @@
 /f5sign-signer-develop/
 /f5sign-backend-docs/
 /f5sign-backend-census/
+/f5sign-signer-sentry/
 
 # IDE / OS / local
 .idea/
