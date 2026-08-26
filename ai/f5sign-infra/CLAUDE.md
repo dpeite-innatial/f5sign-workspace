@@ -15,14 +15,23 @@ Repo de infraestructura del producto F5Sign. Contiene la orquestacion Docker (lo
 
 - **Docker** / **Docker Compose** (v2)
 - **Caddy** 2 alpine (`caddy:2-alpine`, reverse proxy de la API en dev y en prod)
-- **PostgreSQL** 16 alpine
-- **RabbitMQ** 3.13 management alpine
-- **Redis** 7 alpine
+- **PostgreSQL** 18 alpine (imagen propia: `docker/postgres/Dockerfile` = base oficial + pgBackRest)
+- **RabbitMQ** 4.2 management (imagen propia: `docker/rabbitmq/Dockerfile` + plugin delayed-message v4.2.0)
+- **Redis** 8 alpine
 - **MinIO** latest + `mc` para init
 - **EU DSS** (`nowina-solutions/dss-webapp:6.4`, imagen Java)
-- **PHP** 8.4 fpm alpine (Dockerfile custom con extensiones Symfony)
-- **Node** 20 alpine (para los contenedores de dev de dashboard y signer)
+- **PHP** 8.5 fpm alpine (el Dockerfile vive en `f5sign-backend`, ver regla 7)
+- **Node** 24 alpine (para los contenedores de dev de dashboard y signer)
 - **GNU Make** para el Makefile
+
+⚑ **Versiones revisadas y subidas el 2026-08-26.** Esta lista tenia **dos entradas falsas**: decia
+*"RabbitMQ 3.13"* cuando el compose llevaba 4.0 desde hacia meses (un major entero de desfase) y
+*"PHP 8.4"* cuando `f5sign-backend/Dockerfile` es `php:8.5-fpm-alpine`. En el mismo repaso se
+subio **Node 20 -> 24** (la 20 esta FUERA DE SOPORTE desde el 2026-04-30), **Redis 7 -> 8** y
+**RabbitMQ 4.0 -> 4.2**. ⛔ **RabbitMQ no puede pasar de 4.2** aunque el broker publique 4.3: el
+plugin `delayed-message-exchange` se queda en v4.2.0 y su serie debe seguir a la del broker.
+PostgreSQL 16 -> 18 se hizo el mismo dia (ver README § *Copias de seguridad*). EU DSS 6.4 se
+queda: la 6.5 solo tiene RC1.
 
 ## Estructura del repo
 
@@ -120,7 +129,11 @@ Todos los comandos se ejecutan desde la raiz de **este** repo:
 | Deploy completo en host de prod | `make deploy-prod` (preflight + pull + up, req. `.env.prod`) |
 | Deploy SOLO backend (php-fpm+worker) | `make deploy-backend` — ⚠ **NO incluye el relay**, ver abajo |
 | Deploy SOLO signer | `make deploy-signer` (bumpea `SIGNER_TAG` en `.env.prod`) |
-| **Copia de seguridad de prod** | **`make backup-prod LABEL=...`** — ⛔ el UNICO rollback que existe |
+| **Copia de la ventana de despliegue** | **`make backup-prod LABEL=...`** — el suelo del corte, ver abajo |
+| **Restaurar prod** | **`make restore-prod CONFIRM=si-restaurar`** — destructivo; `TARGET="fecha hora"` para PITR |
+| Backup continuo (full/incremental) | `make backup-full-prod` / `make backup-incr-prod` (cron; ver README) |
+| Estado del archivado de WAL | `make pgbackrest-status-prod` — ⛔ el watchdog, ver abajo |
+| Secretos que ningun backup de BD cubre | `make backup-secrets` (.env.prod + seal.p12 + certs, cifrado) |
 | **Migraciones en prod** | **`make migrate-prod`** — ⛔ no va dentro de `deploy-prod`, ver abajo |
 | Estado de las migraciones en prod | `make migrate-status-prod` (mismo motivo que `migrate-status`) |
 | Roles de cluster en el host de prod | `make init-roles-prod` — ANTES de migrar si el release trae roles |
@@ -158,8 +171,12 @@ migraciones viajan dentro de la imagen, asi que `exec` antes de desplegar solo v
 500 hasta que alguien volvia a migrar. **Si lees un runbook que diga "migrate-prod va siempre despues de
 deploy-prod", es anterior a esta fecha.**
 
-⛔ **Y antes de migrar en prod, `make backup-prod`.** No hay `restore-prod` ni ningun target de rollback:
-`migrate-prev` y `migrate-to` son **dev-only** (van contra el stack de desarrollo), y el `down()` de una
+⚑ **Corregido 2026-08-26, y con esto se cae la afirmacion central de este bloque.** Decia que `backup-prod` era *"el UNICO rollback que existe"* y que *"no hay `restore-prod` ni ningun target de rollback"*. Era cierto: la receta de `pg_restore` se imprimia en un `echo` que nadie habia ejecutado nunca. Ahora hay **archivado continuo de WAL con pgBackRest** (PITR) y un **`make restore-prod`** de verdad, con confirmacion explicita. Puesta en marcha, cron y el orden —que no se adivina: la stanza se crea con el archivado APAGADO— en `README.md` § *Copias de seguridad y recuperacion*.
+
+⛔ **El watchdog no es `failed_count`.** Ese contador de `pg_stat_archiver` es acumulativo y no se resetea: un cluster sano arrastra para siempre los fallos previos a la stanza (medido: 7 con el archivado perfecto). Lo que decide es si `last_failed_time` es POSTERIOR a `last_archived_time`. Y si el archivado se rompe, Postgres RETIENE el WAL y `pg_wal` llena el disco hasta parar las escrituras. Las dos cosas las mira `make pgbackrest-status-prod`.
+
+⛔ **Y antes de migrar en prod, `make backup-prod` igual.** Sigue siendo el suelo de la ventana:
+`migrate-prev` y `migrate-to` siguen siendo **dev-only** (van contra el stack de desarrollo), y el `down()` de una
 migracion no aditiva es destructivo por definicion — el de un `DROP COLUMN` no devuelve los datos. El target
 verifica lo que produce y **borra el fichero si no pasa**, para que no quede nada con pinta de copia. En una
 ventana de corte van **dos** copias con `LABEL=` distinto y solo la de despues del corte es la que se
