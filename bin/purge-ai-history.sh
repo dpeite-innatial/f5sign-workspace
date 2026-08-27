@@ -4,7 +4,15 @@
 # -----------------------------------------------------------------------------
 # Borra de TODO el historial de cada subrepo las rutas `.claude/` y `CLAUDE.md`,
 # y limpia de los mensajes de commit los rastros de IA (Co-Authored-By: Claude,
-# "Generated with Claude", 🤖). Reescribe TODOS los SHAs.
+# Claude-Session:, "Generated with Claude", 🤖). Reescribe TODOS los SHAs.
+#
+# ⚑ 2026-08-27: `Claude-Session:` NO estaba en la lista `drop` y esta cabecera ya
+#   prometía "los rastros de IA" igualmente. Correr el script habría reescrito todos
+#   los SHAs de los cinco repos DEJANDO EN PIE el trailer que más se ha colado: ese
+#   día había 168 en f5sign-backend/develop y 0 de los otros dos. Un purgado que
+#   deja el rastro y rompe todos los clones es peor que no purgar, porque después
+#   nadie vuelve a mirar. Medirlo antes de darlo por hecho, en cada repo:
+#     git log --all --format=%B | grep -ciE "co-authored-by: claude|claude-session:"
 #
 # NO se ejecuta sin pasar explícitamente:  --yes-rewrite-history
 # Y aun así NO hace push: el `git push --force` se deja MANUAL tras revisar.
@@ -37,7 +45,7 @@ command -v git-filter-repo >/dev/null 2>&1 || { echo "ERROR: falta git-filter-re
 
 MSG_CB='
 lines = message.decode("utf-8", "replace").splitlines()
-drop = ("Co-Authored-By: Claude", "Co-authored-by: Claude", "Generated with Claude", "Generated with [Claude", "\U0001F916")
+drop = ("Co-Authored-By: Claude", "Co-authored-by: Claude", "Claude-Session:", "Generated with Claude", "Generated with [Claude", "\U0001F916")
 lines = [l for l in lines if not any(d in l for d in drop)]
 return ("\n".join(lines).rstrip() + "\n").encode()
 '
