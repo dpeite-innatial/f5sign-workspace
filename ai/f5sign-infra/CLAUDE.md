@@ -156,11 +156,27 @@ aprovisionada, que solo se muestra una vez.** Medido el 2026-08-21: el mismo com
 no lo listaba — o sea que documentaba las dos formas ruidosas y no la unica que dice la verdad.
 
 ⛔ **`migrate-prod` NO va dentro de `deploy-prod`, y el orden entre los dos depende del release.**
-Con migraciones **aditivas** (todas las que hubo hasta 2026-07) el orden es `deploy-prod` -> `migrate-prod`:
-el codigo viejo no ve la columna nueva y aguanta. Con una migracion **NO aditiva** (`RENAME`, `DROP COLUMN`,
-`SET NOT NULL`, `ALTER COLUMN ... TYPE`) el orden **se invierte** y la ventana entre ambos es un corte duro,
-no una degradacion. Quien prepara el release es quien tiene que decirlo. La secuencia completa de las dos,
-con la ventana de corte, esta en `README.md` §5; no la dupliques aqui.
+⚑ **Reescrito el 2026-08-27: hasta hoy esta regla decia "aditiva -> deploy primero", y eso induce al
+error contrario en un caso real que acaba de aparecer.** El eje NO es aditiva/no aditiva. Son DOS
+compatibilidades independientes, y hay que preguntarse las dos:
+
+| | Si la respuesta es NO |
+|---|---|
+| ¿Aguanta el **codigo VIEJO** el **esquema NUEVO**? | migrar **despues** de desplegar |
+| ¿Aguanta el **codigo NUEVO** el **esquema VIEJO**? | migrar **antes** de desplegar |
+
+- **Aditiva y el codigo nuevo no la necesita** (el caso comun hasta 2026-07): las dos respuestas son si,
+  `deploy-prod` -> `migrate-prod`, sin ventana.
+- **NO aditiva** (`RENAME`, `DROP COLUMN`, `SET NOT NULL`, `ALTER COLUMN ... TYPE`): el codigo viejo NO
+  aguanta el esquema nuevo -> migrar antes, y la ventana entre ambos es un corte duro.
+- ⛔ **Aditiva pero el codigo nuevo EXIGE la columna**: la trampa. Es aditiva, asi que la regla vieja
+  mandaba desplegar primero — y el codigo nuevo arrancaria contra una tabla sin la columna. Hay que
+  **migrar antes**. Caso real que destapo esto: el `epoch_floor_position` que el backend anade a
+  `platform.event_checkpoint` para que el relay sobreviva a un dump/restore (ver README seccion
+  PostgreSQL, la nota del contador de transacciones).
+
+Quien prepara el release es quien tiene que contestar las dos preguntas. La secuencia completa, con la
+ventana de corte, esta en `README.md` §5; no la dupliques aqui.
 
 ⚑ **Anadido 2026-08-26, y con esto se cae una frase que hasta hoy era la recomendada.** `migrate-prod` corre
 la consola en un contenedor **efimero de la imagen NUEVA** (`docker compose run --rm --no-deps -u www-data`),
