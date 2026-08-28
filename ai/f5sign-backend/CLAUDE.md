@@ -161,6 +161,25 @@ in eleven files, and the same generator has now fired on five separate branches.
   the thing itself: `SubscriberConventionsRule` re-gated path→interface with `phpstan.dist.neon` still
   describing the path gate; `DefaultChannelSelector` LOG→EMAIL with `services.yaml` still calling it
   "the degenerate LOG-only selector".
+- **Sweep for the symbol you did NOT use.** When a decision picks between two shapes, stale prose
+  points at the **rejected** one, so grepping what you built finds nothing. TASK-036 put a guard inside
+  `SigningTokenIssuance` rather than on the `SigningTokenIssuer` port; **four** surfaces — three
+  `docs/ddd/` banners and the ADR index row — still sent readers to the port, live-linking a file that
+  does not carry the guard **and endorsing the placement an accepted ADR refuses**. `rg` the losing name
+  as well as the winning one.
+- **A closed enumeration is a surface, and it names no symbol at all.** A published `#[OA\*]` saying
+  *"`code` **is** `ENVELOPE_NOT_SENT`"* mentions nothing you changed, so no symbol sweep reaches it — and
+  it went silently incomplete the moment a second code landed on that route. Same shape as a docblock
+  counting *"the two"* refusals where there are three. ⚑ **Two of these shipped on one branch**, on
+  strings emitted verbatim into the spec the frontend ratifies. The sweep that finds them is **per-file:
+  re-read the whole prose block you edited, not the lines you changed** — and for every `BL-NNN` the
+  branch closes or changes, `rg 'BL-NNN' src tests migrations config docs` read for **tense**, because a
+  live *"deferred to BL-N"* pointer survives a record-name sweep untouched.
+  ⛔ **The sweep is the last thing before the commit, not a phase you complete.** That branch swept ten
+  surfaces, closed a security hole two commits later, and never re-swept — creating a second generation
+  of stale claims *after* the pass that cleared them. The worst sat two lines above the new guard and
+  told the next reader it was not a check, which is an argument for deleting it. **A change made after a
+  sweep invalidates the sweep.**
 - **Scope the sweep by grep, never by directory.** `b3ae6f7`, a commit whose whole purpose was
   repointing orphaned links, swept `docs/adr/*` and missed `docs/tasks/*`. Also forgotten: ADR *bodies*
   and *footers* (not just index rows), `config/*.yaml` comments, and `§N` refs inside `src/`.

@@ -275,6 +275,18 @@ mismo árbol de trabajo**; sin esa lista no hay forma de saber de quién es cada
   ediciones **en vuelo** de un agente de validación. El agente reportó después que sus entregables
   "estaban en HEAD aunque él nunca commiteó", y que HEAD **no** estaba verde sin el delta que todavía
   tenía en el árbol. Ninguna de las dos cosas se ve desde el diff.
+- ⛔ **Y el fallo simétrico, que no se ve desde ningún informe: el hueco ENTRE las listas.** Una lista de
+  rutas por agente impide que se pisen y **hace invisible lo que no es de nadie**. Medido 2026-08-28 en
+  TASK-036, con cinco agentes: faltaba el **handler de Messenger** de un comando nuevo —sin él la ruta
+  entera daba 500, y ni el caso de uso ni el comando ni el controlador ni la ruta lo echaban de menos—
+  y la prosa de un fichero cuyo *comportamiento* cambiaba en otro sitio, que **la propia task nombraba
+  por escrito** (`§4 D3`: *"the controller docblock's two-code paragraph gains a third"*). Los cinco
+  reportaron correctamente *"nada fuera de mi lista"*; el defecto estaba en medio, y por construcción
+  ninguno podía verlo.
+  ▶ **Antes de repartir, recorre el `§Scope` de la task y comprueba que cada superficie que nombra
+  tiene dueño.** Lo que no lo tenga es tuyo. Y al recoger, la unidad que necesita dueño no es el fichero
+  que cambia, es la **afirmación** que cambia — las afirmaciones viven en ficheros que nadie está
+  editando (`CLAUDE.md` regla 1).
 - **Con agentes vivos, `git add -A` es siempre incorrecto**: commitea trabajo ajeno a medias. Añadir
   rutas explícitas, o commitear cuando no quede ningún agente corriendo.
 - **Sabotear un fichero ajeno es legítimo, y hay que pedirlo bien.** Dos agentes necesitaron sabotear
