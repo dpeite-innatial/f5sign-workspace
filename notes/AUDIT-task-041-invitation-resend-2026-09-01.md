@@ -237,3 +237,42 @@ suposición.
 Arreglado y verde: 19 ficheros de prosa, cuentas y punteros; cero cambios de comportamiento. Sin tocar:
 los tres hallazgos de §1, registrados en TASK-041 §7 y en `BL-211`/`BL-222`. Pendiente de decisión del
 usuario antes de commitear.
+
+---
+
+## 9. Segunda vuelta: una auditoría adversarial de los arreglos
+
+Los cinco commits de la primera vuelta se sometieron a un auditor nuevo, sin contexto, con instrucción
+de asumir que el autor se equivoca. Encontró cinco bloqueantes, **todos del mismo tipo que esta rama
+existe para arreglar**, aplicados a la propia rama.
+
+- **El gemelo sin arreglar.** El comentario declarado falso en el reenvío está verbatim en
+  `NotifyCorrectedRecipientUseCase`, y ahí es **peor**: `CorrectRecipientRequest` acepta solo teléfono,
+  así que una corrección sobre un destinatario sin email gasta una de **tres** correcciones de forma
+  permanente, escribe `RecipientCorrected` y no manda nada. La causa fue mía y está en el propio
+  docblock que escribí como evidencia: el censo iba acotado a `src/F5Sign/Envelope/`. Sin acotar hay
+  **cuatro** skips y **dos** llevaban la afirmación falsa. Arreglé uno. Registrado como `BL-227`.
+- **Enumeración cerrada extendida en un sitio y no en siete.** Incluido el docblock de `Envelope` que
+  decía *"all four conditions"* sesenta líneas encima de la guarda que añadí, el `@throws`, tres frases
+  de la excepción, el docblock de clase del controlador y seis sitios del handoff de frontal.
+- **El orden de la guarda, que llamé deliberado, no lo fijaba nada**: todos los fixtures del fichero
+  son de un solo paso ya activado. Añadido el caso que discrimina (sin dirección **y** en paso dormido)
+  y sabotage-checked: mover la guarda debajo del check de paso lo enrojece.
+- **Mi medición del audit de ids era falsa** y la escribí como la lección: el máximo real era 225, no
+  221. Corregido en la memoria durable, no en el mensaje del commit, que ya está escrito.
+
+Lo que confirmó a favor: la guarda dispara cuando debe, el test enrojece por su propio `self::fail`,
+`OpenApiSpecTest` censa en ambas direcciones y pasa, el ensanchado del builder está alineado con el
+agregado, `0493b9d` es bisect-safe, y re-derivó por su cuenta el censo de brazos SMS, el 341→23 y el
+7→3 de LIVE_SCHEMA. Verificó dashboard y signer él mismo: cero consumidores, salvo un snapshot de
+OpenAPI en `f5sign-signer/tests/fixtures/` que habrá que regenerar en un PR aparte.
+
+**Discrepancia registrada:** sostuvo que deprecar `DELIVERY_FAILED` del enum publicado obliga a mover
+`Recipient.outcome` de `PINNED_ENUMS` a `UNPINNED_ENUMS` — apagar el censo. Es cierto solo si se
+mantiene una ventana de deprecación; con cero consumidores vivos el corte es limpio y el censo sigue
+encendido.
+
+**La conclusión operativa**, que vale más que cualquiera de los arreglos: el defecto no fue no conocer
+la regla — la rama entera es una demostración de conocerla. Fue **acotar el censo por directorio** y
+**releer las líneas cambiadas en vez del bloque de prosa entero**. Las dos son mecánicas y las dos
+tienen comando.
