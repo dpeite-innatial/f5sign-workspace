@@ -71,7 +71,7 @@ f5sign-infra/
 │   │   ├── Dockerfile
 │   │   ├── conf/logback.xml
 │   │   └── scripts/{entrypoint,generate-self-signed-keystore,wait-for-tl}.sh
-│   └── scripts/{agent-smoke,check-event-dlx,wait-for-healthy}.sh
+│   └── scripts/{agent-smoke,check-event-dlx,check-seal,wait-for-healthy}.sh
 └── scripts/
     └── wt-validate.sh             ← driver de los lanes `wt-*`
 ```
@@ -443,8 +443,22 @@ Comandos:
 | Health basico (Tomcat) | `make dss-health` |
 | Esperar a TL cargadas (default timeout 180s) | `make dss-wait-tl` |
 | Con timeout custom | `make dss-wait-tl t=300` |
+| **Con QUE identidad firma** | **`make seal-check-prod`** — la tercera forma de "healthy sin servir", ver abajo |
 
 Tests de firma PAdES B-LT y validacion eIDAS **deben** depender de `dss-wait-tl`. `make smoke` muestra ambos estados por separado.
+
+### El sello: la trampa que no se ve desde el healthcheck
+
+⛔ **Healthy y con las TL cargadas, `eu-dss` puede seguir firmando con una identidad que no es la vuestra.** La webapp de `dss-demonstrations` lleva un keystore de DEMO **dentro del WAR**, y cuando no encuentra el configurado no falla: sirve el suyo. Los PDF salen firmados, el healthcheck verde y los tests de estructura en verde tambien — porque la criptografia es real; lo que no es vuestro es el certificado.
+
+⚑ **Anadido el 2026-09-01, el dia en que se midio.** Este documento describia dos maneras de que `eu-dss` estuviera "healthy sin ser utilizable" (Tomcat arriba, TL sin cargar) y no la tercera, que es la unica con consecuencias legales. Estado ese dia: dev y preprod llevaban desde el principio sellando con `CN=self-signed, O=European Commission, OU=PKI-TEST`, serial 01 — cuya **clave privada esta publicada** en el repo `dss-demonstrations` junto con su password. Cualquiera podia producir un sello equivalente. Ya esta cableado (rama `fix/dss-seal-keystore-wiring` de `f5sign-infra`), pero el mecanismo sigue vivo y hay que conocerlo:
+
+- DSS carga el keystore con `ClassPathResource`, o sea **por classpath, no por sistema de ficheros**: un `.p12` en un volumen es invisible salvo que su directorio este en el `common.loader` de Tomcat. Por eso el Dockerfile mete `/keystore` ahi.
+- Las properties son `dss.server.signing.keystore.{type,filename,password}`, y `filename` es **relativo al classpath**, no una ruta absoluta. Las que empiezan por `dss.keystore.` no existen: se ignoran en silencio.
+- ⛔ **No deduzcas que el sello es bueno porque un test de sellado este verde.** Un test que asierta estructura (hay `ByteRange`, el PDF crece) pasa igual con identidad de demo. Lo unico que lo distingue es mirar subject/issuer: `make seal-check-prod`, o a mano `GET /services/rest/server-signing/key/{alias}`.
+- En dev el sello es autofirmado a proposito (`CN=F5Sign Dev Seal`) y la validacion da `INDETERMINATE`: es lo declarado en ADR-0023 del backend y no es un fallo. Lo que se arreglo no fue eso, sino de quien era la clave.
+
+**Pasar una maquina del keystore de demo a un sello propio NO es un `deploy-prod` normal** — el material del host va antes que la imagen (si falta el fichero de la password no arranca NADA, no solo `eu-dss`) y el primer despliegue se bloquea a si mismo con su propio gate. El procedimiento, con el escape que hace falta exactamente una vez, en `README.md` § *Despliegue en preprod / produccion* → *Migracion del sello*; no lo dupliques aqui.
 
 ## Convenciones
 
