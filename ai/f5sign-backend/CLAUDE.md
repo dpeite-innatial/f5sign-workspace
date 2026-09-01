@@ -230,6 +230,12 @@ in eleven files, and the same generator has now fired on five separate branches.
 - **Sabotage before you trust it.** Revert the guard, watch the test fail *for the right reason*, then
   restore. Three guards were sabotage-checked on the last review; one of them accidentally upgraded an
   open question to evidence.
+  ⛔ **With two guards in series a sabotage reports green about a guard it never reached — check WHICH
+  one fired, not merely that the test still passes.** Shipped here on 2026-09-01: a case written to pin a
+  purpose guard stayed green with that guard deleted, because a staleness guard upstream refused the
+  input first. The fixture's "later" instant had been typed as a literal on a different date than the
+  file's `NOW`, so the later-looking time was a month *earlier*. Two costs, both real: the guard was
+  unpinned for a commit, and the sabotage was reported as evidence that it was.
 - **A test double that reimplements production logic is safe only if the real artifact has its own unit
   test.** That is the precondition, and it is the whole rule — port stubs and recording spies are not
   covered by it, logic-duplicating doubles are.
@@ -246,6 +252,15 @@ in eleven files, and the same generator has now fired on five separate branches.
   pass all seven conformance properties in silence. **Prefer a predicate stating the property over one
   enumerating today's members**; where you must name a set, **census the universe, classify, and fail on
   the unclassified** — then drop a known member and check the test fails *naming* it.
+- ⛔ **A predicate that answers *no* for a member is evidence that the member is in the wrong type.**
+  `RecipientOutcome::isTerminal()` returned `false` for `DELIVERY_FAILED` — documented, argued, green for
+  weeks — and that `false` was the tell: it was never an outcome of the recipient's leg, it was an
+  annotation on a leg that was still `PENDING`, and occupying the one slot it destroyed the `PENDING` it
+  annotated. Read a deliberate-looking exception in a `match` as a question about the enum, not as a
+  quirk of the member. ⚑ The same shape then fired twice more on the branch that fixed it (one field for
+  an address and a phone; one field for cause identity and observation), so the general form is worth
+  carrying: **when one field has to answer two questions, no choice of meaning is correct** — which is
+  why "just decide what it means" is the repair that keeps failing.
 - ⚑ **An exempted set that is empty today returns nothing and reads as an all-clear.** It is the
   opposite: nothing *can* go red, so green is the expected signal, not evidence — and the set is
   populated later by someone with no reason to know your predicate exists. Re-gating
