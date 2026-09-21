@@ -1,17 +1,17 @@
 ---
 name: v1-touched-file-hygiene
-description: Before committing, audit every file a task touched for rot-prone prose and out-of-repo references, fixing or tagging them so the repo stays self-contained. Use when preparing to stage/commit changes, or when asked to "run the hygiene pass" / "clean touched files" / review changed files for rot and dangling pointers.
+description: Before committing, audit every file a task touched, except those it touched only mechanically, for rot-prone prose and out-of-repo references, fixing or tagging them so the repo stays self-contained. Use when preparing to stage/commit changes, or when asked to "run the hygiene pass" / "clean touched files" / review changed files for rot and dangling pointers.
 ---
 
 # Touched-file hygiene
 
-Audit **every file a task touched** — before committing — for two things that quietly rot a repo: **rot-prone prose** and **out-of-repo references**. Fix or tag what's found, even when it's outside the task's scope.
+Audit **every file a task touched**, except those it touched only mechanically, before committing, for two things that quietly rot a repo: **rot-prone prose** and **out-of-repo references**. Fix or tag what's found, even when it's outside the task's scope.
 
 **Why this exists:** keep the repo self-contained for an agent that has only *this* repo, without ever paying for a costly full-repo sweep — the cost amortizes into work already happening. A review step (PR) catches legitimate misses downstream, so aim for **high coverage, not perfection** — 99% beats the 0% you get from skipping the pass.
 
 ## The one rule that makes this work
 
-This is an **AUDIT, not a SEARCH.** The failure mode is reaching for `grep` + batch-staging to "be efficient" — but a grep only finds what you predict, and the entire point is to catch what you *didn't* (a dead `§` anchor, a stale version pin, a forgotten `../../` link). So the **reading is delegated to a dedicated read-only subagent, one file at a time**, that cannot grep-shortcut or edit. You keep the judgment and the edits.
+This is an **AUDIT, not a SEARCH.** The failure mode is reaching for `grep` + batch-staging to "be efficient" — but a grep only finds what you predict, and the entire point is to catch what you *didn't* (a dead `§` anchor, a stale version pin, a forgotten `../../` link). So the **reading is delegated to dedicated read-only subagents, each reading every file it is given in full**, that cannot grep-shortcut or edit. You keep the judgment and the edits.
 
 **Never substitute a grep for reading a file in this pass.** If you catch yourself writing a grep to *review*, stop — that's the search reflex; this is an audit.
 
@@ -19,10 +19,12 @@ This is an **AUDIT, not a SEARCH.** The failure mode is reaching for `grep` + ba
 
 1. **Enumerate** the touched files: `git status --porcelain` (include untracked). This is listing, not reviewing.
    - Unstage everything first (`git reset`) so that **staging a file becomes its per-file "reviewed & done" signal.**
+   - **Classify each file before dispatching anything.** A file the task touched only *mechanically* -- a scripted call-site substitution, an import removal, a rename -- with no prose added or edited is **skipped**: its changed lines were already reviewed in the diff, and a whole-file audit of it mostly re-flags prose nobody touched. **Every other file is audited**: a new file, a file where prose was written or edited, and a file whose code was changed by hand, because a hand edit is where the comment above it goes stale. **Stage a skipped file as soon as it is classified**, so the staging signal covers it too. Whether an edit was mechanical is the question to ask the user about when it is unclear, rather than guessing either way. (Decided 2026-09-16: a 63-file pass ran 62 flaggers for four real fixes, 18 of those files were two-line mechanical rewrites.)
 
-2. **Flag — delegated, per file.** For each touched file, dispatch the `v1-hygiene-flagger` subagent (Agent tool, `subagent_type: v1-hygiene-flagger`) with just the file path. It reads the whole file and returns flagged candidates (category **A** rot / **B** out-of-repo, with line + context).
-   - You may fan these out in parallel — each agent still does a full dedicated read, so thoroughness is preserved; only the reads parallelize. The efficient path and the thorough path are the same path here.
-   - **Fallback:** if `v1-hygiene-flagger` isn't available in this session's registry, dispatch a general-purpose agent with the same instructions (read the *entire* file; flag A/B candidates; over-flag; report line + text + category + why + context; no fixes, no judgment).
+2. **Flag — delegated, in batches.** Split the files to audit into **batches** and dispatch one `v1-hygiene-flagger` subagent (Agent tool, `subagent_type: v1-hygiene-flagger`) per batch, with the batch's file paths. It reads every file in full and returns flagged candidates grouped by file (category **A** rot / **B** out-of-repo, with line + context).
+   - **Keep the agent count low -- fewer than ten per pass.** Every report lands in the orchestrator's context, and ten or more of them bloat it (decided 2026-09-16). Batch by size, roughly 5-8 files or ~1500 lines per agent, and group files of one area together so a batch's flags can be judged side by side. When the agent count and the batch size conflict, the agent count wins: make the batches larger. Batching changes how many agents read, never how much each file is read.
+   - You may run the batches in parallel.
+   - **Fallback:** if `v1-hygiene-flagger` isn't available in this session's registry, dispatch a general-purpose agent per batch with the same instructions: read every file of the batch in full; flag A/B candidates; over-flag; report grouped by file, one row per candidate with line + text + category + why + context; list the files with no candidates on one final `Clean:` line; no fixes, no judgment.
 
 3. **Judge + act — you, file by file, visible.** For each file's flags, decide and edit:
    - **In-repo reference** (path/symbol that resolves inside this repo) → fine, leave it. *Verify before assuming out-of-repo.*
