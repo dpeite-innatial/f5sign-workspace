@@ -24,6 +24,7 @@
 /f5sign-backend-claimable/
 /f5sign-signer-sentry/
 /f5sign-backend-delegated/
+/f5sign-backend-task-044/
 
 # IDE / OS / local
 .idea/
