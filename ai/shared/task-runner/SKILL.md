@@ -1,283 +1,332 @@
 ---
 name: task-runner
-description: Orquestador único del stack de skills de ejecución de tareas. Ejecuta una tarea del Planning/ end-to-end invocando skills especializadas (spec-lint, implement, task-validate, security-audit, etc.), gestionando gates, workspace en var/task-runner/T{id}/, rama git, commit único y PR final. Úsalo con /task-runner T{id} o /task-runner {ruta al .md}. Activar con frases como "ejecuta T02.1.1", "corre la tarea X", "task runner sobre...", "ejecuta la siguiente tarea del planning".
+description: Single orchestrator for the task-execution skill stack. Runs a Planning/ task end-to-end by invoking specialized skills (spec-lint, implement, task-validate, security-audit, etc.), managing gates, the workspace at var/task-runner/T{id}/, the git branch, a single commit, and the final PR. Use it with /task-runner T{id} or /task-runner {path to the .md}. Trigger with "run T02.1.1", "run task X", "task runner on...", "run the next task in planning".
 ---
 
 # Task Runner
 
-Orquestador del stack. Ver diseño completo en `Implementación/Skills de Ejecución de Tareas/common/01 - Task Runner.md`.
+Stack orchestrator. See the full design in `Implementación/Skills de Ejecución de Tareas/common/01 - Task Runner.md`.
 
-## Invocación
+## Invocation
 
 ```
-/task-runner T{id}                    # ej: /task-runner T02.1.1
-/task-runner {ruta absoluta al .md}
-/task-runner T{id} --auto             # modo no supervisado (default: supervised)
-/task-runner T{id} --resume           # reanudar workspace existente
+/task-runner T{id}                    # e.g.: /task-runner T02.1.1
+/task-runner {absolute path to the .md}
+/task-runner T{id} --auto             # unsupervised mode (default: supervised)
+/task-runner T{id} --resume           # resume an existing workspace
 ```
 
-Si no se pasa argumento, pedir al usuario el ID o ruta.
+If no argument is passed, ask the user for the ID or path.
 
-## Precondiciones
+## Preconditions
 
-Antes de empezar, verificar (y parar con mensaje claro si falla):
+Before starting, verify (and stop with a clear message if it fails):
 
-1. El `.md` de la tarea existe y es legible
-2. `git status` está limpio (no hay cambios sin commitear en la rama actual)
-3. **La rama base del proyecto** — hoy `develop` en backend y signer, `master` en infra y docs; léela del
-   `CLAUDE.md` del repo en vez de asumirla. ⚑ **Ramificar desde la *ref*, no desde el checkout**:
-   `git checkout -b <rama> <base>`. Es equivalente en cualquier entorno y es la única forma que funciona en
-   un **worktree enlazado** —el entorno del que habla la precondición 5—: allí `git checkout <base>` es
-   *imposible*, porque el checkout principal ya tiene esa rama tomada y git se niega a tener la misma rama
-   dos veces. ⚠ **Corregido 2026-08-25, y esta precondición decía "checkout a base antes de crear rama
-   nueva"**: redactada así se bloqueaba a sí misma justo donde más falta hace.
-4. **El stack está arriba, y se comprueba desde `../f5sign-infra`, nunca con `docker compose` desde este
-   repo.** ⚠ **Corregido 2026-08-25: esto decía `docker compose ps` y listaba «postgres, rabbitmq, redis»
-   como los servicios esenciales.** Las dos mitades eran falsas. El stack lo define `f5sign-infra` y sus
-   targets, no cada repo — y en el backend, Symfony Flex genera además un `compose.yaml` propio que está
-   deshabilitado y gitignorado, así que un `docker compose` desde el repo apunta a otra cosa. Y **redis no
-   es esencial**: sus dos consumidores son el pool `cache.rate_limiter` y `LOCK_DSN`, y en `test` ese pool
-   se sustituye por `cache.adapter.array`, así que ninguna corrida de tests lo necesita.
-   Comprobación: `make -C ../f5sign-infra worker-status` responde, o `docker ps` muestra los contenedores
-   `f5sign-*`. Si no → parar con *"entorno no disponible: `make -C ../f5sign-infra up`"*.
-5. ⚑ **¿Estás en un worktree enlazado? Entonces los targets normales validan el árbol de OTRO, y reportan
-   verde por él.** `f5sign-infra/docker-compose.override.yml` bind-montea `../f5sign-signer` y
-   `../f5sign-dashboard` — los checkouts **principales**, escritos a mano. Un worktree no está montado
-   nunca, así que `make test-signer` y sus hermanos corren contra la rama en la que el principal esté
-   sentado: tus ediciones no están dentro del contenedor y **nada te avisa**. La corrida pasa, los números
-   son plausibles y la respuesta es sobre otra rama.
-   - **Comprobar antes de fiarte de una corrida:** `git rev-parse --git-dir` — un path que contiene
-     `/worktrees/` significa que estás en uno. `git worktree list` nombra el checkout principal, que es el
-     árbol que esos targets validan de verdad.
-   - **Desde un worktree, el lane efímero, que sí monta *tu* árbol:**
-     `make -C ../f5sign-infra wt-signer src=$(pwd)`. Levanta un lane aislado por `STACK_NS=wt-<lane>`, sin
-     puertos al host, corre lint + typecheck + unit + e2e y lo destruye al terminar. `flock` limita a **2
-     lanes de signer** a la vez (`WT_CAP_SIGNER`). El equivalente del backend es `wt-backend`, con cap 1 y
-     `WT_GATES` para elegir gates; su `/task-runner` propio lo documenta en detalle.
-   - ⛔ **`wt-dashboard` no existe.** El dashboard no tiene lane ni suite todavía (llega con EP26), así que
-     desde un worktree suyo **no hay ruta de validación aislada hoy**. Decláralo así en el report; no
-     corras `test-signer` desde ahí y lo llames verde.
-   - **Elegir una ruta y declararla en el report.** Una validación cuya diana no era tu árbol es peor que
-     ninguna, porque se lee como verde. Medido en el backend 2026-08-17: una sesión en un worktree corrió
-     la suite, obtuvo `OK (16 tests)` y **dedujo de ese número** que 8 tests del fichero que acababa de
-     editar no se recogían — y lo reportó como defecto que tumbaba la barra de aceptación de una tarea. El
-     contenedor estaba corriendo otra rama, cuya copia de ese fichero tiene 6 tests. La misma sesión ya
-     había reportado "PHPStan verde" para ediciones que PHPStan no vio.
+1. The task's `.md` exists and is readable
+2. `git status` is clean (no uncommitted changes on the current branch)
+3. **The project's base branch** — today `develop` in backend and signer, `master` in infra and docs; read it
+   from the repo's `CLAUDE.md` instead of assuming it. ⚑ **Branch from the *ref*, not from the checkout**:
+   `git checkout -b <branch> <base>`. It is equivalent in any environment and is the only form that works in
+   a **linked worktree** —the environment precondition 5 talks about—: there, `git checkout <base>` is
+   *impossible*, because the main checkout already has that branch checked out and git refuses to have the
+   same branch checked out twice. ⚠ **Fixed 2026-08-25, and this precondition used to say "checkout to base
+   before creating the new branch"**: worded that way it blocked itself exactly where it's needed most.
+4. **The stack is up, and it's checked from `../f5sign-infra`, never with `docker compose` from this
+   repo.** ⚠ **Fixed 2026-08-25: this used to say `docker compose ps` and listed «postgres, rabbitmq, redis»
+   as the essential services.** Both halves were false. The stack is defined by `f5sign-infra` and its
+   targets, not each repo — and in the backend, Symfony Flex also generates its own `compose.yaml`, which is
+   disabled and gitignored, so a `docker compose` from the repo points at something else. And **redis is
+   not essential**: its two consumers are the `cache.rate_limiter` pool and `LOCK_DSN`, and in `test` that
+   pool is replaced by `cache.adapter.array`, so no test run needs it.
+   Check: `make -C ../f5sign-infra worker-status` responds, or `docker ps` shows the `f5sign-*`
+   containers. If not → stop with *"environment not available: `make -C ../f5sign-infra up`"*.
+5. ⚑ **Are you in a linked worktree? Then the normal targets validate SOMEONE ELSE's tree, and report
+   green for it.** `f5sign-infra/docker-compose.override.yml` bind-mounts `../f5sign-signer` and
+   `../f5sign-dashboard` — the **main** checkouts, written by hand. A worktree is never mounted, so
+   `make test-signer` and its siblings run against whatever branch the main checkout is sitting on: your
+   edits are not inside the container and **nothing warns you**. The run passes, the numbers are
+   plausible, and the answer is about a different branch.
+   - **Check before trusting a run:** `git rev-parse --git-dir` — a path containing `/worktrees/` means
+     you're in one. `git worktree list` names the main checkout, which is the tree those targets actually
+     validate.
+   - **From a worktree, the ephemeral lane, which DOES mount *your* tree:**
+     `make -C ../f5sign-infra wt-signer src=$(pwd)`. It spins up a lane isolated by `STACK_NS=wt-<lane>`,
+     with no ports to the host, runs lint + typecheck + unit + e2e, and tears itself down when done.
+     `flock` caps it at **2 signer lanes** at a time (`WT_CAP_SIGNER`). The backend equivalent is
+     `wt-backend`, with cap 1 and `WT_GATES` to pick gates; its own `/task-runner` documents it in detail.
+   - ⛔ **`wt-dashboard` does not exist.** The dashboard has no lane or suite yet (it arrives with EP26),
+     so from one of its worktrees **there is no isolated validation path today**. State it as such in the
+     report; do not run `test-signer` from there and call it green.
+   - **Pick a path and state it in the report.** A validation whose target wasn't your tree is worse than
+     none, because it reads as green. Measured in the backend on 2026-08-17: a session in a worktree ran
+     the suite, got `OK (16 tests)` and **inferred from that number** that 8 tests from the file it had
+     just edited weren't being picked up — and reported it as a defect that failed a task's acceptance
+     bar. The container was running a different branch, whose copy of that file has 6 tests. The same
+     session had already reported "PHPStan green" for edits PHPStan never saw.
 
-## Flujo de ejecución
+## Execution flow
 
-> **Rendimiento — principios (un run no debería tardar ~1h):**
+> **Performance — principles (a run shouldn't take ~1h):**
 >
-> 1. **Validación pesada compartida, no repetida.** El orquestador corre la suite de validación del repo (lint + análisis estático/typecheck + unit + build, con los comandos del CLAUDE.md del repo) **una sola vez** tras `implement` (ver Fase 3.0) y vuelca los resultados al workspace; `task-validate` y `perf-smoke` **consumen esos artefactos** en lugar de recompilar/retestear. Ejecutar el mismo build/test 3-4 veces (implement + task-validate + perf-smoke) es el mayor desperdicio.
-> 2. **Serializa lo pesado, paraleliza lo estático.** En repos con un único contenedor de app, dos builds simultáneos compiten por CPU/caché y dan flakiness → no paralelizar comandos de build/test. En cambio `security-audit` es análisis estático del diff y SÍ corre en paralelo con `task-validate`.
-> 3. **`implement` da feedback rápido.** Durante su TDD corre solo unit + lint + typecheck (rápido); no el e2e + build completo al final — esa corrida autoritativa la hace `task-validate` una sola vez.
-> 4. **Prompts de gate ajustados.** Cada skill hija recibe la ruta a `changes.diff` y la lista exacta de ficheros tocados; se le indica no re-explorar el repo entero ni re-ejecutar build/test si ya existen los artefactos compartidos del workspace.
+> 1. **Shared heavy validation, not repeated.** The orchestrator runs the repo's validation suite (lint +
+>    static analysis/typecheck + unit + build, with the commands from the repo's CLAUDE.md) **exactly
+>    once** after `implement` (see Phase 3.0) and dumps the results to the workspace; `task-validate` and
+>    `perf-smoke` **consume those artifacts** instead of recompiling/retesting. Running the same
+>    build/test 3-4 times (implement + task-validate + perf-smoke) is the biggest waste.
+> 2. **Serialize the heavy stuff, parallelize the static stuff.** In repos with a single app container,
+>    two simultaneous builds compete for CPU/cache and cause flakiness → don't parallelize build/test
+>    commands. `security-audit`, on the other hand, is static analysis of the diff and DOES run in
+>    parallel with `task-validate`.
+> 3. **`implement` gives fast feedback.** During its TDD it runs only unit + lint + typecheck (fast); not
+>    the e2e + full build at the end — that authoritative run is done once by `task-validate`.
+> 4. **Tight gate prompts.** Each child skill receives the path to `changes.diff` and the exact list of
+>    touched files; it's instructed not to re-explore the whole repo nor re-run build/test if the
+>    workspace's shared artifacts already exist.
 
-### Fase 0 — Preparación
+### Phase 0 — Preparation
 
-1. **Parsear argumento** → resolver ruta al `.md` de la tarea (si vino un ID, buscar `Planning/F*-*/EP*-*/S*-*/T{id}-*.md` con Glob)
-2. **Leer frontmatter** del `.md`:
+1. **Parse the argument** → resolve the path to the task's `.md` (if an ID was given, look for
+   `Planning/F*-*/EP*-*/S*-*/T{id}-*.md` with Glob)
+2. **Read the frontmatter** of the `.md`:
    - `Story Points`, `Tipo`, `Complejidad`, `Tags`, `Depende de`
-   - Si falta alguno → informar al usuario y abortar (lo normal es que `spec-lint` lo detecte después, pero hay campos mínimos para decidir el flujo)
-3. **Verificar dependencias**: para cada task listada en `Depende de`, leer su `.md` y comprobar Estado:
+   - If any is missing → inform the user and abort (normally `spec-lint` catches this afterward, but
+     there are minimum fields needed to decide the flow)
+3. **Check dependencies**: for each task listed in `Depende de`, read its `.md` and check Estado:
    - `completed` → OK.
-   - `review` (implementada y commiteada, pero su PR sin mergear → su código vive en su rama, no en la base): en **supervised**, preguntar si **apilar (stacked branch)** — crear la rama de esta tarea DESDE la rama de la dependencia y calcular `changes.diff` contra el HEAD de esa rama (no contra `master`). En **auto**, abortar.
-   - Cualquier otro estado → **abortar** con mensaje "dependencia T{X} en estado {Y}; completar primero".
-4. **Crear workspace**: `var/task-runner/T{id}/`
-   - Si ya existe y no se pasó `--resume` → preguntar: reanudar desde última fase `pass` o reiniciar desde cero
-   - Si se reinicia → borrar el workspace y crear de nuevo
-5. **Verificar rama git**:
-   - Nombre: `feat/T{id}-{slug-del-título}` (slug kebab-case del título de la tarea, máx 40 chars, ASCII)
-   - Si no existe → crear desde base y checkout
-   - Si existe → checkout
-6. **Si tag `critical-path`** (solo backend): ejecutar `composer perf:seed` — si falla, informar al usuario y preguntar si continuar (perf-smoke warnirá). En repos **frontend NO aplica** (no hay seed de DB; `perf-smoke` mide bundle/Lighthouse directamente) → saltar este paso.
-7. **Inicializar `run.log`** (JSON lines, una línea por fase) con entrada `{phase: "prepare", status: "pass", at: ISO8601}`
+   - `review` (implemented and committed, but its PR not merged → its code lives on its branch, not on
+     the base): in **supervised**, ask whether to **stack (stacked branch)** — create this task's branch
+     FROM the dependency's branch and compute `changes.diff` against that branch's HEAD (not against
+     `master`). In **auto**, abort.
+   - Any other state → **abort** with the message "dependency T{X} in state {Y}; complete it first".
+4. **Create workspace**: `var/task-runner/T{id}/`
+   - If it already exists and `--resume` wasn't passed → ask: resume from the last `pass` phase or
+     restart from scratch
+   - If restarting → delete the workspace and create it again
+5. **Check the git branch**:
+   - Name: `feat/T{id}-{title-slug}` (kebab-case slug of the task title, max 40 chars, ASCII)
+   - If it doesn't exist → create from base and checkout
+   - If it exists → checkout
+6. **If tag `critical-path`** (backend only): run `composer perf:seed` — if it fails, inform the user and
+   ask whether to continue (perf-smoke will warn). In **frontend** repos this does NOT apply (no DB seed;
+   `perf-smoke` measures bundle/Lighthouse directly) → skip this step.
+7. **Initialize `run.log`** (JSON lines, one line per phase) with the entry
+   `{phase: "prepare", status: "pass", at: ISO8601}`
 
-### Fase 1 — `spec-lint` [Haiku, GATE]
+### Phase 1 — `spec-lint` [Haiku, GATE]
 
-Invocar skill via Agent tool:
+Invoke the skill via the Agent tool:
 ```
 Agent({
   subagent_type: "general-purpose",
   model: "haiku",
   description: "spec-lint on T{id}",
-  prompt: "Execute the spec-lint skill defined at .claude/skills/spec-lint/SKILL.md on task {rutaMd}. Write the report to var/task-runner/T{id}/spec-lint.report.md. Return the JSON summary as the last line of your response."
+  prompt: "Execute the spec-lint skill defined at .claude/skills/spec-lint/SKILL.md on task {mdPath}. Write the report to var/task-runner/T{id}/spec-lint.report.md. Return the JSON summary as the last line of your response."
 })
 ```
 
-Leer el último mensaje → extraer JSON. Si `status: "fail"`:
-- Modo supervised: mostrar report al usuario, preguntar qué hacer (editar `.md` y reintentar, o abortar)
-- Modo auto: abortar con exit code 1
+Read the last message → extract the JSON. If `status: "fail"`:
+- Supervised mode: show the report to the user, ask what to do (edit the `.md` and retry, or abort)
+- Auto mode: abort with exit code 1
 
-### Fase 2 — `implement` [Opus si Complejidad=alta, Sonnet si media/baja, GATE]
+### Phase 2 — `implement` [Opus if Complejidad=alta, Sonnet if media/baja, GATE]
 
-Decidir modelo según `Complejidad` del frontmatter.
+Decide the model according to the frontmatter's `Complejidad`.
 
-Invocar Agent con el modelo correspondiente y prompt:
+Invoke the Agent with the corresponding model and prompt:
 ```
-"Execute the implement skill defined at .claude/skills/implement-{stack}/SKILL.md on task {rutaMd}   (implement-backend o implement-frontend según el repo).
+"Execute the implement skill defined at .claude/skills/implement-{stack}/SKILL.md on task {mdPath}   (implement-backend or implement-frontend depending on the repo).
 Workspace: var/task-runner/T{id}/.
-Model assigned: {haiku|sonnet|opus según Complejidad}.
-Durante el TDD ejecuta en el contenedor solo unit + lint + typecheck (feedback rápido); NO corras el e2e + build completo al final — esa corrida autoritativa la hace task-validate una sola vez (ver Fase 3.0).
+Model assigned: {haiku|sonnet|opus according to Complejidad}.
+During TDD, run only unit + lint + typecheck in the container (fast feedback); do NOT run the e2e + full build at the end — that authoritative run is done once by task-validate (see Phase 3.0).
 Commit changes as a single commit at the end. Produce context-digest.md, plan.md, and ensure changes.diff is generable.
 Return the JSON summary."
 ```
 
-Si falla con diagnóstico tipo `"spec contradictorio"` o `"contexto insuficiente"` → NO escalar, parar y pedir al usuario ampliar el `.md`.
+If it fails with a diagnosis of type `"spec contradictorio"` or `"contexto insuficiente"` → do NOT
+escalate, stop and ask the user to expand the `.md`.
 
-Si falla por otro motivo (3 intentos del modelo asignado) y el diagnóstico justifica escalada → reinvocar Agent con `model: "opus"` y **contexto ampliado** (README story padre + README epic padre + `.md` de dependencias + catálogo de eventos + cross-cutting-concerns + diagnóstico nivel 1).
+If it fails for another reason (3 attempts of the assigned model) and the diagnosis justifies escalation
+→ re-invoke the Agent with `model: "opus"` and **expanded context** (parent story README + parent epic
+README + dependencies' `.md` + event catalog + cross-cutting-concerns + level-1 diagnosis).
 
-Si nivel 2 también falla → abortar con recomendación de enriquecer `Contexto requerido`.
+If level 2 also fails → abort with a recommendation to enrich `Contexto requerido`.
 
-Generar `changes.diff`: `git diff {base}..HEAD > var/task-runner/T{id}/changes.diff` donde `{base}` es el commit común con `master`.
+Generate `changes.diff`: `git diff {base}..HEAD > var/task-runner/T{id}/changes.diff` where `{base}` is
+the commit common with `master`.
 
-### Fase 3 — Validaciones condicionales
+### Phase 3 — Conditional validations
 
-#### Fase 3.0 — Validación pesada compartida (una sola vez)
+#### Phase 3.0 — Shared heavy validation (once only)
 
-Antes de invocar los gates, el orquestador corre la suite pesada del repo **una vez** y guarda los artefactos en el workspace para que las skills hijas los reutilicen (principio de rendimiento 1). Comandos según el CLAUDE.md del repo, **siempre en el contenedor, nunca en el host**:
+Before invoking the gates, the orchestrator runs the repo's heavy suite **once** and saves the artifacts
+in the workspace so the child skills can reuse them (performance principle 1). Commands per the repo's
+CLAUDE.md, **always in the container, never on the host**:
 
-Despachar por el `stack:` de `.claude/skills-config.yaml`, y por **si estás o no en un worktree**
-(precondición 5) — no por el nombre del repo:
+Dispatch by the `stack:` in `.claude/skills-config.yaml`, and by **whether or not you're in a worktree**
+(precondition 5) — not by the repo's name:
 
-| `stack` | Checkout principal | Worktree enlazado |
+| `stack` | Main checkout | Linked worktree |
 |---|---|---|
-| `frontend` (signer) | `make -C ../f5sign-infra test-signer` + `build` en el contenedor | `make -C ../f5sign-infra wt-signer src=$(pwd)` |
-| `frontend` (dashboard) | ⛔ sin suite todavía (EP26) | ⛔ sin lane; declarar "sin validar" |
+| `frontend` (signer) | `make -C ../f5sign-infra test-signer` + `build` in the container | `make -C ../f5sign-infra wt-signer src=$(pwd)` |
+| `frontend` (dashboard) | ⛔ no suite yet (EP26) | ⛔ no lane; declare "not validated" |
 | `backend` | `make -C ../f5sign-infra test` | `make -C ../f5sign-infra wt-backend src=$(pwd)` |
-| `common` (infra) | n/a — no hay suite de app | n/a |
+| `common` (infra) | n/a — no app suite | n/a |
 
-Volcar a `var/task-runner/T{id}/docker-validate.log`; el `build` deja `.output/` para `perf-smoke`.
+Dump to `var/task-runner/T{id}/docker-validate.log`; the `build` leaves `.output/` for `perf-smoke`.
 
-⚠ **Corregido 2026-08-25: esto decía «Frontend (f5sign-signer/dashboard): `make -C ../f5sign-infra
-test-signer`».** Metía al dashboard en un target que sólo existe para el signer — `test-dashboard` no
-está en el Makefile de infra, y el propio `CLAUDE.md` del dashboard dice que su suite llega con EP26 —, y
-no contemplaba el worktree, que es el caso en el que ese comando valida el árbol de otro. Y este fichero
-es también el `/task-runner` de `f5sign-infra`, que no tiene ni frontend ni suite PHP: con `stack: common`
-esta fase **no aplica** y se salta declarándolo, en vez de buscarle un comando.
+⚠ **Fixed 2026-08-25: this used to say «Frontend (f5sign-signer/dashboard): `make -C ../f5sign-infra
+test-signer`».** It lumped the dashboard into a target that only exists for the signer — `test-dashboard`
+isn't in infra's Makefile, and the dashboard's own `CLAUDE.md` says its suite arrives with EP26 —, and it
+didn't account for the worktree, which is the case where that command validates someone else's tree. And
+this file is also the `/task-runner` of `f5sign-infra`, which has neither a frontend nor a PHP suite:
+with `stack: common` this phase **does not apply** and is skipped, stating so, instead of hunting for a
+command.
 
-Si esta corrida ya falla en lint/typecheck/unit/build → es un fallo de gate duro: tratarlo como tal (parar/reintentar) sin gastar agentes en gates que dependen de un build sano.
+If this run already fails at lint/typecheck/unit/build → it's a hard gate failure: treat it as such
+(stop/retry) without spending agents on gates that depend on a healthy build.
 
-#### Fase 3.1 — Gates en paralelo
+#### Phase 3.1 — Parallel gates
 
-Determinar qué skills invocar según tags del frontmatter e invocarlas **en paralelo** (múltiples Agent calls en un solo mensaje). A cada una se le pasa la ruta a `changes.diff`, los artefactos de la Fase 3.0 y la lista de ficheros tocados, con la instrucción de **no** recompilar/retestear lo ya cubierto ni re-explorar el repo entero:
+Determine which skills to invoke based on the frontmatter's tags and invoke them **in parallel**
+(multiple Agent calls in a single message). Each one is passed the path to `changes.diff`, Phase 3.0's
+artifacts, and the list of touched files, with the instruction **not** to recompile/retest what's already
+covered nor re-explore the whole repo:
 
-- `task-validate` [Haiku] — **siempre**, GATE (skill stack-específica: `task-validate-backend` / `task-validate-frontend`). Consume `docker-validate.log` + `.output/` de la Fase 3.0 y solo añade lo que falte (p. ej. `e2e` mobile + lectura de cobertura/AC). No repite lint/typecheck/unit/build.
-- `security-audit` [Sonnet] — **siempre**, GATE. Análisis estático del diff → corre en paralelo con `task-validate` (apenas toca Docker; ya no es secuencial).
-  - Si tags incluye `signing`, `crypto` o `eidas`: dentro de security-audit se invocará `eidas-compliance` [Opus]
-- `doctrine-guard` [Haiku] si tags incluye `db`, `migration`, `rls`, `tenancy` (backend)
-- `contract-check` [Haiku] si tags incluye `api` o `event` (skill stack-específica: `contract-check-backend` / `contract-check-frontend`)
-  - Pre-requisito backend: ejecutar `bin/console nelmio:apidoc:dump --format=json > var/task-runner/T{id}/openapi-snapshot.json` (si tag `api`)
+- `task-validate` [Haiku] — **always**, GATE (stack-specific skill: `task-validate-backend` /
+  `task-validate-frontend`). Consumes `docker-validate.log` + `.output/` from Phase 3.0 and only adds
+  what's missing (e.g. mobile `e2e` + reading coverage/AC). Does not repeat lint/typecheck/unit/build.
+- `security-audit` [Sonnet] — **always**, GATE. Static analysis of the diff → runs in parallel with
+  `task-validate` (it barely touches Docker; no longer sequential).
+  - If tags include `signing`, `crypto`, or `eidas`: `eidas-compliance` [Opus] will be invoked inside
+    security-audit
+- `doctrine-guard` [Haiku] if tags include `db`, `migration`, `rls`, `tenancy` (backend)
+- `contract-check` [Haiku] if tags include `api` or `event` (stack-specific skill:
+  `contract-check-backend` / `contract-check-frontend`)
+  - Backend prerequisite: run `bin/console nelmio:apidoc:dump --format=json > var/task-runner/T{id}/openapi-snapshot.json` (if tag `api`)
 
-Esperar a que terminen todas. Consolidar JSONs de retorno.
+Wait for all of them to finish. Consolidate the returned JSONs.
 
-Si algún gate duro falla:
-- Modo supervised: mostrar report, preguntar "reintentar implementación con el report como contexto" o "abortar"
-- Si reintentar: volver a Fase 2 pasando el report como input adicional (máx 2 iteraciones de corrección)
-- Modo auto: al 1er fallo de gate duro que no se puede auto-corregir, abortar
+If any hard gate fails:
+- Supervised mode: show the report, ask "retry implementation with the report as context" or "abort"
+- If retrying: go back to Phase 2 passing the report as additional input (max 2 correction iterations)
+- Auto mode: on the 1st hard gate failure that can't be auto-corrected, abort
 
-### Fase 4 — Validaciones no-gate
+### Phase 4 — Non-gate validations
 
-- `perf-smoke` [Sonnet] si tag `critical-path` — no bloquea (skill stack-específica: `perf-smoke-backend` / `perf-smoke-frontend`)
-  - **Reutiliza el `.output/` (o artefacto de build) de la Fase 3.0** (analiza el bundle ya construido); NO vuelve a compilar. Por eso puede lanzarse dentro del mismo bloque paralelo de la Fase 3.1.
-  - Si WARN alta: en supervised, preguntar si iterar
+- `perf-smoke` [Sonnet] if tag `critical-path` — non-blocking (stack-specific skill: `perf-smoke-backend`
+  / `perf-smoke-frontend`)
+  - **Reuses Phase 3.0's `.output/` (or build artifact)** (analyzes the already-built bundle); does NOT
+    recompile. That's why it can be launched inside the same parallel block as Phase 3.1.
+  - If high WARN: in supervised, ask whether to iterate
 
-### Fase 5 — `docs-sync` [Haiku/Sonnet según actividad]
+### Phase 5 — `docs-sync` [Haiku/Sonnet depending on activity]
 
-Invocar si tags incluye `adr`, `config`, `breaking`, `event`, `worker`, `new-module`.
+Invoke if tags include `adr`, `config`, `breaking`, `event`, `worker`, `new-module`.
 
-Modelo: Sonnet si la actividad incluye redactar ADR; Haiku en cualquier otro caso.
+Model: Sonnet if the activity includes drafting an ADR; Haiku in any other case.
 
-Los cambios se amend-ean al commit existente: `git add <ficheros-tocados-por-docs-sync> && git commit --amend --no-edit`.
+The changes are amended onto the existing commit: `git add <files-touched-by-docs-sync> && git commit --amend --no-edit`.
 
-No es gate duro: si falla, warn y seguir.
+Not a hard gate: if it fails, warn and continue.
 
-### Fase 6 — `task-close` [Haiku]
+### Phase 6 — `task-close` [Haiku]
 
-Invocar siempre. Edita el `.md` de la tarea (Estado → review, Fin, Commit SHA, limpia tagMismatches consolidados, añade sección Desviaciones). Escribe `notes.md` solo si hay aprendizajes.
+Always invoke. Edits the task's `.md` (Estado → review, Fin, Commit SHA, cleans up consolidated
+tagMismatches, adds the Desviaciones section). Writes `notes.md` only if there are learnings.
 
-### Fase 7 — Confirmación (solo modo supervised)
+### Phase 7 — Confirmation (supervised mode only)
 
-Mostrar al usuario:
-- Resumen de fases con status
-- Ficheros cambiados
-- Tests añadidos
-- AC cubiertos
-- Warnings activos
+Show the user:
+- Summary of phases with status
+- Changed files
+- Added tests
+- Covered AC
+- Active warnings
 
-Preguntar: ¿abrir PR ahora?
+Ask: open the PR now?
 
-### Fase 8 — `pr-ready` [Haiku]
+### Phase 8 — `pr-ready` [Haiku]
 
-Invocar solo si el usuario confirma (o modo auto).
+Invoke only if the user confirms (or auto mode).
 
-> **El `.md` de la tarea vive en `f5sign-docs` (repo separado), NO en el repo de código.** El cierre de Seguimiento (Estado/Fin/Commit/PR) es un **commit aparte en `f5sign-docs`**, nunca un `amend` al branch de código (regla cross-repo: prohibido mezclar repos en un commit). Stagear solo el `.md` de esa tarea.
+> **The task's `.md` lives in `f5sign-docs` (a separate repo), NOT in the code repo.** Closing Seguimiento
+> (Estado/Fin/Commit/PR) is a **separate commit in `f5sign-docs`**, never an `amend` to the code branch
+> (cross-repo rule: mixing repos in one commit is forbidden). Stage only that task's `.md`.
 
-1. Push de la rama de código.
-2. Crear el PR:
-   - Si `gh` está disponible: `gh pr create` con título (conventional) y body (tarea + AC + tabla de validaciones + test plan); marcar **draft** si hay warnings activos.
-   - Si `gh` **NO está instalado** (caso de este entorno): tras el push, devolver el enlace `…/pull/new/<rama>` para que el usuario abra el PR a mano (draft si hay warnings).
-   - Si la rama está **apilada** (dependencia en `review`): avisar de poner la **base del PR** en la rama de la dependencia (no `master`) hasta que esta se mergee.
-3. Actualizar el campo `PR/Branch` del `.md` (URL o enlace de creación + nota de stacking) y **commitear ese cambio en `f5sign-docs`** (junto con el cierre de Seguimiento, en su propio commit).
-4. Devolver URL/enlace al usuario.
+1. Push the code branch.
+2. Create the PR:
+   - If `gh` is available: `gh pr create` with a title (conventional) and body (task + AC + validation
+     table + test plan); mark it **draft** if there are active warnings.
+   - If `gh` is **NOT installed** (the case for this environment): after the push, return the
+     `…/pull/new/<branch>` link so the user can open the PR by hand (draft if there are warnings).
+   - If the branch is **stacked** (dependency in `review`): warn to set the **PR's base** to the
+     dependency's branch (not `master`) until it is merged.
+3. Update the `.md`'s `PR/Branch` field (URL or creation link + stacking note) and **commit that change
+   in `f5sign-docs`** (together with closing Seguimiento, in its own commit).
+4. Return the URL/link to the user.
 
-## Contrato con skills hijas
+## Contract with child skills
 
-Cada skill hija:
-- Recibe `taskDir` (var/task-runner/T{id}/) y `taskMdPath` como parte del prompt
-- Lee lo que declara necesitar; no re-lee si ya existe en workspace
-- Escribe su `*.report.md` en ruta predecible del workspace
-- Devuelve JSON estructurado como último mensaje (parseable): `{ status, summary, issues?, tagMismatches?, metrics? }`
+Each child skill:
+- Receives `taskDir` (var/task-runner/T{id}/) and `taskMdPath` as part of the prompt
+- Reads what it declares it needs; doesn't re-read if it already exists in the workspace
+- Writes its `*.report.md` to a predictable workspace path
+- Returns structured JSON as the last message (parseable): `{ status, summary, issues?, tagMismatches?, metrics? }`
 
 ## run.log
 
-Tras cada fase, append entrada JSON al `run.log`:
+After each phase, append a JSON entry to `run.log`:
 ```json
 {"phase": "implement", "status": "pass", "model": "sonnet", "attempts": 1, "tokens_estimated": 12500, "duration_s": 145, "at": "2026-04-13T10:15:00Z"}
 ```
 
-## Manejo de fallos
+## Failure handling
 
-- **Skill devuelve status=fail**: actuar según gate (duro → parar/reintentar; no gate → warn y seguir)
-- **Agent tool falla** (error de red, timeout): reintentar una vez con el mismo modelo; si falla otra vez, reportar al usuario
-- **Git falla** (conflicto, push rechazado): nunca usar `--force` ni `reset --hard`; parar y pedir intervención manual
-- **Ctrl+C del usuario**: el workspace queda en el estado actual; se puede reanudar con `--resume`
+- **Skill returns status=fail**: act according to the gate (hard → stop/retry; non-gate → warn and
+  continue)
+- **Agent tool fails** (network error, timeout): retry once with the same model; if it fails again,
+  report to the user
+- **Git fails** (conflict, rejected push): never use `--force` nor `reset --hard`; stop and request
+  manual intervention
+- **User's Ctrl+C**: the workspace stays in its current state; it can be resumed with `--resume`
 
-## Qué NO hace
+## What it does NOT do
 
-- No edita código
-- No interpreta reports de otras skills (solo lee su JSON de retorno)
-- No inventa tags, complejidad ni dependencias
-- No crea tareas (eso es `/planning-scaffold`)
-- No mergea PRs
-- No edita las copias por-repo de las skills (`<repo>/.claude/skills/`): son **symlinks** al store del
-  workspace. La fuente es `ai/shared/<skill>/` (o `ai/<repo>/.claude/skills/<skill>/` si es propia del
-  repo) en el repo raíz del workspace, y se distribuye con `bin/sync-ai.sh`. Editar a través del symlink
-  escribe el fichero real, que es correcto — pero **el cambio pertenece al repo raíz**, así que `git add`
-  desde el subrepo no ve nada.
-  ⛔ **Corregido 2026-08-25, y esta línea decía que las copias son "generadas", que la fuente es
-  `f5sign-docs/skills-library/` y que se propaga con `scripts/sync-skills.sh`.** Los dos ficheros existen
-  todavía, y por eso hay que decirlo aquí: `skills-library/` está **retirado y congelado desde el
-  2026-06-01**, y `sync-skills.sh` hace `rm -rf` del destino seguido de `cp -r`. Correrlo hoy **borra los
-  symlinks, escribe ficheros de IA reales dentro del subrepo** —lo que rompe la regla de cero rastro de IA
-  que justifica toda esta arquitectura— **y revierte las skills a junio**. No lo corras. El propio script
-  aborta desde el 2026-08-25 si se intenta.
+- Does not edit code
+- Does not interpret reports from other skills (only reads their returned JSON)
+- Does not invent tags, complejidad, or dependencies
+- Does not create tasks (that's `/planning-scaffold`)
+- Does not merge PRs
+- Does not edit the per-repo copies of the skills (`<repo>/.claude/skills/`): they are **symlinks** to
+  the workspace store. The source is `ai/shared/<skill>/` (or `ai/<repo>/.claude/skills/<skill>/` if it's
+  specific to the repo) in the workspace's root repo, and it's distributed with `bin/sync-ai.sh`. Editing
+  through the symlink writes the real file, which is correct — but **the change belongs to the root
+  repo**, so `git add` from the subrepo sees nothing.
+  ⛔ **Fixed 2026-08-25, and this line used to say the copies are "generated", that the source is
+  `f5sign-docs/skills-library/`, and that it's propagated with `scripts/sync-skills.sh`.** Both files
+  still exist, and that's why it needs to be said here: `skills-library/` has been **retired and frozen
+  since 2026-06-01**, and `sync-skills.sh` does an `rm -rf` of the destination followed by `cp -r`.
+  Running it today **deletes the symlinks, writes real AI files inside the subrepo** —which breaks the
+  zero-AI-trace rule that this whole architecture is built on— **and reverts the skills to June**. Do not
+  run it. The script itself has aborted since 2026-08-25 if attempted.
 
-## Entorno (monorepo F5Sign)
+## Environment (F5Sign monorepo)
 
-- **Tests/lint/typecheck/build SIEMPRE en el contenedor, nunca en el host** (ver CLAUDE.md del repo).
-  Frontend: `make -C ../f5sign-infra test-signer*` desde el checkout principal, `wt-signer` desde un
-  worktree (precondición 5); los E2E corren en una imagen Playwright dedicada, porque el contenedor de la
-  app es Alpine y Playwright no lo soporta.
-- **El `.md` de la tarea vive en `f5sign-docs`** (repo de specs), no en el repo de código → cerrar Seguimiento y actualizar `PR/Branch` son commits en `f5sign-docs`, separados del commit de código (regla cross-repo).
-- **`gh` puede no estar instalado** en el host: `pr-ready` hace `push` y devuelve el enlace `…/pull/new/<rama>` para abrir el PR a mano; no asumir `gh pr create`.
-- **Skills centralizadas**: para cambiar una skill, editar el store del workspace —`ai/shared/<skill>/`
-  para las compartidas, `ai/<repo>/.claude/skills/<skill>/` para las propias— y re-ejecutar
-  `bin/sync-ai.sh`. `task-runner` es **compartida** por dashboard, infra y signer; el backend tiene la
-  suya, que divergió y es otra skill. ⚑ Este fichero es uno solo para tres repos: antes de escribir algo
-  específico de un stack, mira si va en la tabla de la Fase 3.0 o si el `CLAUDE.md` del repo es su sitio.
+- **Tests/lint/typecheck/build ALWAYS in the container, never on the host** (see the repo's CLAUDE.md).
+  Frontend: `make -C ../f5sign-infra test-signer*` from the main checkout, `wt-signer` from a worktree
+  (precondition 5); E2E runs in a dedicated Playwright image, because the app container is Alpine and
+  Playwright doesn't support it.
+- **The task's `.md` lives in `f5sign-docs`** (specs repo), not in the code repo → closing Seguimiento and
+  updating `PR/Branch` are commits in `f5sign-docs`, separate from the code commit (cross-repo rule).
+- **`gh` might not be installed** on the host: `pr-ready` does a `push` and returns the
+  `…/pull/new/<branch>` link to open the PR by hand; do not assume `gh pr create`.
+- **Centralized skills**: to change a skill, edit the workspace store —`ai/shared/<skill>/` for shared
+  ones, `ai/<repo>/.claude/skills/<skill>/` for repo-specific ones— and re-run `bin/sync-ai.sh`.
+  `task-runner` is **shared** by dashboard, infra, and signer; the backend has its own, which diverged and
+  is a different skill. ⚑ This file is a single one for three repos: before writing something specific to
+  a stack, check whether it belongs in Phase 3.0's table or whether the repo's `CLAUDE.md` is its place.
 
-## Referencias
+## References
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/common/01 - Task Runner.md`
-- Índice del stack: `Implementación/Skills de Ejecución de Tareas/README.md`
+- Full design: `Implementación/Skills de Ejecución de Tareas/common/01 - Task Runner.md`
+- Stack index: `Implementación/Skills de Ejecución de Tareas/README.md`

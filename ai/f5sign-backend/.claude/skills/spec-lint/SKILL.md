@@ -1,142 +1,143 @@
 ---
 name: spec-lint
-description: 'Validación mecánica de completitud del .md de una task de docs/tasks/ antes de implementarla. Comprueba la tabla de cabecera (Status, Type, Why, Decision record), que Status y Decision record sean falsificables, que una task que toca superficies transversales (deptrac, phpstan.dist.neon, el baseline, Kernel/Foundation, dependencias cross-BC) cite un ADR, que Builds on resuelva, secciones numeradas, autocontención (OFFREPO, enlaces relativos, cero citas por número de línea), unicidad del id entre ramas y ausencia de marcadores de incertidumbre. Úsalo con /spec-lint TASK-NNN o /spec-lint {ruta-al-.md}. Activar con "lint de tarea", "validar definición", "verificar task X", "revisar .md de task".'
+description: 'Mechanical completeness validation of a task''s .md under docs/tasks/ before implementing it. Checks the header table (Status, Type, Why, Decision record), that Status and Decision record are falsifiable, that a task touching cross-cutting surfaces (deptrac, phpstan.dist.neon, the baseline, Kernel/Foundation, cross-BC dependencies) cites an ADR, that Builds on resolves, numbered sections, self-containment (OFFREPO, relative links, zero line-number citations), id uniqueness across branches, and absence of uncertainty markers. Use it with /spec-lint TASK-NNN or /spec-lint {path-to-.md}. Trigger with "lint task", "validate definition", "verify task X", "review task .md".'
 ---
 
 # Spec Lint
 
-Gate de entrada. Checklist determinista sobre el `.md` de una task.
+Entry gate. Deterministic checklist over a task's `.md`.
 
-> **La convención que valida es [`docs/tasks/README.md`](../../../docs/tasks/README.md).** Si esta skill y
-> ese README discrepan, gana el README y esta skill es el bug.
+> **The convention it validates is [`docs/tasks/README.md`](../../../docs/tasks/README.md).** If this skill and
+> that README disagree, the README wins and this skill is the bug.
 
-## Invocación
+## Invocation
 
 ```
-/spec-lint TASK-NNN                 # resuelve por Glob en docs/tasks/
-/spec-lint {ruta al .md}
+/spec-lint TASK-NNN                 # resolves via Glob under docs/tasks/
+/spec-lint {path to the .md}
 ```
 
 ## Inputs
 
-- Ruta al `.md` (resuelta del argumento). Raíz de tasks: **`docs/tasks/`** — no `Planning/`, que es
-  legado del repo de docs (README §1).
+- Path to the `.md` (resolved from the argument). Tasks root: **`docs/tasks/`** — not `Planning/`, which is
+  legacy from the docs repo (README §1).
 
 ## Outputs
 
-- `var/task-runner/TASK-NNN/spec-lint.report.md`. ⚠ **`var/` puede ser de root y no dejarte crear el
-  directorio** (comprobado 2026-08-17: `mkdir` desde el host da *Permission denied*, porque las herramientas
-  corren en contenedores como root). Esta skill es la primera del flujo, así que es la que se lo encuentra:
-  si pasa, crea el directorio dentro del contenedor o escribe el report en el scratchpad de la sesión, y
-  **di en el summary dónde quedó**.
-- Última línea: JSON `{"status":"pass|fail","summary":"...","issues":[{"severity":"fail|warn","category":"...","message":"..."}]}`
+- `var/task-runner/TASK-NNN/spec-lint.report.md`. ⚠ **`var/` may be owned by root and not let you create the
+  directory** (checked 2026-08-17: `mkdir` from the host gives *Permission denied*, because the tools
+  run in containers as root). This skill is the first in the flow, so it's the one that hits it:
+  if it happens, create the directory inside the container or write the report to the session's scratchpad, and
+  **say in the summary where it ended up**.
+- Last line: JSON `{"status":"pass|fail","summary":"...","issues":[{"severity":"fail|warn","category":"...","message":"..."}]}`
 
-## Ejecución
+## Execution
 
-### Paso 1 — Leer el .md
+### Step 1 — Read the .md
 
-Si no existe o no parsea → `fail`, categoría `file`.
+If it doesn't exist or doesn't parse → `fail`, category `file`.
 
-### Paso 2 — Tabla de cabecera
+### Step 2 — Header table
 
-Es una tabla de dos columnas entre el título y el primer `---`/`## `. **No hay frontmatter YAML, ni
-`Story Points`, `Tipo`, `Complejidad`, `Tags` o `Depende de`** — esos campos eran del formato `Planning/`.
+It's a two-column table between the title and the first `---`/`## `. **There's no YAML frontmatter, nor
+`Story Points`, `Tipo`, `Complejidad`, `Tags` or `Depende de`** — those fields belonged to the `Planning/` format.
 
-Obligatorios:
+Required:
 
-- [ ] `Status` — presente y no vacío
-- [ ] `Type` — presente; texto libre, pero debe decir *qué clase de trabajo es* (forward build, corrective,
-      enabling, groundwork) y no solo repetir el título
-- [ ] `Why` — presente; debe enunciar el fallo o la carencia, de forma que se pueda **discrepar** de ella
-- [ ] `Decision record` — presente y **falsificable como `Status`** (Paso 3b), con la misma condición de
-      antigüedad que `Why`. Un campo ausente es una task que no ha respondido *"¿qué decisión gobierna
-      esto?"*, la pregunta de la que depende la regla 7 del repo.
+- [ ] `Status` — present and not empty
+- [ ] `Type` — present; free text, but must state *what kind of work this is* (forward build, corrective,
+      enabling, groundwork) and not just repeat the title
+- [ ] `Why` — present; must state the failure or gap, in a way that it can be **disagreed with**
+- [ ] `Decision record` — present and **falsifiable like `Status`** (Step 3b), with the same age
+      condition as `Why`. A missing field is a task that hasn't answered *"what decision governs
+      this?"*, the question repo rule 7 depends on.
 
-⚑ **`Why` y `Decision record` solo bloquean en tasks todavía no implementadas.** La condición es una
-propiedad, no una lista: si el `Status` **no** afirma código existente, el registro sigue siendo un plan
-editable y los dos campos son obligatorios (`fail`). Si ya afirma código, son `warn` — porque rellenar el
-*por qué* de un trabajo ya cerrado es inventarlo a posteriori, y un `Why` inventado es peor que ausente.
-**Medido 2026-08-17: `Why` está en 6 de 21 registros y `Decision record` en 12**, así que exigirlos en
-bloque haría fallar a 15 de 21 y el linter sería más estricto que el corpus del que dice derivarse.
+⚑ **`Why` and `Decision record` only block on tasks not yet implemented.** The condition is a
+property, not a list: if `Status` does **not** claim existing code, the record is still an
+editable plan and both fields are required (`fail`). If it already claims code, they're `warn` — because filling in
+the *why* of already-closed work is inventing it after the fact, and an invented `Why` is worse than an absent one.
+**Measured 2026-08-17: `Why` is present in 6 of 21 records and `Decision record` in 12**, so requiring them
+across the board would fail 15 of 21 and the linter would be stricter than the corpus it claims to derive from.
 
-Opcionales, y no se penaliza su ausencia: `Builds on`, `Scope`, `Delivery bar`, `Sibling`.
+Optional, and their absence isn't penalized: `Builds on`, `Scope`, `Delivery bar`, `Sibling`.
 
-### Paso 3 — `Status` falsificable
+### Step 3 — Falsifiable `Status`
 
-El campo que más se podre, así que se valida por contenido, no por presencia:
+The field that rots the most, so it's validated by content, not by presence:
 
-- [ ] Si afirma que existe código (`merged`, `landed`, `in progress`, `shipped`, `✅`) → **nombra una rama o
-      un commit**. Si no → `fail`, categoría `status-unverifiable`.
-- [ ] Si dice `Not started` y el diff de la rama ya toca los ficheros de §Scope → `warn`, categoría
+- [ ] If it claims code exists (`merged`, `landed`, `in progress`, `shipped`, `✅`) → **names a branch or
+      a commit**. If not → `fail`, category `status-unverifiable`.
+- [ ] If it says `Not started` and the branch diff already touches the §Scope files → `warn`, category
       `status-stale`.
-- [ ] Si contiene una fecha, que sea absoluta (`2026-08-17`), nunca relativa (*"la semana pasada"*) →
-      `fail`, categoría `date-relative`.
+- [ ] If it contains a date, it must be absolute (`2026-08-17`), never relative (*"last week"*) →
+      `fail`, category `date-relative`.
 
-### Paso 3b — `Decision record` falsificable
+### Step 3b — Falsifiable `Decision record`
 
-Dos formas válidas, y ninguna más:
+Two valid forms, and no others:
 
-1. **Cita un ADR** (`[ADR-NNNN](../adr/ADR-NNNN-*.md)`) → el enlace debe resolver (Paso 6). Si además dice
-   que esta task *contradice* o *revierte* algo de ese ADR, comprobar que declara **dónde aterriza el ADR
-   nuevo** (esta task o cuál) → si no lo dice: `fail`, categoría `decision-unlanded`. Un ADR aceptado no
-   se contradice en silencio.
-2. **`No ADR yet` + qué lo forzaría.** La segunda mitad no es opcional: *"no hay ADR"* sin condición de
-   disparo es indistinguible de *"no me lo he preguntado"*. → sin ella: `fail`, categoría
-   `decision-record-unfalsifiable`.
+1. **Cites an ADR** (`[ADR-NNNN](../adr/ADR-NNNN-*.md)`) → the link must resolve (Step 6). If it also says
+   that this task *contradicts* or *reverts* something from that ADR, check that it declares **where the
+   new ADR lands** (this task or which one) → if it doesn't say so: `fail`, category `decision-unlanded`. An
+   accepted ADR isn't silently contradicted.
+2. **`No ADR yet` + what would force one.** The second half isn't optional: *"there's no ADR"* without a
+   trigger condition is indistinguishable from *"I haven't asked myself the question"*. → without it: `fail`,
+   category `decision-record-unfalsifiable`.
 
-⚑ **Y si el alcance de la task toca cualquiera de estas superficies, la forma 2 no vale.** ⚠ *Alcance*
-aquí es **la sección**, no el campo `Scope` de la cabecera: ese campo existe en 2 de 21 registros y el Paso 2
-lo declara opcional, así que gatear sobre él dejaría el check vacío en casi todos. Si no hay ni campo ni
-sección de alcance, dilo como `warn` (`scope-unstated`) en vez de dar por bueno que no toca nada. Superficies: el ruleset o las
-capas de [`deptrac.yaml`](../../../deptrac.yaml), `phpstan.dist.neon`, `phpstan-baseline.neon`, un contrato
-de `src/F5Sign/Kernel/` o `src/F5Sign/Foundation/`, o una dependencia cross-BC nueva. Todas son decisiones
-transversales por definición y piden ADR → `fail`, categoría `decision-required`, nombrando la superficie.
+⚑ **And if the task's scope touches any of these surfaces, form 2 doesn't count.** ⚠ *Scope*
+here is **the section**, not the header's `Scope` field: that field exists in 2 of 21 records and Step 2
+declares it optional, so gating on it would leave the check empty in almost all of them. If there's neither
+field nor scope section, say so as `warn` (`scope-unstated`) instead of assuming it touches nothing. Surfaces:
+the ruleset or layers of [`deptrac.yaml`](../../../deptrac.yaml), `phpstan.dist.neon`, `phpstan-baseline.neon`,
+a contract in `src/F5Sign/Kernel/` or `src/F5Sign/Foundation/`, or a new cross-BC dependency. All of these are
+cross-cutting decisions by definition and require an ADR → `fail`, category `decision-required`, naming the surface.
 
-### Paso 4 — `Builds on` y `Sibling`
+### Step 4 — `Builds on` and `Sibling`
 
-⚑ **Los dos campos no se validan igual, y confundirlos produce un falso bloqueante.** `Builds on` es una
-dependencia real ("reuso su salida sin cambiarla"); `Sibling` es un aviso a un humano ("no planifiques
-estas dos por separado"). Una task que declara honestamente que su sibling vive en otra rama está
-haciendo justo lo que el formato pide, y penalizarlo castiga la conducta correcta.
+⚑ **The two fields aren't validated the same way, and confusing them produces a false blocker.** `Builds on` is
+a real dependency ("I reuse its output without changing it"); `Sibling` is a heads-up to a human ("don't plan
+these two separately"). A task that honestly declares that its sibling lives on another branch is doing exactly
+what the format asks for, and penalizing it punishes the correct behavior.
 
-**`Builds on` — bloquea:**
+**`Builds on` — blocks:**
 
-- [ ] Cada task citada existe como `docs/tasks/TASK-NNN-*.md` en **esta** rama. Si no existe aquí pero sí
-      en otra (`git ls-tree -r --name-only <rama> -- ':(top)docs/tasks/'`) → `fail`, categoría
-      `dependency-offbranch`, nombrando la rama: no se puede construir sobre algo que no está en el árbol.
-- [ ] Si su `Status` es `Not started` → `fail`, categoría `dependency`.
-- [ ] Puede citar ADRs además de tasks; para esos basta que el enlace resuelva (Paso 6).
+- [ ] Every cited task exists as `docs/tasks/TASK-NNN-*.md` on **this** branch. If it doesn't exist here but does
+      on another (`git ls-tree -r --name-only <branch> -- ':(top)docs/tasks/'`) → `fail`, category
+      `dependency-offbranch`, naming the branch: you can't build on something that isn't in the tree.
+- [ ] If its `Status` is `Not started` → `fail`, category `dependency`.
+- [ ] It can cite ADRs in addition to tasks; for those it's enough that the link resolves (Step 6).
 
-**`Sibling` — nunca bloquea:**
+**`Sibling` — never blocks:**
 
-- [ ] Si está marcado con ⚑ → `warn`, categoría `sibling-flagged`, recordando que no se planifican de
-      forma independiente.
-- [ ] Si vive en otra rama → **el mismo `warn`, con la rama nombrada**, y decir qué pasa si se ejecuta
-      esta task antes de que aquella se integre. Nunca `fail`.
+- [ ] If it's flagged with ⚑ → `warn`, category `sibling-flagged`, noting that they aren't planned
+      independently.
+- [ ] If it lives on another branch → **the same `warn`, naming the branch**, and say what happens if this
+      task runs before that one is integrated. Never `fail`.
 
-### Paso 5 — Secciones
+### Step 5 — Sections
 
-Las secciones van numeradas (`## 1. …`) y se citan como `§N` desde otros documentos.
+Sections are numbered (`## 1. …`) and cited as `§N` from other documents.
 
-- [ ] Al menos una sección cuyo encabezado hable de **scope/alcance** y otra de
-      **verification/acceptance/definition of done**. ⚑ Comprobar por *intención*, no contra una lista
-      cerrada de encabezados: los 21 registros de esta rama usan variantes legítimas —el alcance aparece en §3, §4 y §6; la verificación en §4, §5, §6 y §9— y una enumeración
-      exime "todo lo que aún no está en la lista" (regla de autoría 5).
-- [ ] Numeración sin huecos ni repetidos, y **empezando en 1**.
-- [ ] Ninguna sección vacía (encabezado seguido de otro encabezado).
+- [ ] At least one section whose heading talks about **scope** and another about
+      **verification/acceptance/definition of done**. ⚑ Check by *intent*, not against a closed
+      list of headings: the 21 records on this branch use legitimate variants —scope appears in §3, §4 and §6;
+      verification in §4, §5, §6 and §9— and an enumeration exempts "anything not yet on the list"
+      (authoring rule 5).
+- [ ] Numbering with no gaps or repeats, and **starting at 1**.
+- [ ] No empty sections (heading followed immediately by another heading).
 
-### Paso 6 — Autocontención
+### Step 6 — Self-containment
 
-- [ ] Todo enlace relativo resuelve en disco → si no: `fail`, categoría `link-broken`.
-- [ ] Toda referencia a algo fuera del repo lleva `<!-- OFFREPO: ... -->` cerca, y el hecho que se toma
-      de ahí está **restatado** en el `.md` → si falta el tag: `fail`, categoría `offrepo-untagged`.
-- [ ] **Cero citas por número de línea**: enlaces con `#L\d+` o rutas con `:\d+` → `fail`, categoría
-      `line-number-citation`. Se cita por símbolo o por patrón de grep.
-- [ ] Rutas con wildcard (`src/**/UI/`) no se validan en disco; son conceptuales.
+- [ ] Every relative link resolves on disk → if not: `fail`, category `link-broken`.
+- [ ] Every reference to something outside the repo carries a nearby `<!-- OFFREPO: ... -->`, and the fact
+      taken from there is **restated** in the `.md` → if the tag is missing: `fail`, category `offrepo-untagged`.
+- [ ] **Zero line-number citations**: links with `#L\d+` or paths with `:\d+` → `fail`, category
+      `line-number-citation`. Cite by symbol or grep pattern instead.
+- [ ] Wildcard paths (`src/**/UI/`) aren't validated on disk; they're conceptual.
 
-### Paso 7 — Unicidad del id
+### Step 7 — Id uniqueness
 
-Correr el sweep del README §4 **en el momento**:
+Run the README §4 sweep **at the moment**:
 
 ```bash
 for b in $(git branch -a --format='%(refname:short)' | grep -v HEAD); do
@@ -144,26 +145,26 @@ for b in $(git branch -a --format='%(refname:short)' | grep -v HEAD); do
 done | sort -u
 ```
 
-⚠ **`':(top)'` no es decorativo, y sin él este check falla en abierto.** Un pathspec de git es relativo al
-**cwd**, así que `-- docs/tasks/` ejecutado desde `docs/tasks/` — el directorio donde estás precisamente
-cuando escribes una task — resuelve `docs/tasks/docs/tasks/` y devuelve **cero ids**. Cero ids se lee como
-"el id está libre", en el único check cuyo trabajo es impedir una colisión. Medido 2026-08-17: **0 ids** sin
-`:(top)` desde `docs/tasks/`, y **24** con él (o desde la raíz). ⚑ Y no copies ese 24 a ninguna parte: es el
-recuento de ese día, no una constante. Una versión anterior de esta línea decía 21 —el número de ficheros de
-*una* rama— y ese error se propagó a dos documentos antes de que un audit lo cazara.
+⚠ **`':(top)'` isn't decorative, and without it this check fails open.** A git pathspec is relative to the
+**cwd**, so `-- docs/tasks/` run from `docs/tasks/` — the directory you're precisely in
+when you're writing a task — resolves to `docs/tasks/docs/tasks/` and returns **zero ids**. Zero ids reads as
+"the id is free", in the one check whose job is to prevent a collision. Measured 2026-08-17: **0 ids** without
+`:(top)` from `docs/tasks/`, and **24** with it (or from the root). ⚑ And don't copy that 24 anywhere: it's the
+count for that day, not a constant. An earlier version of this line said 21 —the file count for
+*one* branch— and that error propagated to two documents before an audit caught it.
 
-- [ ] El id del `.md` no aparece en ninguna otra rama con **otro** slug → si aparece: `fail`, categoría
-      `id-collision`, nombrando la rama. Esto ha pasado de verdad: `TASK-021…023` viven en
-      `docs/two-gate-signer-auth` y son invisibles desde cualquier otra rama.
+- [ ] The `.md`'s id doesn't appear on any other branch with a **different** slug → if it does: `fail`,
+      category `id-collision`, naming the branch. This has actually happened: `TASK-021…023` live on
+      `docs/two-gate-signer-auth` and are invisible from any other branch.
 
-### Paso 8 — Marcadores de incertidumbre
+### Step 8 — Uncertainty markers
 
-Grep de `PENDIENTE`, `[NEEDS CLARIFICATION`, `TBD`, `???`. Cualquier ocurrencia → `fail`, categoría
+Grep for `PENDIENTE`, `[NEEDS CLARIFICATION`, `TBD`, `???`. Any occurrence → `fail`, category
 `clarification`.
 
-⚠ **Excepción deliberada:** una sección de *Open follow-ups* **debe** contener cosas sin resolver — eso es
-su función (README §7). No penalizar ahí; solo exigir que cada punto diga *qué* está sin decidir y *qué*
-lo forzaría.
+⚠ **Deliberate exception:** an *Open follow-ups* section **must** contain unresolved items — that's
+its function (README §7). Don't penalize there; just require that each point say *what* is undecided and *what*
+would force it.
 
 ## Report
 
@@ -171,21 +172,21 @@ lo forzaría.
 # spec-lint — TASK-NNN
 
 **Status:** {PASS|FAIL}
-**Issues:** {N} ({B} bloqueantes, {W} warnings)
+**Issues:** {N} ({B} blocking, {W} warnings)
 
-## Bloqueantes
-- [{categoría}] {mensaje}
+## Blockers
+- [{category}] {message}
 
 ## Warnings
-- [{categoría}] {mensaje}
+- [{category}] {message}
 
-## Chequeos superados
-- {lista}
+## Checks passed
+- {list}
 ```
 
-## Qué NO hace
+## What it does NOT do
 
-- No valida calidad semántica (solo formato, resolución y existencia).
-- No modifica el `.md`.
-- No ejecuta tests ni código.
-- No resuelve las issues — solo las reporta.
+- Doesn't validate semantic quality (only format, resolution, and existence).
+- Doesn't modify the `.md`.
+- Doesn't run tests or code.
+- Doesn't resolve issues — only reports them.

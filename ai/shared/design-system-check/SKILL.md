@@ -1,13 +1,13 @@
 ---
 name: design-system-check
-description: Valida coherencia con el design system en componentes y páginas Vue nuevos o modificados. Comprueba que las clases Tailwind usan tokens canónicos de tailwind.config.ts (colores, spacing, tipografía, radios, sombras), que no hay valores arbitrarios sin justificación, que los componentes base del sistema (Button, Input, Modal, etc.) se reutilizan en lugar de reimplementar, y que no hay estilos inline. Úsalo con /design-system-check T{id}. Activar con "design system", "tokens tailwind", "check coherencia visual", "validar estilos".
+description: Validates coherence with the design system in new or modified Vue components and pages. Checks that Tailwind classes use canonical tokens from tailwind.config.ts (colors, spacing, typography, radii, shadows), that there are no unjustified arbitrary values, that the system's base components (Button, Input, Modal, etc.) are reused instead of reimplemented, and that there are no inline styles. Use with /design-system-check T{id}. Trigger with "design system", "tailwind tokens", "check visual coherence", "validate styles".
 ---
 
 # Design System Check
 
-Validación de coherencia con el design system. Solo si tags incluye `ui`. **No es gate duro** — emite WARN.
+Design system coherence validation. Only if tags include `ui`. **Not a hard gate** — emits WARN.
 
-## Invocación
+## Invocation
 
 ```
 /design-system-check T{id}
@@ -16,106 +16,106 @@ Validación de coherencia con el design system. Solo si tags incluye `ui`. **No 
 ## Inputs
 
 - `var/task-runner/T{id}/changes.diff`
-- `.md` de la tarea
-- `tailwind.config.ts` (fuente de verdad técnica de tokens)
-- `.claude/skills/planning-detail/references/wireframe-conventions.md` (referencia semántica)
-- Opcional: `design-system/allowed-arbitrary.json` (lista blanca de valores arbitrarios aceptados)
-- Componentes base declarados (ej. `components/base/` o `components/ui/`)
+- Task `.md`
+- `tailwind.config.ts` (technical source of truth for tokens)
+- `.claude/skills/planning-detail/references/wireframe-conventions.md` (semantic reference)
+- Optional: `design-system/allowed-arbitrary.json` (whitelist of accepted arbitrary values)
+- Declared base components (e.g. `components/base/` or `components/ui/`)
 
 ## Outputs
 
 - `var/task-runner/T{id}/design-system-check.report.md`
 - JSON: `{"status":"pass|warn","summary":"...","issues":[...],"tokensViolations":N,"inlineStyles":N,"arbitraryValues":N}`
 
-## Precondición
+## Precondition
 
-Si no existe `tailwind.config.ts`: emitir WARN "tokens no definidos, diseño sin sistema" y devolver `pass` (no hay contra qué validar).
+If `tailwind.config.ts` doesn't exist: emit WARN "tokens not defined, design without a system" and return `pass` (nothing to validate against).
 
-## Ejecución
+## Execution
 
-### Paso 1 — Extraer tokens canónicos
+### Step 1 — Extract canonical tokens
 
-Parsear `tailwind.config.ts` (o `tailwind.config.js`):
-- Lista de colores permitidos (tokens + sus shades)
-- Escala de spacing permitida (`xs`, `sm`, `md`, ... o valores numéricos `0, 1, 2, 4, 8, 16, ...`)
-- Tamaños de fuente (`text-xs`, `text-sm`, ...)
+Parse `tailwind.config.ts` (or `tailwind.config.js`):
+- List of allowed colors (tokens + their shades)
+- Allowed spacing scale (`xs`, `sm`, `md`, ... or numeric values `0, 1, 2, 4, 8, 16, ...`)
+- Font sizes (`text-xs`, `text-sm`, ...)
 - Border radius (`rounded-sm`, `rounded-md`, ...)
-- Sombras (`shadow-sm`, `shadow-md`, ...)
+- Shadows (`shadow-sm`, `shadow-md`, ...)
 - Breakpoints
 
-Guardar como sets en memoria para comparación.
+Store as sets in memory for comparison.
 
-### Paso 2 — Parsear ficheros Vue del diff
+### Step 2 — Parse Vue files from the diff
 
-Para cada `.vue` modificado, extraer:
-- Atributos `class` de los templates
-- Clases dentro de `:class` dinámico (mejor esfuerzo)
-- CSS de bloques `<style>`
-- Estilos inline `style="..."`
+For each modified `.vue`, extract:
+- `class` attributes from templates
+- Classes inside dynamic `:class` (best effort)
+- CSS from `<style>` blocks
+- Inline styles `style="..."`
 
-### Paso 3 — Validar clases Tailwind
+### Step 3 — Validate Tailwind classes
 
-Para cada clase Tailwind detectada:
+For each detected Tailwind class:
 
-#### Valores arbitrarios `[...]`
-- Si la clase tiene formato `bg-[#...]`, `p-[13px]`, `text-[14px]`, etc.:
-  - Comprobar si está en `allowed-arbitrary.json` (si existe)
-  - Si no → issue `warn` categoría `arbitrary-value`: "valor arbitrario {clase}, usar token del DS o añadir a allowed-arbitrary.json con justificación"
+#### Arbitrary values `[...]`
+- If the class has the format `bg-[#...]`, `p-[13px]`, `text-[14px]`, etc.:
+  - Check if it's in `allowed-arbitrary.json` (if it exists)
+  - If not → issue `warn` category `arbitrary-value`: "arbitrary value {class}, use a DS token or add to allowed-arbitrary.json with justification"
 
-#### Colores
+#### Colors
 - `bg-{color}`, `text-{color}`, `border-{color}`, `ring-{color}`, `fill-{color}`, `stroke-{color}`:
-  - Si `{color}` no está en tokens (o no es `current`, `transparent`, `black`, `white`) → issue `warn` categoría `color-off-palette`
+  - If `{color}` is not in the tokens (or is not `current`, `transparent`, `black`, `white`) → issue `warn` category `color-off-palette`
 
 #### Spacing
 - `p-{n}`, `m-{n}`, `gap-{n}`, `space-{n}`, `inset-{n}`, `top-{n}`, etc.:
-  - Si `{n}` no está en la escala de spacing permitida → issue `warn` categoría `spacing-off-scale`
+  - If `{n}` is not in the allowed spacing scale → issue `warn` category `spacing-off-scale`
 
-#### Tipografía
-- `text-{size}`: debe estar en la escala de fontSize
-- `font-{weight}`: debe estar en los pesos definidos
+#### Typography
+- `text-{size}`: must be in the fontSize scale
+- `font-{weight}`: must be in the defined weights
 
-#### Radios y sombras
-- `rounded-{size}`, `shadow-{level}`: idem
+#### Radii and shadows
+- `rounded-{size}`, `shadow-{level}`: same
 
-### Paso 4 — Estilos inline
+### Step 4 — Inline styles
 
-- Grep `style="..."` en templates
-- Cualquier ocurrencia → issue `warn` categoría `inline-style`: "mover a clases Tailwind o `<style>` con variables"
-- Excepción documentada: `style` que usa variables CSS del design system (`style="--width: var(--space-md)"`) es aceptable con justificación
+- Grep `style="..."` in templates
+- Any occurrence → issue `warn` category `inline-style`: "move to Tailwind classes or `<style>` with variables"
+- Documented exception: `style` using design system CSS variables (`style="--width: var(--space-md)"`) is acceptable with justification
 
-### Paso 5 — Bloques `<style>` en SFCs
+### Step 5 — `<style>` blocks in SFCs
 
-- [ ] Usan `<style scoped>` (aislados)
-- [ ] Variables CSS del design system, no valores crudos
-- [ ] No sobrescriben tokens globales (`:root { --color-primary: ... }`) — eso es responsabilidad del design system, no de un componente
-- [ ] Selectores universales `*` fuera
+- [ ] Use `<style scoped>` (isolated)
+- [ ] Design system CSS variables, not raw values
+- [ ] Do not override global tokens (`:root { --color-primary: ... }`) — that's the design system's responsibility, not a component's
+- [ ] No universal selectors `*`
 
-### Paso 6 — Uso de componentes base
+### Step 6 — Use of base components
 
-Detectar si el componente nuevo o modificado está reimplementando algo que ya existe en el design system:
+Detect whether the new or modified component is reimplementing something that already exists in the design system:
 
-- Si hay `<button class="...">` con 5+ clases de styling → probablemente debería usar el componente `<BaseButton />` (o como se llame en el proyecto)
-  - Issue `warn` categoría `component-duplication`
-- Lo mismo para Input, Modal, Dropdown, Card, etc.
+- If there's a `<button class="...">` with 5+ styling classes → probably should use the `<BaseButton />` component (or whatever it's called in the project)
+  - Issue `warn` category `component-duplication`
+- Same for Input, Modal, Dropdown, Card, etc.
 
-La lista de componentes base se lee de `components/base/` o `components/ui/` (heurística por directorio).
+The list of base components is read from `components/base/` or `components/ui/` (directory heuristic).
 
-### Paso 7 — Dark mode (si aplica)
+### Step 7 — Dark mode (if applicable)
 
-Si el proyecto soporta dark mode (detectable por presencia de `darkMode` en tailwind.config o variantes `dark:*` usadas en componentes existentes):
-- [ ] Cualquier clase con color ligh tiene su pareja `dark:*` cuando tiene sentido
-  - Issue `warn` categoría `dark-mode-missing`
+If the project supports dark mode (detectable by the presence of `darkMode` in tailwind.config or `dark:*` variants used in existing components):
+- [ ] Any class with a light color has its `dark:*` pair when it makes sense
+  - Issue `warn` category `dark-mode-missing`
 
-### Paso 8 — Breakpoints
+### Step 8 — Breakpoints
 
-- [ ] Uso consistente de breakpoints definidos (`sm:`, `md:`, `lg:`, `xl:`, `2xl:`)
-- No usar valores arbitrarios en clases responsive
+- [ ] Consistent use of defined breakpoints (`sm:`, `md:`, `lg:`, `xl:`, `2xl:`)
+- Do not use arbitrary values in responsive classes
 
-## Gravedad
+## Severity
 
-Todo es **WARN por defecto**. No bloquea. El usuario decide si arreglar o dejar como deuda documentada en `notes.md`.
+Everything is **WARN by default**. It does not block. The user decides whether to fix or leave it as documented debt in `notes.md`.
 
-Excepción: si la tarea afecta a componentes base del sistema (ej. crea un nuevo `<BaseButton>`), los checks pasan a FAIL porque el design system debe ser coherente.
+Exception: if the task affects the system's base components (e.g. creates a new `<BaseButton>`), the checks become FAIL because the design system must be coherent.
 
 ## Report
 
@@ -123,37 +123,37 @@ Excepción: si la tarea afecta a componentes base del sistema (ej. crea un nuevo
 # design-system-check — T{id}
 
 **Status:** {PASS|WARN}
-**Violaciones:** {tokens}: N, {arbitrary}: N, {inline}: N, {duplications}: N
+**Violations:** {tokens}: N, {arbitrary}: N, {inline}: N, {duplications}: N
 
 ## Warnings
-- [{categoría}] {fichero:línea} {mensaje}
+- [{category}] {file:line} {message}
 
-## Tokens extraídos de tailwind.config.ts
-- Colores: primary-{500,600,700}, neutral-{100..900}, danger-500, ...
-- Spacing: xs, sm, md, lg, xl (+ numéricos 0,1,2,4,8...)
+## Tokens extracted from tailwind.config.ts
+- Colors: primary-{500,600,700}, neutral-{100..900}, danger-500, ...
+- Spacing: xs, sm, md, lg, xl (+ numeric 0,1,2,4,8...)
 - FontSize: body, heading-{sm,md,lg}
 - Radii: sm, md, lg
 - Shadows: card, modal, dropdown
 
-## Sugerencias de refactor
-- components/SignerCard.vue:34 — reimplementa Button inline; usar <BaseButton />
-- pages/dashboard.vue:87 — bg-[#1e3a8a], usar bg-primary-500
+## Refactor suggestions
+- components/SignerCard.vue:34 — reimplements Button inline; use <BaseButton />
+- pages/dashboard.vue:87 — bg-[#1e3a8a], use bg-primary-500
 ```
 
-## JSON de retorno
+## Return JSON
 
 ```json
-{"status":"warn","summary":"3 colores fuera de paleta + 1 reimplementación de botón","issues":[{"severity":"warn","category":"color-off-palette","file":"components/Card.vue:12","message":"bg-[#1e3a8a] → usar bg-primary-500"}],"tokensViolations":3,"inlineStyles":0,"arbitraryValues":5}
+{"status":"warn","summary":"3 colors off-palette + 1 button reimplementation","issues":[{"severity":"warn","category":"color-off-palette","file":"components/Card.vue:12","message":"bg-[#1e3a8a] → use bg-primary-500"}],"tokensViolations":3,"inlineStyles":0,"arbitraryValues":5}
 ```
 
-## Qué NO hace
+## What it does NOT do
 
-- No valida accesibilidad del diseño (`a11y-check`)
-- No valida performance visual (`perf-smoke-frontend`)
-- No aplica fixes automáticos — solo reporta
-- No genera los tokens — asume que existen en `tailwind.config.ts`
+- Does not validate design accessibility (`a11y-check`)
+- Does not validate visual performance (`perf-smoke-frontend`)
+- Does not apply automatic fixes — only reports
+- Does not generate the tokens — assumes they exist in `tailwind.config.ts`
 
-## Referencias
+## References
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/` (nueva sección)
+- Full design: `Implementación/Skills de Ejecución de Tareas/` (new section)
 - Wireframe conventions: `.claude/skills/planning-detail/references/wireframe-conventions.md`

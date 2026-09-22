@@ -1,54 +1,54 @@
-# Estado de adaptación del stack de skills (backend)
+# Skill stack adaptation status (backend)
 
-Este stack se escribió para una versión anterior del proyecto: tasks en el `Planning/` del repo de docs,
-tiers de test `composer test:unit|test:integration|test:e2e`, ORM con mapeos `*.orm.xml`, rama base
-`master`, y `docker compose` desde el propio repo. **Nada de eso es cierto hoy** — ver
-[`docs/tasks/README.md`](../../../docs/tasks/README.md) §1 para dónde queda `Planning/`.
+This stack was written for an earlier version of the project: tasks in the docs repo's `Planning/`,
+test tiers `composer test:unit|test:integration|test:e2e`, ORM with `*.orm.xml` mappings, base branch
+`master`, and `docker compose` from the repo itself. **None of that is true today** — see
+[`docs/tasks/README.md`](../../../docs/tasks/README.md) §1 for where `Planning/` stands.
 
-La adaptación va por fases. Esta tabla es el estado real, medido el **2026-08-17**.
+The adaptation goes in phases. This table is the actual status, measured on **2026-08-17**.
 
-| Skill | Estado | Qué queda por arreglar |
+| Skill | Status | What's left to fix |
 |---|---|---|
-| `spec-lint` | ✅ adaptada | — |
-| `implement-backend` | ✅ adaptada | — |
-| `task-validate-backend` | ✅ adaptada | — |
-| `pr-ready` | ✅ adaptada | — |
-| `task-runner` | ✅ adaptada | — |
-| `task-close` | ✅ adaptada | — |
-| `doctrine-guard` | ✅ adaptada | — |
-| `contract-check-backend` | ✅ adaptada | — |
-| `perf-smoke-backend` | ◑ mitad estática adaptada | La dinámica (p95, throughput, memoria) sigue sin diana: no existe `composer perf:seed`. Crear el seed es una decisión, no un arreglo de la skill |
-| `docs-sync` | ✅ adaptada | — |
-| `security-audit-core` / `security-audit-backend` | ✅ adaptadas | — |
-| `eidas-compliance` | ✅ adaptada | — |
-| `v1-touched-file-hygiene` | ✅ nativa | Escrita para este repo. Se usa antes de commitear |
+| `spec-lint` | ✅ adapted | — |
+| `implement-backend` | ✅ adapted | — |
+| `task-validate-backend` | ✅ adapted | — |
+| `pr-ready` | ✅ adapted | — |
+| `task-runner` | ✅ adapted | — |
+| `task-close` | ✅ adapted | — |
+| `doctrine-guard` | ✅ adapted | — |
+| `contract-check-backend` | ✅ adapted | — |
+| `perf-smoke-backend` | ◑ half, static adapted | The dynamic part (p95, throughput, memory) still has no target: `composer perf:seed` doesn't exist. Creating the seed is a decision, not a skill fix |
+| `docs-sync` | ✅ adapted | — |
+| `security-audit-core` / `security-audit-backend` | ✅ adapted | — |
+| `eidas-compliance` | ✅ adapted | — |
+| `v1-touched-file-hygiene` | ✅ native | Written for this repo. Used before committing |
 
-## Auditadas el 2026-08-17
+## Audited on 2026-08-17
 
-Las doce pasaron por una auditoría de cinco agentes con contexto fresco: cuatro comprobando cada afirmación
-factual contra el árbol (un comando por claim) y uno preguntando lo contrario — qué debería vigilar el stack
-dada la arquitectura y no vigila nadie. Salieron ~100 hallazgos y todos los de estas cuatro clases están
-corregidos: **afirmar protección o regla inexistente** (PII cifrada, identidad derivada contra ADR-0042, VOs
-`final readonly` en bloque, B-LT por defecto), **checks que no podían fallar** (registro de eventos, `NO FORCE`,
-`CHECK (... IN ...)`, cuatro pasos enteros de eIDAS), **instrucciones inejecutables** (ramas `feat/TASK-NNN-*`
-que nunca existieron, `--testsuite <tier>`, JUnit sin configurar, `make sf` para el dry-run) y **duplicar un
-test que ya existe** (`OpenApiSpecTest`, `SchemaConformanceTest`).
+The twelve went through an audit by five agents with fresh context: four checking every factual claim
+against the tree (one command per claim) and one asking the opposite — what the stack should be watching
+given the architecture that nobody watches. About 100 findings came out, and all the ones in these four
+classes are fixed: **claiming a protection or rule that doesn't exist** (encrypted PII, identity derived
+against ADR-0042, `final readonly` VOs across the board, B-LT by default), **checks that couldn't fail**
+(event log, `NO FORCE`, `CHECK (... IN ...)`, four entire eIDAS steps), **unrunnable instructions**
+(`feat/TASK-NNN-*` branches that never existed, `--testsuite <tier>`, unconfigured JUnit, `make sf` for the
+dry-run) and **duplicating a test that already exists** (`OpenApiSpecTest`, `SchemaConformanceTest`).
 
-Lo que la auditoría dejó **abierto y no es arreglo de skill** está fichado en `docs/BACKLOG.md`: los dos
-agujeros de producto que encontró, el censo de row-lock que se deja cuatro use cases, `BC_SCHEMAS ⊄
-OWNED_SCHEMA`, los 26 `EVENT_TYPE` sin pin, y que no hay CI.
+What the audit left **open and isn't a skill fix** is logged in `docs/BACKLOG.md`: the two product holes it
+found, the row-lock census that leaves out four use cases, `BC_SCHEMAS ⊄ OWNED_SCHEMA`, the 26 unpinned
+`EVENT_TYPE`s, and that there's no CI.
 
-⚑ **El hueco grande que sigue ahí:** ninguna de las doce nombra una categoría del kernel, y el contrato
-conductual de `Repository` —siete invariantes de `save`— no tiene ni un fichero de test. La forma está
-enforzada casi por completo; el comportamiento, por nada. Eso es trabajo nuevo, no adaptación.
+⚑ **The big gap that's still there:** none of the twelve names a kernel category, and `Repository`'s
+behavioral contract —seven invariants of `save`— doesn't have a single test file. The form is enforced
+almost completely; the behavior, not at all. That's new work, not adaptation.
 
-## Dos reglas para quien siga la adaptación
+## Two rules for whoever continues the adaptation
 
-1. **Probar cada skill adaptada contra una task real antes de fiarse.** Una skill cuyos checks no
-   encuentran nada devuelve verde, y ese verde se lee como all-clear: es el patrón que la regla de autoría
-   5 de [`CLAUDE.md`](../../../CLAUDE.md) describe (*"un conjunto exento que hoy está vacío no puede
-   ponerse rojo, así que verde es la señal esperada, no evidencia"*).
-2. **Editar en el store, nunca en el subrepo.** Estos ficheros llegan al repo como symlinks a
-   `ai/f5sign-backend/.claude/` con `skip-worktree`; una edición hecha en el checkout se pierde en el
-   siguiente `bin/sync-ai.sh` — o peor, se commitea dentro del subrepo y rompe la regla de "cero rastro de
-   IA". El worktree `f5sign-backend-develop` estuvo sirviendo copias de julio precisamente por eso.
+1. **Test each adapted skill against a real task before trusting it.** A skill whose checks find nothing
+   returns green, and that green reads as all-clear: it's the pattern that authorship rule 5 of
+   [`CLAUDE.md`](../../../CLAUDE.md) describes (*"an exempt set that's empty today can't turn red, so
+   green is the expected signal, not evidence"*).
+2. **Edit in the store, never in the subrepo.** These files reach the repo as symlinks to
+   `ai/f5sign-backend/.claude/` with `skip-worktree`; an edit made in the checkout is lost on the next
+   `bin/sync-ai.sh` — or worse, it gets committed inside the subrepo and breaks the "zero AI trace" rule.
+   The `f5sign-backend-develop` worktree was serving July copies precisely because of that.

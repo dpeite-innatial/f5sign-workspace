@@ -1,107 +1,109 @@
 ---
 name: spec-lint
-description: Validación mecánica de completitud del .md de una tarea del Planning/ antes de implementarla. Comprueba frontmatter (Complejidad, Tags, Depende de), secciones obligatorias, formato de Contexto requerido, existencia de rutas citadas, estado de dependencias y ausencia de PENDIENTE/NEEDS CLARIFICATION. Úsalo con /spec-lint T{id} o /spec-lint {ruta-al-.md}. Activar con "lint de tarea", "validar definición", "verificar tarea X", "revisar .md de tarea".
+description: Mechanical completeness validation of a Planning/ task's .md before implementing it. Checks the frontmatter (Complejidad, Tags, Depende de), required sections, the format of Contexto requerido, existence of cited paths, dependency status, and the absence of PENDIENTE/NEEDS CLARIFICATION. Use it with /spec-lint T{id} or /spec-lint {path-to-the-.md}. Trigger with "lint task", "validate definition", "verify task X", "review task .md".
 ---
 
 # Spec Lint
 
-Gate de entrada. Ejecuta checklist determinista sobre el `.md` de la tarea.
+Entry gate. Runs a deterministic checklist over the task's `.md`.
 
-## Invocación
+## Invocation
 
 ```
-/spec-lint T{id}                    # resuelve por Glob
-/spec-lint {ruta al .md}
+/spec-lint T{id}                    # resolved via Glob
+/spec-lint {path to the .md}
 ```
 
 ## Inputs
 
-- Ruta al `.md` de la tarea (resuelta del argumento)
+- Path to the task's `.md` (resolved from the argument)
 - Planning root: `Planning/`
 
 ## Outputs
 
-- `var/task-runner/T{id}/spec-lint.report.md` (crear el directorio si no existe)
-- Como último mensaje: JSON de una línea
+- `var/task-runner/T{id}/spec-lint.report.md` (create the directory if it doesn't exist)
+- As the last message: single-line JSON
   ```json
   {"status": "pass|fail", "summary": "...", "issues": [{"severity": "fail|warn", "category": "...", "message": "..."}]}
   ```
 
-## Ejecución
+## Execution
 
-### Paso 1 — Leer el .md
+### Step 1 — Read the .md
 
-Si no existe o no es parseable → devolver `status: fail` con issue `{"category": "file", "message": "ruta no encontrada"}`.
+If it doesn't exist or isn't parseable → return `status: fail` with issue `{"category": "file", "message": "ruta no encontrada"}`.
 
-### Paso 2 — Frontmatter
+### Step 2 — Frontmatter
 
-Extraer campos entre el título y la primera sección `##`. Verificar:
+Extract the fields between the title and the first `##` section. Verify:
 
-- [ ] `Story Points`: presente, entero > 0
+- [ ] `Story Points`: present, integer > 0
 - [ ] `Tipo`: ∈ {Backend, Frontend, Integracion, Infraestructura, Diseno}
 - [ ] `Complejidad`: ∈ {baja, media, alta}
-- [ ] `Tags`: presente, no vacío (parsear CSV)
-- [ ] `Depende de`: presente (valor literal "ninguna" es válido)
+- [ ] `Tags`: present, not empty (parse as CSV)
+- [ ] `Depende de`: present (the literal value "ninguna" is valid)
 
-Cada ausencia/invalidación → issue `fail` categoría `frontmatter`.
+Each missing/invalid field → `fail` issue, category `frontmatter`.
 
-### Paso 3 — Dependencias
+### Step 3 — Dependencies
 
-Si `Depende de` ≠ "ninguna":
-- Parsear lista de IDs (formato `T{xx}.{y}.{z}`)
-- Para cada ID: buscar `.md` con Glob `Planning/F*-*/EP*-*/S*-*/T{id}-*.md`
-- Si no existe → issue `fail` categoría `dependency`: "T{id} referenciada no existe"
-- Si existe → leer su tabla "Seguimiento", comprobar `Estado = completed`
-  - Si no está completed → issue `fail` categoría `dependency`: "T{id} está en estado {X}, debe ser completed"
+If `Depende de` ≠ "ninguna":
+- Parse the list of IDs (format `T{xx}.{y}.{z}`)
+- For each ID: look for the `.md` with Glob `Planning/F*-*/EP*-*/S*-*/T{id}-*.md`
+- If it doesn't exist → `fail` issue, category `dependency`: "T{id} referenced does not exist"
+- If it exists → read its "Seguimiento" table, check `Estado = completed`
+  - If it isn't completed → `fail` issue, category `dependency`: "T{id} is in state {X}, must be completed"
 
-### Paso 4 — Secciones obligatorias
+### Step 4 — Required sections
 
-Verificar que estas secciones existen y ninguna contiene literalmente `PENDIENTE`:
+Verify that these sections exist and that none of them literally contains `PENDIENTE`:
 - `## Descripcion`
 - `## Contexto requerido`
 - `## Archivos a crear/modificar`
 - `## Detalle tecnico`
 - `## Tests`
 
-Cada fallo → issue `fail` categoría `section`.
+Each failure → `fail` issue, category `section`.
 
-### Paso 5 — Contexto requerido
+### Step 5 — Contexto requerido
 
-Parsear subsecciones (`### Specs del proyecto`, `### ADRs y decisiones`, etc.). Verificar:
+Parse subsections (`### Specs del proyecto`, `### ADRs y decisiones`, etc.). Verify:
 
-- [ ] Al menos una subsección con contenido no vacío
-- [ ] Cada bullet tiene formato `- <ruta> — <razón>` (dash seguido de razón no vacía)
-- [ ] Cada ruta citada existe en disco (resolver relativo a raíz del proyecto)
-- [ ] Ningún bullet > 200 chars
-- [ ] Total de bullets ≤ 15
+- [ ] At least one subsection with non-empty content
+- [ ] Each bullet has the format `- <ruta> — <razón>` (dash followed by a non-empty reason)
+- [ ] Each cited path exists on disk (resolved relative to the project root)
+- [ ] No bullet > 200 chars
+- [ ] Total bullets ≤ 15
 
-Rutas que NO hay que validar en disco (son conceptuales): paths con wildcards `*`, o paths bajo `Planning/` con wildcards.
+Paths that do NOT need to be validated on disk (they're conceptual): paths with wildcards `*`, or paths
+under `Planning/` with wildcards.
 
-Issues: `fail` para rutas inexistentes y formato; `warn` para >15 bullets y bullets >200 chars.
+Issues: `fail` for nonexistent paths and formatting; `warn` for >15 bullets and bullets >200 chars.
 
-### Paso 6 — Archivos a crear/modificar
+### Step 6 — Archivos a crear/modificar
 
-- [ ] Tabla presente con cabecera `| Archivo | Accion |` o similar
-- [ ] Al menos una fila
-- [ ] Al menos una ruta bajo `tests/` (excepción: si `Tipo: Diseno` o `Tipo: Infraestructura`)
+- [ ] Table present with header `| Archivo | Accion |` or similar
+- [ ] At least one row
+- [ ] At least one path under `tests/` (exception: if `Tipo: Diseno` or `Tipo: Infraestructura`)
 
-### Paso 7 — Tests
+### Step 7 — Tests
 
-- [ ] Tabla presente
-- [ ] Al menos una fila (excepción: `Tipo: Diseno`)
+- [ ] Table present
+- [ ] At least one row (exception: `Tipo: Diseno`)
 
-### Paso 8 — Referencias cruzadas AC
+### Step 8 — AC cross-references
 
-Buscar menciones de `AC-\d+` en el `.md`. Para cada una:
-- Buscar `README.md` de la story padre (directorio inmediato superior)
-- Verificar que el AC mencionado existe con ese número en la story
-- Si no existe → issue `fail` categoría `ac-reference`
+Search for mentions of `AC-\d+` in the `.md`. For each one:
+- Look for the parent story's `README.md` (the immediate parent directory)
+- Verify that the mentioned AC exists with that number in the story
+- If it doesn't exist → `fail` issue, category `ac-reference`
 
-### Paso 9 — Marcadores de incertidumbre
+### Step 9 — Uncertainty markers
 
-Grep del texto `[NEEDS CLARIFICATION` en todo el `.md`. Cualquier ocurrencia → issue `fail` categoría `clarification`.
+Grep for the text `[NEEDS CLARIFICATION` across the whole `.md`. Any occurrence → `fail` issue, category
+`clarification`.
 
-## Generación del report
+## Report generation
 
 `var/task-runner/T{id}/spec-lint.report.md`:
 
@@ -109,34 +111,34 @@ Grep del texto `[NEEDS CLARIFICATION` en todo el `.md`. Cualquier ocurrencia →
 # spec-lint — T{id}
 
 **Status:** {PASS|FAIL}
-**Issues:** {N} ({B} bloqueantes, {W} warnings)
+**Issues:** {N} ({B} blocking, {W} warnings)
 
-## Bloqueantes
-- [{categoría}] {mensaje}
+## Blocking
+- [{category}] {message}
 
 ## Warnings
-- [{categoría}] {mensaje}
+- [{category}] {message}
 
-## Chequeos superados
-- Frontmatter completo
-- {otros que pasaron}
+## Passed checks
+- Complete frontmatter
+- {other checks that passed}
 ```
 
-## JSON de retorno
+## Return JSON
 
-Última línea de tu respuesta debe ser un JSON válido de una sola línea:
+The last line of your response must be a valid single-line JSON:
 
 ```json
 {"status":"fail","summary":"3 issues (2 fail, 1 warn)","issues":[{"severity":"fail","category":"dependency","message":"T02.1.0 en estado pendiente"},{"severity":"fail","category":"section","message":"Contexto requerido contiene PENDIENTE"},{"severity":"warn","category":"contexto-size","message":"17 bullets (>15)"}]}
 ```
 
-## Qué NO hace
+## What it does NOT do
 
-- No valida calidad semántica del contenido (solo formato y existencia)
-- No modifica el `.md`
-- No ejecuta tests ni código
-- No resuelve las issues — solo las reporta
+- Does not validate semantic quality of the content (only format and existence)
+- Does not modify the `.md`
+- Does not run tests or code
+- Does not resolve the issues — only reports them
 
-## Referencias
+## References
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/common/02 - Spec Lint.md`
+- Full design: `Implementación/Skills de Ejecución de Tareas/common/02 - Spec Lint.md`

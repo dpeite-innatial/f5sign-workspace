@@ -1,18 +1,18 @@
 ---
 name: docs-sync
-description: 'Actualiza la documentación que vive fuera del código tras una task: los modelos de dominio de docs/ddd/ (docs vivos), docs/LIVE_SCHEMA.md, docs/ARCHITECTURE.md, CLAUDE.md cuando cambia el stack, las variables de .env/.env.dev/.env.test bajo la regla 4 del repo, y ADRs — que redacta SIEMPRE como Proposed y nunca da por aceptados sin el usuario. NO toca OpenAPI (Nelmio lo cubre inline). Condiciona por lo que toca el diff, no por tags. Úsalo con /docs-sync TASK-NNN. Activar con "sincronizar docs", "actualizar el modelo de dominio", "redactar ADR", "docs externas de task".'
+description: 'Updates the documentation that lives outside the code after a task: the domain models in docs/ddd/ (living docs), docs/LIVE_SCHEMA.md, docs/ARCHITECTURE.md, CLAUDE.md when the stack changes, the variables in .env/.env.dev/.env.test under repo rule 4, and ADRs — which it ALWAYS drafts as Proposed and never treats as accepted without the user. Does NOT touch OpenAPI (Nelmio covers it inline). Conditions on what the diff touches, not on tags. Use it with /docs-sync TASK-NNN. Trigger with "sync docs", "update the domain model", "draft ADR", "external docs for task".'
 ---
 
 # Docs Sync
 
-Documentación fuera del código. No es gate duro; los fallos son warnings.
+Documentation outside the code. Not a hard gate; failures are warnings.
 
-⚑ **La mitad de las dianas que esta skill tenía no existen en este repo.** Medido 2026-08-17: no hay
-`CHANGELOG.md`, no hay `.env.example`, no hay `docs/asyncapi/`, no hay `docs/runbooks/`, y no hay
-`src/*/README.md`. **Crear una superficie de documentación es una decisión, no una sincronización** — si
-falta y hace falta, se reporta y se ficha en el BACKLOG; no se inventa a mitad de una task.
+⚑ **Half of the targets this skill used to have do not exist in this repo.** Measured 2026-08-17: there
+is no `CHANGELOG.md`, no `.env.example`, no `docs/asyncapi/`, no `docs/runbooks/`, and no
+`src/*/README.md`. **Creating a documentation surface is a decision, not a sync** — if it's missing and
+needed, report it and file it in BACKLOG; don't invent it mid-task.
 
-## Invocación
+## Invocation
 
 ```
 /docs-sync TASK-NNN
@@ -20,199 +20,205 @@ falta y hace falta, se reporta y se ficha en el BACKLOG; no se inventa a mitad d
 
 ## Inputs
 
-- `var/task-runner/TASK-NNN/changes.diff` y `context-digest.md`
-- El `.md` de la task
-- Del repo: [`docs/adr/`](../../../docs/adr/), [`docs/ddd/`](../../../docs/ddd/),
+- `var/task-runner/TASK-NNN/changes.diff` and `context-digest.md`
+- The task's `.md`
+- From the repo: [`docs/adr/`](../../../docs/adr/), [`docs/ddd/`](../../../docs/ddd/),
   [`docs/LIVE_SCHEMA.md`](../../../docs/LIVE_SCHEMA.md),
   [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md),
   [`docs/BACKLOG.md`](../../../docs/BACKLOG.md), [`CLAUDE.md`](../../../CLAUDE.md), `.env*`
 
 ## Outputs
 
-- Ficheros del repo modificados, en **su propio commit** (no `--amend`: este repo integra PRs de varios
-  commits)
+- Repo files modified, in **their own commit** (not `--amend`: this repo integrates multi-commit PRs)
 - `var/task-runner/TASK-NNN/docs-sync.report.md`
 - JSON: `{"status":"pass|warn","summary":"...","filesUpdated":[...],"surfacesAbsent":[...]}`
 
-## Qué se ejecuta, según lo que toca el diff
+## What runs, based on what the diff touches
 
-**No hay tags en este formato de task.** La condición es el diff.
+**There are no tags in this task format.** The condition is the diff.
 
-### El diff toca `src/F5Sign/<BC>/Domain/` o cambia un flujo → el modelo de dominio de ese BC
+### The diff touches `src/F5Sign/<BC>/Domain/` or changes a flow → that BC's domain model
 
-⚠ **El nombre del fichero no se deriva del directorio**: `Session/` → `signing-session-domain-model.md`,
-`IdentityAccess/` → `identity-access-domain-model.md`, `SignatureExecution/` → `signature-execution-domain-model.md`.
-Haz `ls docs/ddd/` en vez de construir el nombre en minúsculas.
+⚠ **The filename is not derived from the directory**: `Session/` → `signing-session-domain-model.md`,
+`IdentityAccess/` → `identity-access-domain-model.md`, `SignatureExecution/` →
+`signature-execution-domain-model.md`. Run `ls docs/ddd/` instead of building the lowercase name.
 
-Los modelos de dominio son **documentos vivos**: se actualizan en el sitio y su rastro es git
-([`docs/adr/AUTHORING.md`](../../../docs/adr/AUTHORING.md) § ADRs vs domain models). Los ADRs son lo
-contrario, puntuales.
+Domain models are **living documents**: they get updated in place and their trail is git
+([`docs/adr/AUTHORING.md`](../../../docs/adr/AUTHORING.md) § ADRs vs domain models). ADRs are the
+opposite, point-in-time.
 
-- Actualizar el modelo del BC afectado con el estado actual.
-- ⚑ **Si un ADR de este changeset supersede parte de un modelo**, no reescribas el modelo en la rama del
-  ADR: pon un **banner con fecha** en la parte obsoleta apuntando al ADR, y deja que la siguiente feature
-  del modelo lo reconcilie. El contrato está en
-  [`docs/ddd/README.md`](../../../docs/ddd/README.md) § Document lifecycle.
+- Update the affected BC's model with the current state.
+- ⚑ **If an ADR in this changeset supersedes part of a model**, don't rewrite the model on the ADR's
+  branch: put a **dated banner** on the obsolete part pointing to the ADR, and let the model's next
+  feature reconcile it. The contract is in [`docs/ddd/README.md`](../../../docs/ddd/README.md) §
+  Document lifecycle.
 
-### El diff toca `migrations/` → `docs/LIVE_SCHEMA.md`
+### The diff touches `migrations/` → `docs/LIVE_SCHEMA.md`
 
-- Actualizarlo, y **decir de dónde se re-derivó** (la migración, o una consulta al esquema).
-- ⚠ Es **hecho de base de datos transcrito a mano**, o sea la única clase de afirmación que un documento no
-  puede mantener cierta: ya está fichado como tal (`BL-99`). Si lo que toca es grande, el report debe decir
-  que se transcribió a mano y qué no se verificó.
+- Update it, and **say where it was re-derived from** (the migration, or a query against the schema).
+- ⚠ It's **database fact transcribed by hand**, i.e. the one kind of claim a document can't keep true on
+  its own: already filed as such (`BL-99`). If what's touched is large, the report must say it was
+  transcribed by hand and what wasn't verified.
 
-### El diff añade o cambia una variable de entorno → `.env`, `.env.dev`, `.env.test`
+### The diff adds or changes an environment variable → `.env`, `.env.dev`, `.env.test`
 
-⛔ **No existe `.env.example` y no se crea.** La superficie de descubribilidad es la cabecera de orden de
-carga de `.env`, que **nombra las variables en prosa**.
+⛔ **`.env.example` does not exist and is not created.** The discoverability surface is the load-order
+header of `.env`, which **names the variables in prose**.
 
-⛔ **Y para una variable sensible, un placeholder es la respuesta equivocada.** `.env` viaja **dentro de la
-imagen de producción**, así que una clave nombrada ahí **siempre resuelve** y producción arrancaría con el
-valor commiteado. La cabecera de `.env` lo dice literalmente: *no arregles esa ausencia commiteando un
-placeholder*. Los dos patrones de la regla 4 del repo, y el primero es el estándar:
+⛔ **And for a sensitive variable, a placeholder is the wrong answer.** `.env` ships **inside the
+production image**, so a key named there **always resolves** and production would boot with the
+committed value. The `.env` header says it literally: *don't fix that absence by committing a
+placeholder*. The two patterns from repo rule 4, and the first is the standard one:
 
-| Patrón | Cuándo | Ejemplos |
+| Pattern | When | Examples |
 |---|---|---|
-| **(A) Ausente** — el estándar | Siempre, salvo (B) | Son **seis**, y la cabecera de `.env` las nombra: `DATABASE_URL`, `APP_SECRET`, `MESSENGER_TRANSPORT_DSN`, `SIGNING_TOKEN_SECRET`, `IDENTITY_DATABASE_URL` y `PROVISIONING_DATABASE_URL` (las dos últimas llegaron con Identity & Access; `CLAUDE.md` sigue listando solo cuatro). `%env()%` falla al construir el contenedor en vez de caer a una contraseña de desarrollo |
-| **(B) Presente y vacía** — excepción estrecha | Solo si un valor vacío **jamás** puede funcionar *y* su consumidor lo rechaza | `FIELD_ENCRYPTION_SECRET=` únicamente. **No es transferible**: `SIGNING_TOKEN_SECRET` tiene valor de dev en `.env.dev`, así que vacío no fallaría cerrado |
+| **(A) Absent** — the standard | Always, except (B) | There are **six**, and the `.env` header names them: `DATABASE_URL`, `APP_SECRET`, `MESSENGER_TRANSPORT_DSN`, `SIGNING_TOKEN_SECRET`, `IDENTITY_DATABASE_URL` and `PROVISIONING_DATABASE_URL` (the last two arrived with Identity & Access; `CLAUDE.md` still lists only four). `%env()%` fails building the container instead of falling back to a dev password |
+| **(B) Present and empty** — narrow exception | Only if an empty value can **never** work *and* its consumer rejects it | `FIELD_ENCRYPTION_SECRET=` only. **Not transferable**: `SIGNING_TOKEN_SECRET` has a dev value in `.env.dev`, so empty wouldn't fail closed |
 
-Añadir la variable al fichero del entorno que corresponda (valores de stack local sí van: coinciden con el
-compose de infra y no son secretos), y **nombrarla en la cabecera de `.env`** si es de las ausentes.
+Add the variable to the matching environment file (local-stack values do go in: they match infra's
+compose and aren't secrets), and **name it in the `.env` header** if it's one of the absent ones.
 
-### El diff cambia el stack, un bundle, un script de composer o un target de make → `CLAUDE.md`
+### The diff changes the stack, a bundle, a composer script, or a make target → `CLAUDE.md`
 
-⚑ **Es la superficie de mayor valor del repo y la que más daño hace al podrirse**, porque no se queda
-obsoleta: empieza a **instruir mal**, y el siguiente agente reconstruye lo que quitaste. Declaró
-*"Doctrine ORM 3"* durante semanas después de que saliera de `composer.json`. Entra en el barrido de la
-regla de autoría 1 siempre.
+⚑ **It's the repo's highest-value surface and the one that does the most damage when it rots**, because
+it doesn't just go stale: it starts **giving bad instructions**, and the next agent rebuilds what you
+removed. It declared *"Doctrine ORM 3"* for weeks after it left `composer.json`. It's always in scope
+for authorship rule 1's sweep.
 
-### El diff añade un BC, una capa o cambia una ruta de decisión → `docs/ARCHITECTURE.md`
+### The diff adds a BC, a layer, or changes a decision path → `docs/ARCHITECTURE.md`
 
-Su tabla de enrutado pregunta→documento es lo que lee alguien que llega nuevo. Si el mapa cambió, cambia.
+Its question→document routing table is what someone new reads. If the map changed, it changes.
 
-### Hay una decisión transversal → un ADR, y **solo como `Proposed`**
+### There's a cross-cutting decision → an ADR, and **only as `Proposed`**
 
-⛔ **Esta skill no acepta decisiones.** Redacta; el usuario acepta. Hereda entero el gate de
-`implement-backend` Paso 2b:
+⛔ **This skill does not accept decisions.** It drafts; the user accepts. It fully inherits
+`implement-backend`'s Step 2b gate:
 
-- **El vocabulario de estado es `Proposed` · `Accepted` · `Superseded`.** No existe `draft`. Y **`Accepted`
-  significa ejercitado, no acordado**: escribirlo aquí falsifica el estado del repo.
-- **Nada de `Origin: T{id}` ni cabeceras inventadas.** La cabecera es la tabla
-  `| Field | Value |` con `Status` · `Date` · `Relates to` · `Crosswalk`, y las secciones son las de
-  `AUTHORING.md` § Section template: `Context`, `Decision`, `Consequences` (con **Positive / Negative /
-  Risks** — Risks no es opcional), `Related ADRs`, `Enforced by (in-repo)`, `Realized in (in-repo)`, y
-  `Counterpoint` cuando hay alternativa creíble.
-- **El número se acuña con el sweep de `AUTHORING.md`, corrido en ese momento y desde la raíz del repo**
-  (`cd "$(git rev-parse --show-toplevel)"`, pathspec `':(top)docs/adr'`), sobre **todas** las ramas. "El
-  mayor que hay + 1" mirando solo el working tree es cómo se acuñan colisiones: `AUTHORING.md` registra dos
-  de ADR-0040, y `ADR-0049` apareció en otra rama en medio de una sesión.
-- **Aterrizar es aterrizar completo: CINCO sitios.** Los tres de `docs/adr/README.md` (índice, grafo,
-  crosswalk) más el campo `Crosswalk` de la cabecera; **más** los dos que `AUTHORING.md` llama *"each
-  conditional but each easy to forget"*: la referencia `(ADR-NNNN)` en los docblocks del código que gobierna,
-  y **la reconciliación del modelo de dominio** en `docs/ddd/` con su fila de estado en `docs/ddd/README.md`.
-  Ese último es tuyo por definición: esta skill es la que mantiene los modelos.
-- **Presentarlo al usuario** con qué decide, qué descarta y qué prohíbe, y **parar** hasta que responda.
+- **The status vocabulary is `Proposed` · `Accepted` · `Superseded`.** There's no `draft`. And
+  **`Accepted` means exercised, not agreed**: writing it here misrepresents the repo's state.
+- **No `Origin: T{id}` and no invented headers.** The header is the `| Field | Value |` table with
+  `Status` · `Date` · `Relates to` · `Crosswalk`, and the sections are `AUTHORING.md` § Section
+  template's: `Context`, `Decision`, `Consequences` (with **Positive / Negative / Risks** — Risks isn't
+  optional), `Related ADRs`, `Enforced by (in-repo)`, `Realized in (in-repo)`, and `Counterpoint` when
+  there's a credible alternative.
+- **The number is minted with `AUTHORING.md`'s sweep, run at that moment and from the repo root**
+  (`cd "$(git rev-parse --show-toplevel)"`, pathspec `':(top)docs/adr'`), across **all** branches. "The
+  highest one there is + 1" looking only at the working tree is how collisions get minted:
+  `AUTHORING.md` records two ADR-0040s, and `ADR-0049` showed up on another branch mid-session.
+- **Landing means landing completely: FIVE places.** The three in `docs/adr/README.md` (index, graph,
+  crosswalk) plus the header's `Crosswalk` field; **plus** the two `AUTHORING.md` calls *"each
+  conditional but each easy to forget"*: the `(ADR-NNNN)` reference in the docblocks of the code it
+  governs, and **the domain model reconciliation** in `docs/ddd/` with its status row in
+  `docs/ddd/README.md`. That last one is yours by definition: this skill is the one that maintains the
+  models.
+- **Present it to the user** with what it decides, what it discards, and what it forbids, and **stop**
+  until they respond.
 
-### El diff cambia algo que el frontal consume → `docs/frontend-handoff/`
+### The diff changes something the frontend consumes → `docs/frontend-handoff/`
 
-**Por qué existe.** La regla 4 del workspace prohíbe cruzar repos en un mismo commit: *dos proyectos = dos
-PRs coordinados*. Así que un cambio de contrato del backend y su adopción en `f5sign-dashboard` /
-`f5sign-signer` son changesets distintos, y sin un artefacto de traspaso el segundo se reconstruye
-adivinando —o no llega nunca, que es lo que pasó con `signed_copy_url`: el frontal del firmante esconde su
-botón de descarga desde entonces porque espera un campo que el backend nunca envía, y eso vivía
-solo en un docblock del canal de email cuando se escribió esto — hoy está también en
-`docs/ddd/notification-domain-model.md` y en el README del traspaso. (Dejo la corrección a la vista porque es
-la regla 2 en acción: el *porqué* seguía siendo cierto y la mitad factual se había podrido.)
+**Why it exists.** Workspace rule 4 forbids crossing repos in the same commit: *two projects = two
+coordinated PRs*. So a backend contract change and its adoption in `f5sign-dashboard` / `f5sign-signer`
+are different changesets, and without a handoff artifact the second one gets rebuilt by guessing —or
+never arrives, which is what happened with `signed_copy_url`: the signer frontend has been hiding its
+download button ever since because it expects a field the backend never sends, and that lived only in an
+email-channel docblock when this was written — today it's also in
+`docs/ddd/notification-domain-model.md` and in the handoff README. (Leaving the correction visible
+because it's authorship rule 2 in action: the *why* was still true and the factual half had rotted.)
 
-**Cuándo se escribe** — predicado, no tags. El diff toca `src/**/UI/Http/`, `config/routes/`, cualquier
-`#[OA\`, un `Contract/` que la API emite, un enum cuyos valores salen por la API, una cabecera o regla CORS,
-o una variable de entorno que el frontal necesita.
+**When it's written** — predicate, not tags. The diff touches `src/**/UI/Http/`, `config/routes/`, any
+`#[OA\`, a `Contract/` the API emits, an enum whose values go out through the API, a CORS header or
+rule, or an environment variable the frontend needs.
 
-**Dónde:** `docs/frontend-handoff/TASK-NNN-<slug>.md` (o `YYYY-MM-DD-<slug>.md` si el cambio no viene de una
-task). Convención completa en [`docs/frontend-handoff/README.md`](../../../docs/frontend-handoff/README.md).
+**Where:** `docs/frontend-handoff/TASK-NNN-<slug>.md` (or `YYYY-MM-DD-<slug>.md` if the change doesn't
+come from a task). Full convention in
+[`docs/frontend-handoff/README.md`](../../../docs/frontend-handoff/README.md).
 
-⚠ **Y aquí hay una excepción explícita a la regla de arriba**, para que no parezca contradicción: el
-directorio y su README nacieron en la rama `docs/task-conventions` y **puede que no existan en la rama donde
-trabajas**. Escribir el primer traspaso ahí **sí** crea la superficie — y está autorizado, porque la decisión
-ya está tomada y su convención escrita. Lo que la regla prohíbe es inventarse una superficie **sin decisión
-previa**; esta la tiene. Si el README no está en tu rama, dilo en el report y enlaza a la rama que lo lleva.
+⚠ **And here's an explicit exception to the rule above**, so it doesn't look like a contradiction: the
+directory and its README were born on branch `docs/task-conventions` and **may not exist on the branch
+you're working on**. Writing the first handoff there **does** create the surface — and it's authorized,
+because the decision is already made and its convention written. What the rule forbids is inventing a
+surface **without a prior decision**; this one has one. If the README isn't on your branch, say so in
+the report and link to the branch that has it.
 
-**Qué lleva, y la forma importa porque el lector es un agente en otro repo sin acceso a este:**
+**What it carries, and the form matters because the reader is an agent in another repo with no access to
+this one:**
 
 ```markdown
-# Traspaso al frontal — {qué cambió, en una frase}
+# Handoff to frontend — {what changed, in one sentence}
 
 | | |
 |---|---|
-| **Origen** | rama `feat/...` · commit `<sha>` · {PR si existe} |
-| **Fecha** | YYYY-MM-DD |
-| **Repos afectados** | dashboard / signer / ambos |
-| **Naturaleza** | aditivo · **rompe contrato** · corrige el spec |
-| **Acción requerida** | ninguna · actualizar tipos · manejar estado nuevo · **migrar antes de {fecha}** |
+| **Origin** | branch `feat/...` · commit `<sha>` · {PR if it exists} |
+| **Date** | YYYY-MM-DD |
+| **Repos affected** | dashboard / signer / both |
+| **Nature** | additive · **breaks contract** · fixes the spec |
+| **Action required** | none · update types · handle new state · **migrate before {date}** |
 
-## Lo que cambió en el contrato
-- `{MÉTODO} {ruta}` — {qué campo/estado/código aparece o desaparece}, y **si es obligatorio**
+## What changed in the contract
+- `{METHOD} {route}` — {what field/state/code appears or disappears}, and **whether it's required**
 
-## Lo que el frontal tiene que hacer
-1. {paso concreto, en imperativo}
+## What the frontend needs to do
+1. {concrete step, imperative}
 
-## Lo que NO está listo todavía
-- {para que nadie construya contra un seam a medias}
+## What is NOT ready yet
+- {so nobody builds against a half-finished seam}
 
-## Cómo verificarlo desde el frontal
-- {llamada concreta, o "regenerar el spec y diffear": el OpenAPI generado es la verdad máquina}
+## How to verify it from the frontend
+- {concrete call, or "regenerate the spec and diff it": the generated OpenAPI is the machine truth}
 ```
 
-**Tres reglas anti-podredumbre**, porque este documento es la clase que más rápido se queda mintiendo:
+**Three anti-rot rules**, because this document is the kind that goes stale fastest:
 
-1. **No copies el spec.** El OpenAPI que emite Nelmio es la verdad legible por máquina; aquí se dice **qué
-   cambió y qué hacer**, y se apunta a él. Un esquema duplicado a mano divergirá y el frontal creerá al
-   equivocado.
-2. **Nombra el commit de origen.** Es lo único que le permite al agente del frontal saber si el traspaso ya
-   está aplicado o si va por detrás.
-3. **Di lo que no está listo.** La mitad del valor está en frenar trabajo contra un seam incompleto —el caso
-   `signed_copy_url` es exactamente eso: los bytes ya son alcanzables, falta un campo y **la decisión de
-   qué extremo lo pone**, que no se puede tomar desde dentro de este BC.
+1. **Don't copy the spec.** The OpenAPI Nelmio emits is the machine-readable truth; here you say **what
+   changed and what to do**, and point to it. A hand-duplicated schema will diverge and the frontend
+   will believe the wrong one.
+2. **Name the origin commit.** It's the only thing that lets the frontend agent know whether the handoff
+   is already applied or is behind.
+3. **Say what isn't ready.** Half the value is in stopping work against an incomplete seam —the
+   `signed_copy_url` case is exactly that: the bytes are already reachable, a field is missing, and so
+   is **the decision of which end adds it**, which can't be made from inside this BC.
 
-⚑ **Este fichero no autoriza a tocar el otro repo.** Se escribe aquí, viaja con este PR, y el cambio del
-frontal es su propio PR en su propio repo.
+⚑ **This file does not authorize touching the other repo.** It's written here, it travels with this PR,
+and the frontend's change is its own PR in its own repo.
 
-### Superficies que no existen → warn, y ficha si hace falta
+### Surfaces that don't exist → warn, and file it if needed
 
 `CHANGELOG.md`, `.env.example`, `docs/asyncapi/`, `docs/runbooks/`, `src/*/README.md`.
 
-No crear ninguna. Reportar en `surfacesAbsent` qué quedó sin documentar y dónde vive esa información
-mientras tanto (p. ej. los eventos viven en sus clases `Contract/Event/` y en el ADR que los gobierna). Si
-la ausencia es una carencia real y repetida, **una fila en `docs/BACKLOG.md`** con el id re-derivado por
-grep en el momento — no un fichero fantasma a medio rellenar, que es peor que nada porque parece cobertura.
+Don't create any of them. Report in `surfacesAbsent` what was left undocumented and where that
+information lives in the meantime (e.g. events live in their `Contract/Event/` classes and in the ADR
+that governs them). If the absence is a real, recurring gap, **a row in `docs/BACKLOG.md`** with the id
+re-derived by grep at that moment — not a half-filled phantom file, which is worse than nothing because
+it looks like coverage.
 
 ## Report
 
 ```markdown
 # docs-sync — TASK-NNN
 
-**Status:** {PASS|WARN} · **Ficheros actualizados:** {N}
+**Status:** {PASS|WARN} · **Files updated:** {N}
 
-## Cambios aplicados
-- {fichero}: {qué}
+## Changes applied
+- {file}: {what}
 
-## ADRs redactados
-- ADR-NNNN — **Proposed**, pendiente de aceptación del usuario. Checklist de aterrizaje: {3 ediciones de
-  README + campo Crosswalk} {hecho|pendiente}
+## ADRs drafted
+- ADR-NNNN — **Proposed**, pending user acceptance. Landing checklist: {3 README edits
+  + Crosswalk field} {done|pending}
 
-## Superficies ausentes (no creadas a propósito)
-- {p. ej. docs/asyncapi/: el evento X queda sin documentar; vive en su clase Contract/Event/ y en ADR-NNNN}
+## Absent surfaces (not created on purpose)
+- {e.g. docs/asyncapi/: event X is left undocumented; it lives in its Contract/Event/ class and in ADR-NNNN}
 
-## Transcrito a mano y no verificado
-- {p. ej. LIVE_SCHEMA.md: columnas de la tabla Y}
+## Transcribed by hand and unverified
+- {e.g. LIVE_SCHEMA.md: columns of table Y}
 ```
 
-## Qué NO hace
+## What it does NOT do
 
-- **No toca OpenAPI** — Nelmio lo cubre inline, en las anotaciones del código (`implement-backend` Paso 4).
-- No edita el `.md` de la task (eso es `task-close`).
-- No escribe el body del PR (`pr-ready`).
-- **No marca ningún ADR como `Accepted`**, ni sigue adelante sin la respuesta del usuario.
-- No crea superficies de documentación que el repo no tiene.
-- No "mejora" documentación fuera del alcance de la task — salvo la prosa que la regla de autoría 1 obliga
-  a corregir en el mismo changeset.
+- **Does not touch OpenAPI** — Nelmio covers it inline, in the code's annotations (`implement-backend`
+  Step 4).
+- Does not edit the task's `.md` (that's `task-close`).
+- Does not write the PR body (`pr-ready`).
+- **Does not mark any ADR as `Accepted`**, and does not proceed without the user's response.
+- Does not create documentation surfaces the repo doesn't have.
+- Does not "improve" documentation outside the task's scope — except for prose that authorship rule 1
+  requires fixing in the same changeset.

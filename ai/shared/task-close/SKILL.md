@@ -1,13 +1,13 @@
 ---
 name: task-close
-description: 'Cierra documentalmente una tarea tras la implementación y validaciones: actualiza el .md (Estado=review, Fin, Commit SHA), consolida tagMismatches de todas las skills previas, añade sección "Desviaciones de lo planificado" al .md, y extrae aprendizajes no obvios a notes.md si los hay. Úsalo con /task-close T{id}. Activar con "cerrar tarea", "actualizar .md", "consolidar aprendizajes", "marcar tarea como review".'
+description: 'Documentally closes a task after implementation and validations: updates the .md (Estado=review, Fin, Commit SHA), consolidates tagMismatches from all previous skills, adds a "Desviaciones de lo planificado" section to the .md, and extracts non-obvious learnings to notes.md if there are any. Use it with /task-close T{id}. Trigger with "close task", "update .md", "consolidate learnings", "mark task as review".'
 ---
 
 # Task Close
 
-Cierre documental de la tarea. No es gate duro.
+Documentation closeout for the task. Not a hard gate.
 
-## Invocación
+## Invocation
 
 ```
 /task-close T{id}
@@ -15,54 +15,56 @@ Cierre documental de la tarea. No es gate duro.
 
 ## Inputs
 
-- `var/task-runner/T{id}/` (todos los reports `*.report.md` generados)
+- `var/task-runner/T{id}/` (all the `*.report.md` reports generated)
 - `var/task-runner/T{id}/context-digest.md`
 - `var/task-runner/T{id}/plan.md`
-- `.md` de la tarea (para editarlo)
+- The task's `.md` (to edit it)
 
 ## Outputs
 
-- `.md` de la tarea EDITADO:
-  - Frontmatter: Estado, Fin, Commit, PR/Branch (rama, no URL aún), Tags (limpios)
-  - Nueva sección `## Desviaciones de lo planificado` añadida después de `## Tests`
-  - Sección `## Tests` actualizada si `task-validate` ejecutó tests distintos/adicionales a los declarados
+- The task's `.md` EDITED:
+  - Frontmatter: Estado, Fin, Commit, PR/Branch (branch, no URL yet), Tags (cleaned up)
+  - New `## Desviaciones de lo planificado` section added after `## Tests`
+  - `## Tests` section updated if `task-validate` ran different/additional tests than declared
 - `var/task-runner/T{id}/task-close.report.md`
-- `var/task-runner/T{id}/notes.md` (SOLO si hay aprendizajes reales; si está vacío, NO crearlo)
+- `var/task-runner/T{id}/notes.md` (ONLY if there are real learnings; if empty, do NOT create it)
 - JSON:
   ```json
   {"status":"pass|warn","summary":"...","mdSectionsUpdated":[...],"lessonsCount":N}
   ```
 
-## Ejecución
+## Execution
 
-### Paso 1 — Leer reports
+### Step 1 — Read reports
 
-Parsear todos los `*.report.md` del workspace. Extraer:
-- Status de cada skill
-- `tagMismatches` de cada una (consolidar en un solo array)
-- WARN activos (para deuda técnica)
-- Issues relevantes no resueltos
+Parse all the workspace's `*.report.md` files. Extract:
+- Status of each skill
+- `tagMismatches` from each one (consolidate into a single array)
+- Active WARNs (for technical debt)
+- Relevant unresolved issues
 
-### Paso 2 — Determinar SHA del commit
+### Step 2 — Determine the commit SHA
 
-- `git log -1 --format=%H` (la rama actual debería tener el commit de implement + amends)
-- Guardar SHA para actualizar el frontmatter
+- `git log -1 --format=%H` (the current branch should have the implement commit + amends)
+- Save the SHA to update the frontmatter
 
-### Paso 3 — Editar frontmatter del `.md`
+### Step 3 — Edit the `.md`'s frontmatter
 
-Usar Edit tool. Buscar la tabla "Seguimiento" en el `.md`:
+Use the Edit tool. Find the "Seguimiento" table in the `.md`:
 
 - `Estado` → `review`
-- `Fin` → fecha actual (formato `YYYY-MM-DD`)
-- `Commit` → SHA completo (40 chars)
-- `PR/Branch` → nombre de la rama actual (ej. `feat/T02.1.1-slug`); la URL completa la añadirá `pr-ready` más tarde
+- `Fin` → current date (format `YYYY-MM-DD`)
+- `Commit` → full SHA (40 chars)
+- `PR/Branch` → name of the current branch (e.g. `feat/T02.1.1-slug`); `pr-ready` will add the full URL
+  later
 
-Además, en el bloque de header (arriba, con `> **Tags:** ...`):
-- Quitar tags presentes en `tagMismatches` consolidado. Si quedan solo 1-2 tags, dejarlos (no vaciar).
+Also, in the header block (above, with `> **Tags:** ...`):
+- Remove tags present in the consolidated `tagMismatches`. If only 1-2 tags remain, leave them (don't
+  empty it out).
 
-### Paso 4 — Añadir sección "Desviaciones"
+### Step 4 — Add the "Desviaciones" section
 
-Buscar la sección `## Tests` y después de ella añadir (si no existe ya):
+Find the `## Tests` section and add after it (if it doesn't already exist):
 
 ```markdown
 ## Desviaciones de lo planificado
@@ -83,50 +85,56 @@ Buscar la sección `## Tests` y después de ella añadir (si no existe ya):
 - {WARNs activos que el usuario decidió no corregir; extraer de perf-smoke, security-audit, etc.}
 ```
 
-Si alguna subsección no tiene contenido → escribir "Ninguna" (no omitirla).
+If any subsection has no content → write "Ninguna" (don't omit it).
 
-### Paso 5 — Actualizar tabla "Tests" (si aplica)
+### Step 5 — Update the "Tests" table (if applicable)
 
-Leer `test-results.json` del workspace. Si el número/nombres de tests ejecutados difiere de la tabla `## Tests` del `.md`:
-- Actualizar la tabla para reflejar los tests realmente añadidos
-- Mantener el formato original (`| Test name | Type | File path | What it verifies |`)
+Read the workspace's `test-results.json`. If the number/names of tests run differ from the `.md`'s
+`## Tests` table:
+- Update the table to reflect the tests actually added
+- Keep the original format (`| Test name | Type | File path | What it verifies |`)
 
-### Paso 6 — Extraer aprendizajes → notes.md
+### Step 6 — Extract learnings → notes.md
 
-Mirar reports y detectar patrones aplicables a futuras tareas:
+Look at the reports and detect patterns applicable to future tasks:
 
-- **Contexto insuficiente**: ¿implement escaló a Opus por falta de regla/spec? Documentar qué faltaba en `Contexto requerido`.
-- **Tags mal asignados**: tag mismatches ≥ 1 → sugerir revisar criterio de planning-detail.
-- **Decisiones implícitas**: decisiones tomadas durante implementación sin ADR → sugerir crear ADR si el patrón se repite.
-- **Gates fallados reintentados**: si hubo corrección automática (implement re-invocada con report de validation/security), documentar qué cambió.
-- **Deuda técnica no cerrada**: WARNs de perf-smoke/security-audit no resueltos.
+- **Insufficient context**: did `implement` escalate to Opus due to a missing rule/spec? Document what
+  was missing in `Contexto requerido`.
+- **Poorly assigned tags**: tag mismatches ≥ 1 → suggest reviewing the planning-detail criteria.
+- **Implicit decisions**: decisions made during implementation without an ADR → suggest creating an ADR
+  if the pattern repeats.
+- **Retried failed gates**: if there was an automatic correction (implement re-invoked with the
+  validation/security report), document what changed.
+- **Unclosed technical debt**: unresolved perf-smoke/security-audit WARNs.
 
-Si hay al menos un aprendizaje → crear `var/task-runner/T{id}/notes.md`:
+If there's at least one learning → create `var/task-runner/T{id}/notes.md`:
 
 ```markdown
 # Notes — T{id}
 
-## Aprendizajes potenciales
-- [Contexto insuficiente] Escaló a Opus por falta de regla X; futuras tareas similares deberían listar [regla/fichero]
-- [Tag mal usado] Tag `db` aplicado pero no tocó persistencia; revisar criterio en planning-detail
+## Potential learnings
+- [Insufficient context] Escalated to Opus due to missing rule X; future similar tasks should list [rule/file]
+- [Misused tag] Tag `db` applied but didn't touch persistence; review the planning-detail criteria
 
-## Métricas
-- Tiempo total: {min}
-- Tokens estimados: {breakdown por skill}
-- Escalada a Opus: {sí/no, razón}
-- Gates fallados y reintentados: {N}
+## Metrics
+- Total time: {min}
+- Estimated tokens: {breakdown per skill}
+- Escalated to Opus: {yes/no, reason}
+- Failed and retried gates: {N}
 
-## Decisiones implícitas (candidatos a ADR si se repiten)
-- {lista extraída de context-digest.md}
+## Implicit decisions (ADR candidates if they repeat)
+- {list extracted from context-digest.md}
 ```
 
-Si no hay aprendizajes (todo fue ideal) → **NO crear** el fichero.
+If there are no learnings (everything went ideally) → **do NOT create** the file.
 
-### Paso 7 — NO commitear aún
+### Step 7 — Do NOT commit yet
 
-`task-close` modifica el `.md` pero NO hace commit. `pr-ready` hará el `--amend` final que incluye estas modificaciones + la URL del PR una vez creado.
+`task-close` modifies the `.md` but does NOT commit. `pr-ready` will do the final `--amend` that includes
+these modifications + the PR URL once created.
 
-Dejar los cambios en staging es opcional; si se hace, `git add {rutaMd}` y listo. Si no, `pr-ready` lo añadirá.
+Leaving the changes staged is optional; if done, `git add {mdPath}` and that's it. If not, `pr-ready`
+will add it.
 
 ## Report
 
@@ -135,39 +143,39 @@ Dejar los cambios en staging es opcional; si se hace, `git add {rutaMd}` y listo
 ```markdown
 # task-close — T{id}
 
-**Status:** PASS  |  **Secciones actualizadas:** {N}  |  **Aprendizajes:** {N}
+**Status:** PASS  |  **Sections updated:** {N}  |  **Learnings:** {N}
 
-## Cambios aplicados al .md
+## Changes applied to the .md
 - Frontmatter: Estado → review, Fin → 2026-04-13, Commit → abc123f
-- Tags: eliminado `db` (mismatch detectado por doctrine-guard)
-- Sección "Desviaciones" creada con 3 entradas
-- Sección "Tests" actualizada (2 tests adicionales añadidos vs. plan original)
+- Tags: removed `db` (mismatch detected by doctrine-guard)
+- "Desviaciones" section created with 3 entries
+- "Tests" section updated (2 additional tests added vs. the original plan)
 
-## Aprendizajes escritos en notes.md (2)
-- Contexto insuficiente sobre regla de estado X
-- Decisión implícita sobre estrategia Y (candidato a ADR si se repite)
+## Learnings written to notes.md (2)
+- Insufficient context about state rule X
+- Implicit decision about strategy Y (ADR candidate if it repeats)
 ```
 
-## JSON de retorno
+## Return JSON
 
 ```json
-{"status":"pass","summary":".md actualizado, 2 aprendizajes extraídos","mdSectionsUpdated":["frontmatter","tags","desviaciones","tests"],"lessonsCount":2}
+{"status":"pass","summary":".md updated, 2 learnings extracted","mdSectionsUpdated":["frontmatter","tags","deviations","tests"],"lessonsCount":2}
 ```
 
-## Manejo de fallos
+## Failure handling
 
-- Si no puede parsear un report previo → WARN "skipped section X", no FAIL
-- Si el `.md` está corrupto o no parseable → FAIL (caso improbable)
-- Si falta el commit SHA (git no devuelve nada) → FAIL "no commit found, implement did not run?"
+- If it can't parse a previous report → WARN "skipped section X", not FAIL
+- If the `.md` is corrupt or not parseable → FAIL (unlikely case)
+- If the commit SHA is missing (git returns nothing) → FAIL "no commit found, implement did not run?"
 
-## Qué NO hace
+## What it does NOT do
 
-- No abre PR (pr-ready)
-- No commitea (pr-ready hace el amend final)
-- No decide si se publica (confirmación del usuario)
-- No escribe ADRs (docs-sync, como draft)
-- No corrige tests ni código
+- Does not open a PR (pr-ready)
+- Does not commit (pr-ready does the final amend)
+- Does not decide whether to publish (user confirmation)
+- Does not write ADRs (docs-sync, as a draft)
+- Does not fix tests or code
 
-## Referencias
+## References
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/common/03 - Task Close.md`
+- Full design: `Implementación/Skills de Ejecución de Tareas/common/03 - Task Close.md`

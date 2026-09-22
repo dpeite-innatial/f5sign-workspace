@@ -1,162 +1,168 @@
 ---
 name: pr-ready
-description: Cierra la tarea creando el Pull Request final en GitHub. Consolida el commit (amend con .md actualizado), hace push de la rama, genera título (conventional commits) y body del PR (tarea + AC cubiertos + tabla de validaciones + test plan), aplica labels derivados del .md (fase, epic, tipo, tags), y marca el PR como draft si hubo warnings activos. Úsalo con /pr-ready T{id}. Activar con "crear PR", "abrir pull request", "cerrar tarea y publicar", "pr ready".
+description: Closes the task by creating the final Pull Request on GitHub. Consolidates the commit (amend with the updated .md), pushes the branch, generates the title (conventional commits) and PR body (task + covered AC + validation table + test plan), applies labels derived from the .md (phase, epic, type, tags), and marks the PR as draft if there were active warnings. Use it with /pr-ready T{id}. Trigger with "create PR", "open pull request", "close task and publish", "pr ready".
 ---
 
 # PR Ready
 
-Cierre final. Solo se invoca si los gates previos pasaron (o el usuario forzó continuar en supervised).
+Final closeout. Only invoked if the previous gates passed (or the user forced continuation in supervised
+mode).
 
-## Invocación
+## Invocation
 
 ```
 /pr-ready T{id}
-/pr-ready T{id} --draft         # forzar draft (override)
-/pr-ready T{id} --ready         # forzar ready (override — cuidado)
+/pr-ready T{id} --draft         # force draft (override)
+/pr-ready T{id} --ready         # force ready (override — careful)
 ```
 
 ## Inputs
 
-- `var/task-runner/T{id}/` (todos los artefactos y reports)
-- `.md` de la tarea (ya editado por task-close)
+- `var/task-runner/T{id}/` (all artifacts and reports)
+- The task's `.md` (already edited by task-close)
 - `plan.md`, `context-digest.md`
-- Reports: spec-lint, doctrine-guard, contract-check, task-validate, security-audit, eidas (si aplica), perf-smoke, docs-sync
+- Reports: spec-lint, doctrine-guard, contract-check, task-validate, security-audit, eidas (if
+  applicable), perf-smoke, docs-sync
 
 ## Outputs
 
-- Commit final amendado en la rama
-- Rama pusheada a `origin`
-- PR creado en GitHub
-- `.md` editado una vez más con URL del PR (2º amend)
+- Final commit amended on the branch
+- Branch pushed to `origin`
+- PR created on GitHub
+- `.md` edited once more with the PR URL (2nd amend)
 - `var/task-runner/T{id}/pr-ready.report.md`
 - JSON:
   ```json
   {"status":"pass|fail","summary":"...","prUrl":"...","prNumber":N,"branchName":"..."}
   ```
 
-## Ejecución
+## Execution
 
-### Paso 1 — Pre-check
+### Step 1 — Pre-check
 
-- [ ] `git status --short` → no hay ficheros sin stagear inesperados. Ficheros esperables: el `.md` de la tarea, ficheros de `docs/`, `.env.example`.
-- [ ] `git rev-parse --abbrev-ref HEAD` devuelve `feat/T{id}-*`
-- [ ] `git log --oneline {base}..HEAD | wc -l` devuelve exactamente 1 (un solo commit sobre base)
-  - Si más de 1: squash defensivo antes de continuar: `git reset --soft {base} && git commit` con el mensaje original de implement.
-- [ ] `gh auth status` no falla (si falla → `status: fail, summary: "gh not authenticated, run gh auth login"`)
+- [ ] `git status --short` → no unexpected unstaged files. Expected files: the task's `.md`, files under
+  `docs/`, `.env.example`.
+- [ ] `git rev-parse --abbrev-ref HEAD` returns `feat/T{id}-*`
+- [ ] `git log --oneline {base}..HEAD | wc -l` returns exactly 1 (a single commit over base)
+  - If more than 1: defensive squash before continuing: `git reset --soft {base} && git commit` with
+    implement's original message.
+- [ ] `gh auth status` doesn't fail (if it fails → `status: fail, summary: "gh not authenticated, run gh auth login"`)
 
-### Paso 2 — Amend con `.md` actualizado
+### Step 2 — Amend with the updated `.md`
 
-Ficheros a incluir en el amend:
-- `.md` de la tarea (si task-close lo dejó en staging, ya está; si no, `git add`)
-- Cualquier fichero de `docs/` tocado por docs-sync que no haya sido amendado ya
-- `.env.example` si fue modificado
+Files to include in the amend:
+- The task's `.md` (if task-close left it staged, it's already there; if not, `git add`)
+- Any `docs/` file touched by docs-sync that hasn't already been amended
+- `.env.example` if it was modified
 
 ```bash
-git add {rutaMd} {otros ficheros de docs/, .env.example si aplica}
+git add {mdPath} {other docs/ files, .env.example if applicable}
 git commit --amend --no-edit
 ```
 
-### Paso 3 — Determinar modo (draft vs ready)
+### Step 3 — Determine mode (draft vs ready)
 
-Leer todos los reports del workspace. Contar WARNs activos (no resueltos):
-- Sí, hay WARNs → `--draft`
-- No hay WARNs → ready (no pasar `--draft`)
-- Override explícito: respetar `--draft` o `--ready` del argumento
+Read all the workspace's reports. Count active (unresolved) WARNs:
+- Yes, there are WARNs → `--draft`
+- No WARNs → ready (don't pass `--draft`)
+- Explicit override: respect `--draft` or `--ready` from the argument
 
-Ejemplos que implican WARN activo:
-- perf-smoke con `status: warn` alto
-- security-audit con WARN
-- docs-sync con tag mismatches (estos realmente ya se limpiaron en task-close; si quedaron → es un bug)
-- Cualquier gate con `status: warn`
+Examples that imply an active WARN:
+- perf-smoke with a high `status: warn`
+- security-audit with WARN
+- docs-sync with tag mismatches (these should already have been cleaned up in task-close; if they remain
+  → it's a bug)
+- Any gate with `status: warn`
 
-### Paso 4 — Push
+### Step 4 — Push
 
 ```bash
 git push -u origin feat/T{id}-{slug}
 ```
 
-Si la rama ya existía en remote → `git push --force-with-lease` (NUNCA `--force` sin lease).
+If the branch already existed on remote → `git push --force-with-lease` (NEVER `--force` without lease).
 
-Si el push falla con conflicto/protection rule:
-- `status: fail, summary: "push rechazado: {razón}"`
-- Detallar en el report
-- NO hacer `--force` real ni rebase automático
+If the push fails due to a conflict/protection rule:
+- `status: fail, summary: "push rejected: {reason}"`
+- Detail it in the report
+- Do NOT do a real `--force` or automatic rebase
 
-### Paso 5 — Generar título del PR
+### Step 5 — Generate the PR title
 
-Formato: `{tipo}(T{id}): {título de la tarea}`
+Format: `{type}(T{id}): {task title}`
 
-Mapeo `Tipo` → conventional commit:
-- `Backend` → `feat` (o `fix` si el título o descripción indica "fix"/"bug")
-- `Frontend` → `feat` (o `fix`)
+`Tipo` → conventional commit mapping:
+- `Backend` → `feat` (or `fix` if the title or description indicates "fix"/"bug")
+- `Frontend` → `feat` (or `fix`)
 - `Integracion` → `feat`
 - `Infraestructura` → `chore`
-- `Diseno` → `design` (o `docs` si el repo no acepta `design`)
+- `Diseno` → `design` (or `docs` if the repo doesn't accept `design`)
 
-Extraer título de la primera línea del `.md` (tras `# `). Máximo 70 chars; truncar título si hace falta.
+Extract the title from the `.md`'s first line (after `# `). Maximum 70 chars; truncate the title if
+needed.
 
-### Paso 6 — Generar body del PR
+### Step 6 — Generate the PR body
 
-Plantilla:
+Template:
 
 ```markdown
-## Tarea
-[T{id}]({ruta-relativa-al-.md}) — {título de la tarea}
+## Task
+[T{id}]({relative-path-to-.md}) — {task title}
 
-Epic: EP{xx} | Story: S{xx}.{y} | Fase: F{n}
+Epic: EP{xx} | Story: S{xx}.{y} | Phase: F{n}
 
-## Resumen
-{2-3 líneas extraídas de context-digest.md § "Task summary"}
+## Summary
+{2-3 lines extracted from context-digest.md § "Task summary"}
 
-## Cambios
-{lista generada parseando changes.diff, agrupada por capa}:
-- **Domain:** {ficheros bajo Domain/}
-- **Application:** {ficheros bajo Application/}
-- **Infrastructure:** {ficheros bajo Infrastructure/}
-- **Tests:** {ficheros bajo tests/}
-- **Docs:** {ficheros bajo docs/, .env.example}
+## Changes
+{list generated by parsing changes.diff, grouped by layer}:
+- **Domain:** {files under Domain/}
+- **Application:** {files under Application/}
+- **Infrastructure:** {files under Infrastructure/}
+- **Tests:** {files under tests/}
+- **Docs:** {files under docs/, .env.example}
 
-## Criterios de aceptación cubiertos
-{extraído de task-validate.report acCovered[]}:
-- [x] AC-01 — {nombre del criterio extraído de la story}
+## Acceptance criteria covered
+{extracted from task-validate.report acCovered[]}:
+- [x] AC-01 — {criterion name extracted from the story}
 - [x] AC-02 — ...
 
-## Validaciones ejecutadas
-| Skill | Status | Notas |
+## Validations run
+| Skill | Status | Notes |
 |---|---|---|
 | spec-lint | PASS | — |
 | doctrine-guard | PASS | — |
 | contract-check | PASS | — |
 | task-validate | PASS | N tests, coverage X% |
 | security-audit | PASS | — |
-| eidas-compliance | PASS | Nivel PAdES B-LT |
-| perf-smoke | WARN | p95 = 312ms (ver notas) |
+| eidas-compliance | PASS | PAdES B-LT level |
+| perf-smoke | WARN | p95 = 312ms (see notes) |
 
-## Notas para el reviewer
-{si hay WARNs o deuda técnica de task-close, listarlos aquí}
-- Performance: p95 en el límite del budget; se deja para iteración futura
-- ADR en borrador: `docs/adr/0012-*.md` (marcar como accepted al aprobar)
+## Notes for the reviewer
+{if there are WARNs or technical debt from task-close, list them here}
+- Performance: p95 at the budget limit; left for a future iteration
+- ADR in draft: `docs/adr/0012-*.md` (mark as accepted upon approval)
 
 ## Test plan
-- [ ] Revisar cobertura de AC
-- [ ] {si tag api:} curl al endpoint con cada caso del AC
-- [ ] {si tag worker:} encolar mensaje y verificar procesamiento
-- [ ] {si tag ui:} abrir página X y ejecutar flujo Y
-- [ ] {si tag migration:} ejecutar migrate, verificar schema, migrate:down y verificar reversibilidad
+- [ ] Review AC coverage
+- [ ] {if tag api:} curl the endpoint with each AC case
+- [ ] {if tag worker:} queue a message and verify processing
+- [ ] {if tag ui:} open page X and run flow Y
+- [ ] {if tag migration:} run migrate, verify schema, migrate:down and verify reversibility
 ```
 
-### Paso 7 — Crear PR con gh
+### Step 7 — Create the PR with gh
 
 ```bash
 gh pr create \
   --base master \
   --head feat/T{id}-{slug} \
-  --title "{título}" \
-  --body-file {fichero temporal con el body} \
+  --title "{title}" \
+  --body-file {temporary file with the body} \
   [--draft]
 ```
 
-Alternativa (body inline con HEREDOC):
+Alternative (inline body with HEREDOC):
 ```bash
 gh pr create --base master --head feat/T{id}-{slug} \
   --title "..." \
@@ -166,54 +172,58 @@ EOF
 )" [--draft]
 ```
 
-Capturar la URL del PR que devuelve `gh` y el número (`gh pr view --json number`).
+Capture the PR URL that `gh` returns and the number (`gh pr view --json number`).
 
-### Paso 8 — Labels
+### Step 8 — Labels
 
-Derivar labels del `.md`:
+Derive labels from the `.md`:
 - `fase:F{n}`, `epic:EP{xx}`
 - `tipo:{backend|frontend|integracion|infraestructura|diseno}` (lowercase)
-- Por cada tag canónico del `.md`: `tag:{tag}` (ej. `tag:signing`, `tag:critical-path`)
+- For each canonical tag in the `.md`: `tag:{tag}` (e.g. `tag:signing`, `tag:critical-path`)
 
 ```bash
 gh pr edit {prNumber} --add-label "fase:F0,epic:EP02,tipo:backend,tag:db,tag:migration"
 ```
 
-Si algún label no existe en el repo, `gh` lo reporta; ignorar silenciosamente (no crear labels fantasma).
+If a label doesn't exist in the repo, `gh` reports it; ignore silently (don't create phantom labels).
 
-### Paso 9 — Amend final con URL del PR
+### Step 9 — Final amend with the PR URL
 
-Editar el `.md` de la tarea: actualizar el campo `PR/Branch` en la tabla Seguimiento de solo la rama → `{rama} — {URL del PR}`.
+Edit the task's `.md`: update the `PR/Branch` field in the Seguimiento table from just the branch →
+`{branch} — {PR URL}`.
 
 ```bash
-git add {rutaMd}
+git add {mdPath}
 git commit --amend --no-edit
 git push --force-with-lease
 ```
 
-Resultado: un único commit final, con el `.md` totalmente actualizado (incluida la URL del PR que GitHub acaba de asignar).
+Result: a single final commit, with the `.md` fully updated (including the PR URL GitHub just assigned).
 
-### Paso 10 — Devolver JSON
+### Step 10 — Return the JSON
 
 ```json
-{"status":"pass","summary":"PR abierto","prUrl":"https://github.com/owner/innasign/pull/42","prNumber":42,"branchName":"feat/T02.1.1-slug","draft":false}
+{"status":"pass","summary":"PR opened","prUrl":"https://github.com/owner/innasign/pull/42","prNumber":42,"branchName":"feat/T02.1.1-slug","draft":false}
 ```
 
-## Manejo de fallos
+## Failure handling
 
-- **Push rechazado por branch protection:** `status: fail`, detallar en report, sugerir al usuario qué regla violó
-- **`gh pr create` falla:** `status: fail`; si es por autenticación → `summary` sugiere `gh auth login`
-- **Conflicto con main durante push** (alguien mergeó entretanto): `status: fail, summary: "rebase requerido, intervención manual"`. NO intentar rebase automático.
-- **Rama ya tiene un PR abierto:** detectarlo con `gh pr list --head feat/T{id}-*`; si existe, hacer push y actualizar el PR existente en vez de crear uno nuevo; reportarlo en el summary.
+- **Push rejected by branch protection:** `status: fail`, detail it in the report, suggest to the user
+  which rule was violated
+- **`gh pr create` fails:** `status: fail`; if it's due to authentication → `summary` suggests
+  `gh auth login`
+- **Conflict with main during push** (someone merged in the meantime): `status: fail, summary: "rebase required, manual intervention"`. Do NOT attempt an automatic rebase.
+- **Branch already has an open PR:** detect it with `gh pr list --head feat/T{id}-*`; if it exists, push
+  and update the existing PR instead of creating a new one; report it in the summary.
 
-## Qué NO hace
+## What it does NOT do
 
-- No mergea el PR (responsabilidad del reviewer humano)
-- No asigna reviewers (se configuran con CODEOWNERS, fuera de scope)
-- No añade a milestones ni projects
-- No ejecuta CI manualmente (GitHub lo dispara al abrir PR)
-- No edita `.md` post-merge (SHA de main, fecha de merge) — sería otra skill futura o hook
+- Does not merge the PR (human reviewer's responsibility)
+- Does not assign reviewers (configured via CODEOWNERS, out of scope)
+- Does not add to milestones or projects
+- Does not run CI manually (GitHub triggers it when the PR opens)
+- Does not edit the `.md` post-merge (main's SHA, merge date) — that would be a future skill or hook
 
-## Referencias
+## References
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/common/04 - PR Ready.md`
+- Full design: `Implementación/Skills de Ejecución de Tareas/common/04 - PR Ready.md`

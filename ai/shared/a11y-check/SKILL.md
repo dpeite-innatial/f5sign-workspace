@@ -1,13 +1,13 @@
 ---
 name: a11y-check
-description: Valida accesibilidad (WCAG 2.1 AA) de componentes y páginas Vue nuevos o modificados tras una tarea frontend. Ejecuta axe-core/pa11y, verifica contraste de colores, labels en inputs, alt en imágenes, navegación por teclado, roles ARIA correctos y focus visible. Gate duro cuando hay cambios visuales. Úsalo con /a11y-check T{id}. Activar con "accesibilidad", "a11y", "WCAG", "check aria/alt/labels".
+description: Validates accessibility (WCAG 2.1 AA) of Vue components and pages that are new or modified after a frontend task. Runs axe-core/pa11y, checks color contrast, input labels, image alt text, keyboard navigation, correct ARIA roles and visible focus. Hard gate when there are visual changes. Use with /a11y-check T{id}. Trigger with "accessibility", "a11y", "WCAG", "check aria/alt/labels".
 ---
 
 # A11y Check
 
-Validación de accesibilidad. Solo si tags incluye `ui`. Gate duro.
+Accessibility validation. Only if tags include `ui`. Hard gate.
 
-## Invocación
+## Invocation
 
 ```
 /a11y-check T{id}
@@ -17,110 +17,110 @@ Validación de accesibilidad. Solo si tags incluye `ui`. Gate duro.
 
 - `var/task-runner/T{id}/changes.diff`
 - `var/task-runner/T{id}/context-digest.md`
-- `.md` de la tarea
-- Ficheros Vue del diff
+- Task `.md`
+- Vue files from the diff
 
 ## Outputs
 
 - `var/task-runner/T{id}/a11y-check.report.md`
-- `var/task-runner/T{id}/a11y-axe.json` (output crudo de axe si se ejecuta)
+- `var/task-runner/T{id}/a11y-axe.json` (raw axe output if run)
 - JSON: `{"status":"pass|fail|warn","summary":"...","issues":[...],"wcagLevel":"AA"}`
 
-## Precondición
+## Precondition
 
-Si el proyecto no tiene `axe-core`/`@axe-core/playwright` o `pa11y` instalado → WARN "tooling a11y no disponible" y seguir con los checks estáticos (linter eslint-plugin-vuejs-accessibility si existe). No bloquear.
+If the project doesn't have `axe-core`/`@axe-core/playwright` or `pa11y` installed → WARN "a11y tooling not available" and continue with the static checks (eslint-plugin-vuejs-accessibility linter if present). Do not block.
 
-## Ejecución
+## Execution
 
-### Paso 1 — Checks estáticos sobre ficheros Vue del diff
+### Step 1 — Static checks on Vue files from the diff
 
-Para cada `*.vue` modificado:
+For each modified `*.vue`:
 
-#### Labels y formularios
-- [ ] Cada `<input>`, `<select>`, `<textarea>` tiene `<label for="...">` asociado o `aria-label`/`aria-labelledby`
-- [ ] Inputs de tipo `checkbox`/`radio` tienen labels clickeables
-- [ ] Formularios tienen `<fieldset>`/`<legend>` cuando agrupan controles relacionados
-- [ ] Mensajes de error tienen `aria-live="polite"` o `role="alert"` y vinculados al input con `aria-describedby`
+#### Labels and forms
+- [ ] Every `<input>`, `<select>`, `<textarea>` has an associated `<label for="...">` or `aria-label`/`aria-labelledby`
+- [ ] `checkbox`/`radio` inputs have clickable labels
+- [ ] Forms have `<fieldset>`/`<legend>` when grouping related controls
+- [ ] Error messages have `aria-live="polite"` or `role="alert"` and are linked to the input with `aria-describedby`
 
-#### Imágenes y media
-- [ ] `<img>` tiene `alt` (vacío si decorativa, descriptivo si informativa)
-- [ ] Iconos decorativos con `aria-hidden="true"` y `alt=""`
-- [ ] Iconos informativos con `aria-label` o texto visible asociado
+#### Images and media
+- [ ] `<img>` has `alt` (empty if decorative, descriptive if informative)
+- [ ] Decorative icons have `aria-hidden="true"` and `alt=""`
+- [ ] Informative icons have `aria-label` or associated visible text
 
-#### Botones e interactividad
-- [ ] Elementos interactivos son botones reales (`<button>`, `<a>`), no `<div>` con `@click`
-- [ ] Si se usa `<div role="button">` excepcionalmente: tiene `tabindex="0"`, manejo de `keydown.enter` y `keydown.space`
-- [ ] Botones con solo iconos tienen `aria-label`
-- [ ] Links (`<a>`) tienen `href` real o son `<button>`
+#### Buttons and interactivity
+- [ ] Interactive elements are real buttons (`<button>`, `<a>`), not `<div>` with `@click`
+- [ ] If `<div role="button">` is used exceptionally: it has `tabindex="0"`, handling of `keydown.enter` and `keydown.space`
+- [ ] Icon-only buttons have `aria-label`
+- [ ] Links (`<a>`) have a real `href` or are `<button>`
 
-#### Estructura semántica
-- [ ] Uso de `<header>`, `<nav>`, `<main>`, `<section>`, `<article>`, `<footer>` donde corresponda
-- [ ] Orden jerárquico de headings (`<h1>` → `<h2>` → `<h3>`) sin saltos
-- [ ] `<ul>`/`<ol>` para listas, no `<div>` consecutivos
+#### Semantic structure
+- [ ] Use of `<header>`, `<nav>`, `<main>`, `<section>`, `<article>`, `<footer>` where appropriate
+- [ ] Hierarchical heading order (`<h1>` → `<h2>` → `<h3>`) without skips
+- [ ] `<ul>`/`<ol>` for lists, not consecutive `<div>`s
 
 #### ARIA
-- [ ] No hay `role` redundantes (no `role="button"` en `<button>`)
-- [ ] `aria-*` attributes válidos y correctos
-- [ ] Widgets compuestos (combobox, tabs, modal, dialog) tienen todos los ARIA attributes que el patrón WAI-ARIA exige
+- [ ] No redundant `role`s (no `role="button"` on `<button>`)
+- [ ] `aria-*` attributes valid and correct
+- [ ] Composite widgets (combobox, tabs, modal, dialog) have all the ARIA attributes required by the WAI-ARIA pattern
 
 #### Focus
-- [ ] No hay `outline: none` en CSS sin una alternativa visible (`:focus-visible` con box-shadow o ring)
-- [ ] Tabindex coherente (`0` para orden natural; `-1` para elementos programáticamente enfocables; nunca positivos)
-- [ ] Modales/diálogos atrapan el focus (focus trap) y lo devuelven al trigger al cerrarse
+- [ ] No `outline: none` in CSS without a visible alternative (`:focus-visible` with box-shadow or ring)
+- [ ] Coherent tabindex (`0` for natural order; `-1` for programmatically focusable elements; never positive)
+- [ ] Modals/dialogs trap focus (focus trap) and return it to the trigger on close
 
-### Paso 2 — Contraste de colores (si hay cambios en CSS/estilos)
+### Step 2 — Color contrast (if there are CSS/style changes)
 
-- Si el proyecto usa tokens de Tailwind y los tokens están verificados como accesibles, saltar
-- Si hay colores nuevos inline o variables CSS nuevas: calcular contraste
-  - Texto normal vs fondo: ≥ 4.5:1
-  - Texto grande (≥18pt o 14pt bold): ≥ 3:1
-  - UI components (bordes, iconos): ≥ 3:1
-- Usar librería como `color-contrast` o implementar WCAG contrast ratio formula
+- If the project uses Tailwind tokens and the tokens are verified as accessible, skip
+- If there are new inline colors or new CSS variables: calculate contrast
+  - Normal text vs background: ≥ 4.5:1
+  - Large text (≥18pt or 14pt bold): ≥ 3:1
+  - UI components (borders, icons): ≥ 3:1
+- Use a library such as `color-contrast` or implement the WCAG contrast ratio formula
 
-### Paso 3 — Linter eslint-plugin-vuejs-accessibility
+### Step 3 — eslint-plugin-vuejs-accessibility linter
 
-Si el proyecto tiene el plugin instalado:
-- Ejecutar `npm run lint -- {ficheros-del-diff}` específicamente enfocado en reglas a11y
-- Parsear output JSON
-- Cada error del plugin → issue con severidad `fail` categoría `a11y-lint`
+If the project has the plugin installed:
+- Run `npm run lint -- {diff-files}` specifically focused on a11y rules
+- Parse JSON output
+- Each plugin error → issue with severity `fail`, category `a11y-lint`
 
-### Paso 4 — axe-core / pa11y (si tooling disponible)
+### Step 4 — axe-core / pa11y (if tooling available)
 
-Si el proyecto tiene `@axe-core/playwright` o `pa11y`:
-- Ejecutar contra las rutas afectadas (extraídas del context-digest)
-- Requiere que Playwright/entorno esté listo; si no, saltar con warn
-- Parsear output, cada violación → issue
+If the project has `@axe-core/playwright` or `pa11y`:
+- Run against the affected routes (extracted from context-digest)
+- Requires Playwright/the environment to be ready; if not, skip with warn
+- Parse output, each violation → issue
 
 ```bash
-# Ejemplo con @axe-core/playwright en un test:
-npx playwright test a11y.spec.ts --grep "{ruta}"
+# Example with @axe-core/playwright in a test:
+npx playwright test a11y.spec.ts --grep "{route}"
 ```
 
-Issues de axe con impact:
+axe issues by impact:
 - `critical` → `fail`
 - `serious` → `fail`
 - `moderate` → `warn`
 - `minor` → `warn`
 
-### Paso 5 — Navegación por teclado (si hay widgets complejos)
+### Step 5 — Keyboard navigation (if there are complex widgets)
 
-Si la tarea introduce un widget compuesto (dropdown, modal, tabs, combobox):
-- Verificar que el AC incluye test Playwright que navegue el widget solo con teclado (Tab, Shift+Tab, Enter, Space, Escape, flechas)
-- Si no existe → `fail` categoría `a11y-keyboard-test-missing`
+If the task introduces a composite widget (dropdown, modal, tabs, combobox):
+- Verify that the AC includes a Playwright test that navigates the widget using only the keyboard (Tab, Shift+Tab, Enter, Space, Escape, arrows)
+- If it doesn't exist → `fail` category `a11y-keyboard-test-missing`
 
-## Gravedad
+## Severity
 
 - **FAIL:**
-  - Input sin label
-  - Imagen informativa sin alt
-  - Elemento interactivo no accesible por teclado
-  - Contraste < 4.5:1 (texto normal) o < 3:1 (texto grande)
-  - `outline: none` sin alternativa de focus visible
-  - axe-core severity `critical` o `serious`
+  - Input without a label
+  - Informative image without alt
+  - Interactive element not keyboard-accessible
+  - Contrast < 4.5:1 (normal text) or < 3:1 (large text)
+  - `outline: none` without a visible focus alternative
+  - axe-core severity `critical` or `serious`
 - **WARN:**
-  - Estructura semántica mejorable (`<div>` donde mejor sería `<section>`)
-  - Tab order mejorable
-  - axe-core severity `moderate` o `minor`
+  - Semantic structure could be improved (`<div>` where `<section>` would be better)
+  - Tab order could be improved
+  - axe-core severity `moderate` or `minor`
 
 ## Report
 
@@ -128,40 +128,40 @@ Si la tarea introduce un widget compuesto (dropdown, modal, tabs, combobox):
 # a11y-check — T{id}
 
 **Status:** {PASS|FAIL|WARN}
-**Nivel WCAG:** AA
-**Issues:** {B} bloqueantes, {W} warnings
+**WCAG level:** AA
+**Issues:** {B} blocking, {W} warnings
 
-## Bloqueantes
-- [{categoría}] {fichero:línea} {mensaje}
+## Blocking
+- [{category}] {file:line} {message}
 
 ## Warnings
-- [{categoría}] {mensaje}
+- [{category}] {message}
 
-## Rutas probadas con axe
+## Routes tested with axe
 - /signer/{uuid} — 0 critical, 1 moderate
 - /dashboard — 0 issues
 
-## Herramientas ejecutadas
+## Tools run
 - eslint-plugin-vuejs-accessibility: {N} errors
 - axe-core: {N} critical/serious
-- Contraste (WCAG AA): {N} violaciones
+- Contrast (WCAG AA): {N} violations
 ```
 
-## JSON de retorno
+## Return JSON
 
 ```json
-{"status":"fail","summary":"1 input sin label + 1 contraste insuficiente","issues":[{"severity":"fail","category":"label-missing","file":"components/SignerForm.vue:42","message":"input type=email sin label asociado"}],"wcagLevel":"AA"}
+{"status":"fail","summary":"1 input without label + 1 insufficient contrast","issues":[{"severity":"fail","category":"label-missing","file":"components/SignerForm.vue:42","message":"input type=email without associated label"}],"wcagLevel":"AA"}
 ```
 
-## Qué NO hace
+## What it does NOT do
 
-- No corrige los issues — solo reporta
-- No audita accesibilidad semántica de contenidos (ej. lenguaje claro, instrucciones comprensibles) — eso requiere revisión humana
-- No valida performance (`perf-smoke-frontend`)
-- No ejecuta screen readers reales (solo simulación via axe)
+- Does not fix issues — only reports
+- Does not audit content semantic accessibility (e.g. plain language, understandable instructions) — that requires human review
+- Does not validate performance (`perf-smoke-frontend`)
+- Does not run real screen readers (only simulation via axe)
 
-## Referencias
+## References
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/` (sección nueva a añadir)
+- Full design: `Implementación/Skills de Ejecución de Tareas/` (new section to be added)
 - WCAG 2.1 AA: https://www.w3.org/WAI/WCAG21/quickref/
 - Vuejs accessibility: https://vuejs.org/guide/best-practices/accessibility.html

@@ -1,13 +1,13 @@
 ---
 name: security-audit-core
-description: Audit de seguridad genérico del código introducido por una tarea, independiente del stack. Cubre checks comunes (secretos hardcoded, PII en logs, dependencias con CVEs, autenticación/autorización a nivel conceptual, auth middleware presente, cross-tenant leaks) y delega los checks específicos del stack en security-audit-backend o security-audit-frontend según el repo. Si el diff toca firma o cripto, delega también en eidas-compliance. Úsalo con /security-audit-core TASK-NNN. Activar con "audit seguridad", "revisar security", "OWASP check", "auth/PII check".
+description: Generic security audit of the code introduced by a task, independent of the stack. Covers common checks (hardcoded secrets, PII in logs, dependencies with CVEs, authentication/authorization at a conceptual level, auth middleware present, cross-tenant leaks) and delegates the stack-specific checks to security-audit-backend or security-audit-frontend depending on the repo. If the diff touches signing or crypto, it also delegates to eidas-compliance. Use it with /security-audit-core TASK-NNN. Trigger with "security audit", "review security", "OWASP check", "auth/PII check".
 ---
 
 # Security Audit Core
 
-Gate duro de seguridad. Se invoca siempre. Ejecuta checks genéricos y delega en las variantes específicas del stack.
+Hard security gate. Always invoked. Runs generic checks and delegates to the stack-specific variants.
 
-## Invocación
+## Invocation
 
 ```
 /security-audit-core TASK-NNN
@@ -17,88 +17,100 @@ Gate duro de seguridad. Se invoca siempre. Ejecuta checks genéricos y delega en
 
 - `var/task-runner/T{id}/changes.diff`
 - `var/task-runner/T{id}/context-digest.md`
-- Reports previos que existan en el workspace (`doctrine-guard.report.md`, `contract-check*.report.md`, etc.) para evitar redundancia
-- El `.md` de la task. **Las delegaciones se deciden por lo que toca el diff, no por tags** (este formato no los tiene)
-- Output de `composer audit` / `npm audit` provisto por task-runner
-- `.claude/skills-config.yaml` del repo (para saber el stack: `backend` | `frontend`) — existe y declara `stack: backend`
+- Previous reports that exist in the workspace (`doctrine-guard.report.md`, `contract-check*.report.md`,
+  etc.) to avoid redundancy
+- The task's `.md`. **Delegations are decided by what the diff touches, not by tags** (this format
+  doesn't have them)
+- Output of `composer audit` / `npm audit` provided by task-runner
+- The repo's `.claude/skills-config.yaml` (to know the stack: `backend` | `frontend`) — it exists and
+  declares `stack: backend`
 
 ## Outputs
 
-- `var/task-runner/T{id}/security-audit.report.md` (reporte consolidado de core + backend/frontend + eidas si aplica)
+- `var/task-runner/T{id}/security-audit.report.md` (consolidated report of core + backend/frontend +
+  eidas if applicable)
 - JSON:
   ```json
   {"status":"pass|fail|warn","summary":"...","issues":[...],"delegatedTo":["security-audit-backend|frontend","eidas-compliance"?]}
   ```
 
-## Ejecución
+## Execution
 
-### Paso 1 — Checks genéricos (cualquier stack)
+### Step 1 — Generic checks (any stack)
 
-Ejecutar sobre ficheros del diff. Saltar categorías cuyo scope no aparece en el diff.
+Run over the diff's files. Skip categories whose scope doesn't appear in the diff.
 
-#### Secretos
-- [ ] No hay API keys, passwords, tokens hardcoded (grep patrones: `AWS_`, `API_KEY`, `SECRET`, `Bearer `, base64 largo, strings `sk_live_`, `pk_live_`, JWT-like)
-- [ ] ⚑ **`.env`, `.env.dev` y `.env.test` SÍ están commiteados a propósito** (regla 4 del repo): llevan
-      defaults del stack local, que coinciden con el compose de infra y no son secretos. Lo que se busca no
-      es "hay un `.env` en git", es **una credencial real**: password de prod/staging, token de API real,
-      `APP_SECRET` real, la contraseña del keystore de DSS. Esas viven solo en `.env.local` / `.env.*.local`
-      (gitignorados) o en el vault de secretos.
-- [ ] ⛔ **Y un placeholder para una variable sensible es un hallazgo, no una solución.** `.env` viaja
-      **dentro de la imagen de producción**, así que una clave nombrada ahí siempre resuelve y producción
-      arrancaría con el valor commiteado. El patrón correcto es la **ausencia** (que `%env()%` falle al
-      construir el contenedor); la única excepción es `FIELD_ENCRYPTION_SECRET=` vacía, porque vacío no
-      puede funcionar y su consumidor rechaza menos de 32 bytes
-- [ ] No hay URLs internas commiteadas (endpoints privados, hostnames de prod)
-- [ ] Logs no imprimen variables sensibles (grep log statements con variables que contengan "token", "password", "secret", "key", "credential")
+#### Secrets
+- [ ] No hardcoded API keys, passwords, tokens (grep patterns: `AWS_`, `API_KEY`, `SECRET`, `Bearer `,
+      long base64, `sk_live_`, `pk_live_` strings, JWT-like)
+- [ ] ⚑ **`.env`, `.env.dev` and `.env.test` ARE committed on purpose** (repo rule 4): they carry
+      local-stack defaults, which match infra's compose and aren't secrets. What's being searched for
+      isn't "there's an `.env` in git", it's **a real credential**: a prod/staging password, a real API
+      token, a real `APP_SECRET`, the DSS keystore password. Those live only in `.env.local` /
+      `.env.*.local` (gitignored) or in the secrets vault.
+- [ ] ⛔ **And a placeholder for a sensitive variable is a finding, not a solution.** `.env` ships
+      **inside the production image**, so a key named there always resolves and production would boot
+      with the committed value. The correct pattern is **absence** (`%env()%` failing to build the
+      container); the only exception is an empty `FIELD_ENCRYPTION_SECRET=`, because empty can't work
+      and its consumer rejects fewer than 32 bytes
+- [ ] No committed internal URLs (private endpoints, prod hostnames)
+- [ ] Logs don't print sensitive variables (grep log statements with variables containing "token",
+      "password", "secret", "key", "credential")
 
 #### PII
-- [ ] PII en logs: emails, teléfonos, DNI/NIE, IBAN, direcciones, nombres reales — redactados o fuera.
-- [ ] ⚑ **Afirmar el conjunto de claves cerrado, no hacer un spot-check.** Un "aquí no veo PII" pasa por alto
-      el campo nuevo: enumerar los campos que la superficie emite/persiste y decidir sobre **todos**.
-      ⚠ En el backend, PII fuera del event log es correcto y comprobable (ADR-0031, Path B), pero **PII en
-      reposo NO está cifrada hoy**: `FieldCipher` no tiene llamantes y ADR-0033 está `Proposed`. No dar por
-      hecha esa protección; si el diff añade una columna con PII, es hallazgo
-- [ ] PII en URLs: no está en path ni query string (va en body o headers)
-- [ ] Responses no exponen más PII de la necesaria para el endpoint
+- [ ] PII in logs: emails, phone numbers, DNI/NIE, IBAN, addresses, real names — redacted or excluded.
+- [ ] ⚑ **Assert the closed set of keys, don't do a spot-check.** An "I don't see PII here" misses the
+      new field: enumerate the fields the surface emits/persists and decide on **all** of them. ⚠ On the
+      backend, PII kept out of the event log is correct and checkable (ADR-0031, Path B), but **PII at
+      rest is NOT encrypted today**: `FieldCipher` has no callers and ADR-0033 is `Proposed`. Don't
+      assume that protection; if the diff adds a column with PII, it's a finding
+- [ ] PII in URLs: not in the path or query string (goes in body or headers)
+- [ ] Responses don't expose more PII than the endpoint needs
 
-#### Autenticación / Autorización (conceptual)
-- [ ] Rutas nuevas que deberían requerir auth, la requieren. ⚠ En el backend **no hay SecurityBundle
-      registrado**: el seam es la ruta que declara su tipo de credencial y un principal ya verificado
-      (ADR-0044/ADR-0048). El detalle lo comprueba `security-audit-backend`; aquí basta con que ninguna ruta
-      nueva quede sin declaración
-- [ ] Operaciones que requieren authz (no solo estar logueado, sino tener permiso sobre el recurso concreto) tienen check explícito
-- [ ] Tokens JWT / session tokens no se loguean ni devuelven en responses
+#### Authentication / Authorization (conceptual)
+- [ ] New routes that should require auth, do. ⚠ On the backend **there's no SecurityBundle
+      registered**: the seam is the route declaring its credential type and an already-verified principal
+      (ADR-0044/ADR-0048). The detail is checked by `security-audit-backend`; here it's enough that no
+      new route is left undeclared
+- [ ] Operations that require authz (not just being logged in, but having permission on the specific
+      resource) have an explicit check
+- [ ] JWT tokens / session tokens are not logged or returned in responses
 
-- [ ] ⚑ **Declarar un tipo de credencial no es lo mismo que estar protegido.** Comprobar que un `NONE` sea
-      **defendible y acotado por entorno**: hoy `GET /api/doc.json` declara `_authn: 'NONE'` —así que pasa
-      cualquier check de "está declarado"— y **no** tiene gate `when@dev`, de modo que publica toda la
-      superficie de la API, incluido el vocabulario de campos y cada bound de validación, en producción
-      (BL-63). Una ruta `NONE` nueva sin justificación y sin gate de entorno → `fail`.
+- [ ] ⚑ **Declaring a credential type is not the same as being protected.** Check that a `NONE` is
+      **defensible and scoped by environment**: today `GET /api/doc.json` declares `_authn: 'NONE'` —so
+      it passes any "it's declared" check— and has **no** `when@dev` gate, so it publishes the API's
+      entire surface, including the field vocabulary and every validation bound, in production (BL-63).
+      A new `NONE` route with no justification and no environment gate → `fail`.
 
-#### Aislamiento multi-tenant (conceptual)
-- [ ] Endpoints/operaciones nuevas que acceden a datos de un tenant respetan el contexto (verificación formal a nivel stack se hace en backend/frontend; aquí solo conceptual)
-- [ ] IDs de recursos no se confían del cliente sin verificación
-- [ ] Si la tarea es crítica en multi-tenancy: existe test de cross-tenant que intenta acceder a recurso de otro tenant y espera 404/403
+#### Multi-tenant isolation (conceptual)
+- [ ] New endpoints/operations that access a tenant's data respect the context (formal stack-level
+      verification happens in backend/frontend; here it's conceptual only)
+- [ ] Resource IDs are not trusted from the client without verification
+- [ ] If the task is critical for multi-tenancy: there's a cross-tenant test that tries to access
+      another tenant's resource and expects 404/403
 
-#### Dependencias
-Input: output de `composer audit` (backend) o `npm audit` (frontend) provisto por task-runner.
-- [ ] ⚠ **`composer audit` necesita red**: sin ella falla con `Could not resolve host: repo.packagist.org` y
-      no hay caché local de avisos, así que un run offline **no se distingue de uno limpio**. Declararlo.
-- [ ] Sin CVEs HIGH ni CRITICAL **introducidas por esta tarea** — y además **reportar el estado absoluto**:
-      hoy hay 1 HIGH viva (`symfony/http-kernel`) que el filtro por delta nunca dispara, y la regla 1 del repo
-      prohíbe regenerar `composer.lock` sin permiso, así que el remedio no está en manos de esta skill.
-- [ ] MEDIUM / LOW → `warn`. ⚑ Y hay avisos con `severity: null` (hoy uno, `symfony/runtime`): la escalera
-      necesita un brazo para ese caso o se cuelan en silencio.
+#### Dependencies
+Input: output of `composer audit` (backend) or `npm audit` (frontend) provided by task-runner.
+- [ ] ⚠ **`composer audit` needs network access**: without it, it fails with `Could not resolve host:
+      repo.packagist.org` and there's no local advisory cache, so an offline run **can't be told apart**
+      from a clean one. Declare it.
+- [ ] No HIGH or CRITICAL CVEs **introduced by this task** — and also **report the absolute state**:
+      today there's 1 live HIGH (`symfony/http-kernel`) that the delta filter never triggers on, and
+      repo rule 1 forbids regenerating `composer.lock` without permission, so the fix isn't in this
+      skill's hands.
+- [ ] MEDIUM / LOW → `warn`. ⚑ And there are advisories with `severity: null` (today one,
+      `symfony/runtime`): the ladder needs an arm for that case or they slip through silently.
 
-#### Errores y logging
-- [ ] Mensajes de error al usuario no filtran stack traces, paths internos, detalles de infraestructura
-- [ ] 404 vs 403: 403 solo si el usuario sabe del recurso (evitar user enumeration)
+#### Errors and logging
+- [ ] User-facing error messages don't leak stack traces, internal paths, infrastructure details
+- [ ] 404 vs 403: 403 only if the user already knows about the resource (avoid user enumeration)
 
-### Paso 2 — Delegar en security-audit-{stack}
+### Step 2 — Delegate to security-audit-{stack}
 
-Leer `.claude/skills-config.yaml` para determinar stack. Si no existe el fichero, inferir por presencia de `composer.json` (backend) o `package.json` con Vue/Nuxt (frontend).
+Read `.claude/skills-config.yaml` to determine the stack. If the file doesn't exist, infer it from the
+presence of `composer.json` (backend) or a `package.json` with Vue/Nuxt (frontend).
 
-Invocar via Agent tool:
+Invoke via the Agent tool:
 ```
 Agent({
   subagent_type: "general-purpose",
@@ -108,11 +120,13 @@ Agent({
 })
 ```
 
-Consolidar su report bajo sección "## security-audit-{stack}" del report propio. Sus issues se suman a la lista total.
+Consolidate its report under the "## security-audit-{stack}" section of the report. Its issues get added
+to the total list.
 
-### Paso 3 — Delegar en eidas-compliance (si aplica)
+### Step 3 — Delegate to eidas-compliance (if applicable)
 
-Si el diff toca firma o cripto — `src/F5Sign/SignatureExecution/`, `Foundation/Crypto/`, DSS, PAdES, TSA:
+If the diff touches signing or crypto — `src/F5Sign/SignatureExecution/`, `Foundation/Crypto/`, DSS,
+PAdES, TSA:
 ```
 Agent({
   subagent_type: "general-purpose",
@@ -122,20 +136,22 @@ Agent({
 })
 ```
 
-Consolidar bajo "## eidas-compliance". Si devuelve `fail` → esta skill también falla.
+Consolidate under "## eidas-compliance". If it returns `fail` → this skill also fails.
 
-### Paso 4 — Consolidar y devolver
+### Step 4 — Consolidate and return
 
-Si cualquier delegación devolvió `fail` → `status: fail`.
-Si todas `pass` pero hay WARNs → `status: warn`.
-Si todo limpio → `status: pass`.
+If any delegation returned `fail` → `status: fail`.
+If all `pass` but there are WARNs → `status: warn`.
+If everything's clean → `status: pass`.
 
-## Gravedad
+## Severity
 
-- **FAIL:** SQL/command injection detectada conceptualmente, endpoint sin auth cuando debería, cross-tenant leak, secreto hardcoded, PII en logs sin redactar, `security-audit-{stack}` o `eidas-compliance` devuelven fail
-- **WARN:** dependencia con CVE LOW/MEDIUM, mensaje de error algo verboso, y —una sola vez, no por
-  endpoint— que una superficie nueva pediría rate limiting: **el componente no está instalado en el
-  backend**, así que es una carencia de capacidad, no un defecto de la ruta
+- **FAIL:** SQL/command injection detected conceptually, endpoint with no auth when it should have one,
+  cross-tenant leak, hardcoded secret, unredacted PII in logs, `security-audit-{stack}` or
+  `eidas-compliance` returning fail
+- **WARN:** dependency with a LOW/MEDIUM CVE, somewhat verbose error message, and —once only, not per
+  endpoint— that a new surface would call for rate limiting: **the component isn't installed in the
+  backend**, so it's a capability gap, not a defect in the route
 
 ## Report
 
@@ -143,47 +159,48 @@ Si todo limpio → `status: pass`.
 # security-audit — T{id}
 
 **Status:** {PASS|FAIL|WARN}
-**Issues totales:** {B} bloqueantes, {W} warnings
-**Delegaciones:** security-audit-{stack} ({status}), eidas-compliance ({status})
+**Total issues:** {B} blocking, {W} warnings
+**Delegations:** security-audit-{stack} ({status}), eidas-compliance ({status})
 
-## Issues core
-- [{categoría}] {fichero:línea} {mensaje}
+## Core issues
+- [{category}] {file:line} {message}
 
 ## security-audit-{stack}
-{resumen consolidado del report de la skill específica}
+{consolidated summary from the specific skill's report}
 
-## eidas-compliance (si aplica)
-{resumen consolidado}
+## eidas-compliance (if applicable)
+{consolidated summary}
 
-## Categorías revisadas
-- Secretos: OK
+## Categories reviewed
+- Secrets: OK
 - PII: OK
 - Auth/Authz: OK
 - Multi-tenant: OK
-- Dependencias: {N} CVEs (LOW:X, MEDIUM:Y, HIGH:0, CRITICAL:0)
+- Dependencies: {N} CVEs (LOW:X, MEDIUM:Y, HIGH:0, CRITICAL:0)
 ```
 
-## JSON de retorno
+## Return JSON
 
-Última línea:
+Last line:
 ```json
-{"status":"fail","summary":"1 secreto hardcoded + 1 fail en security-audit-backend","issues":[{"severity":"fail","category":"secret-hardcoded","file":"...","message":"..."}],"delegatedTo":["security-audit-backend"]}
+{"status":"fail","summary":"1 hardcoded secret + 1 fail in security-audit-backend","issues":[{"severity":"fail","category":"secret-hardcoded","file":"...","message":"..."}],"delegatedTo":["security-audit-backend"]}
 ```
 
-## Qué NO hace
+## What it does NOT do
 
-- No valida contratos API (contract-check-*)
-- No valida persistencia (doctrine-guard)
-- No ejecuta pentesting ni exploits
-- No audita infraestructura (Docker, k8s, CI)
-- No reescribe código — solo reporta
+- Does not validate API contracts (contract-check-*)
+- Does not validate persistence (doctrine-guard)
+- Does not run pentesting or exploits
+- Does not audit infrastructure (Docker, k8s, CI)
+- Does not rewrite code — only reports
 
-## Protocolo de corrección
+## Correction protocol
 
-Si task-runner reintenta pasando este report a `implement-*`: instrucción "corregir issues bloqueantes sin cambiar el scope". Máx 2 iteraciones automáticas.
+If task-runner retries by passing this report to `implement-*`: instruction "fix blocking issues without
+changing scope". Max 2 automatic iterations.
 
-## Referencias
+## References
 
-- <!-- OFFREPO --> Diseño original (prototipo, superado): `Implementación/Skills de Ejecución de Tareas/common/06 - Security Audit Core.md`
-- security-audit-backend: `.claude/skills/security-audit-backend/SKILL.md` (en repo backend)
-- security-audit-frontend: `.claude/skills/security-audit-frontend/SKILL.md` (en repo frontend)
+- <!-- OFFREPO --> Original design (prototype, superseded): `Implementación/Skills de Ejecución de Tareas/common/06 - Security Audit Core.md`
+- security-audit-backend: `.claude/skills/security-audit-backend/SKILL.md` (in backend repo)
+- security-audit-frontend: `.claude/skills/security-audit-frontend/SKILL.md` (in frontend repo)

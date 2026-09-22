@@ -1,249 +1,253 @@
 ---
 name: implement-backend
-description: 'Implementa una task backend (PHP/Symfony) de docs/tasks/ con TDD dirigido por propiedades, respetando el kernel de dominio, la separación entre BCs (solo Contract/ ajeno) y las reglas de autoría de CLAUDE.md. Para y consulta al usuario antes de tomar cualquier decisión transversal — contradecir un ADR aceptado, abrir una dependencia cross-BC, tocar Kernel/Foundation o editar deptrac/phpstan: redacta el ADR como Proposed y espera aceptación explícita, nunca lo marca Accepted por su cuenta. Lee el .md de la task (lo que ya existe, el alcance y la verificación, localizados por intención y no por número de sección), escribe código + tests al tier que usan sus hermanos, anota endpoints con Nelmio, y produce context-digest.md y plan.md. Solo para repositorios con stack PHP/Symfony. Úsalo con /implement-backend TASK-NNN. Activar con "implementa backend TASK-NNN", "codifica task PHP...", "ejecuta implementación backend de...".'
+description: 'Implements a backend task (PHP/Symfony) from docs/tasks/ with property-driven TDD, respecting the domain kernel, the separation between BCs (only the other''s Contract/) and the authorship rules in CLAUDE.md. Stops and asks the user before making any cross-cutting decision — contradicting an accepted ADR, opening a new cross-BC dependency, touching Kernel/Foundation or editing deptrac/phpstan: it drafts the ADR as Proposed and waits for explicit acceptance, never marking it Accepted on its own. Reads the task''s .md (what already exists, the scope and the verification, located by intent rather than by section number), writes code + tests at the tier used by its siblings, annotates endpoints with Nelmio, and produces context-digest.md and plan.md. Only for repositories with a PHP/Symfony stack. Use it with /implement-backend TASK-NNN. Trigger with "implement backend TASK-NNN", "code PHP task...", "run backend implementation of...".'
 ---
 
 # Implement (backend)
 
-Implementación de una task por TDD dirigido por propiedades.
+Implementation of a task via property-driven TDD.
 
-> **Antes de escribir código, leer las [reglas de autoría de `CLAUDE.md`](../../../CLAUDE.md).** Existen
-> porque el fallo que describe cada una **pasó en este repo, en una rama con `make qa` verde**, y ningún
-> gate las ve. Esta skill las referencia; no las duplica, porque una copia se desincroniza.
+> **Before writing code, read the [CLAUDE.md authorship rules](../../../CLAUDE.md).** They exist
+> because the failure each one describes **happened in this repo, on a branch with `make qa` green**, and no
+> gate sees them. This skill references them; it does not duplicate them, because a copy goes out of sync.
 
-## Invocación
+## Invocation
 
 ```
 /implement-backend TASK-NNN
-/implement-backend {ruta al .md}
+/implement-backend {path to the .md}
 /implement-backend TASK-NNN --amplified-context
 ```
 
-**Sin selección de modelo por `Complejidad`**: ese campo no existe en este formato de task. Hereda el
-modelo de la sesión; escalar solo tras fallo repetido con diagnóstico que lo justifique.
+**No model selection via `Complejidad`**: that field doesn't exist in this task format. It inherits the
+session's model; escalate only after a repeated failure with a diagnosis that justifies it.
 
 ## Inputs
 
-- El `.md` de la task, completo. Tres secciones gobiernan el trabajo: **lo que ya existe** (reusar, no
-  reconstruir), **el alcance** (qué se toca y qué no) y **la verificación** (el listón).
-  ⚠ **Localízalas por intención, no por número.** Medido 2026-08-17 sobre los 21 registros: el alcance está
-  en §3 en 13 de 21 (también en §4 y §6), la verificación en §5 en solo 7 (también §4, §6, §9), y "lo que ya
-  existe" aparece como *What was built*, *What will be built*, *Design grounding*, *Locked decisions* o
-  *The model*. `docs/tasks/README.md` §2 dice explícitamente que los encabezados varían con el trabajo, así
-  que direccionar por `§N` es la lista cerrada que la propia convención prohíbe.
-- Lo que citen sus campos `Builds on` y `Decision record`.
-- Referencias fijas, siempre:
-  - [`CLAUDE.md`](../../../CLAUDE.md) — convenciones + reglas de autoría
-  - [`docs/LOAD-BEARING.md`](../../../docs/LOAD-BEARING.md) — qué parece duplicación y no lo es, más la
-    lista **Never** de cambios ya propuestos y rechazados con su razón
-  - [`docs/adr/`](../../../docs/adr/) — la decisión que gobierna la zona que tocas (regla 7 del repo)
-  - Los docblocks de `src/F5Sign/Kernel/` de las categorías que uses: son la definición canónica
-    (`grep -rnE "Kernel (sub-)?category" src/F5Sign/Kernel/` para enumerarlas)
-  - [`tests/README.md`](../../../tests/README.md) — tiers, layout y convención `P-§`
+- The task's `.md`, in full. Three sections govern the work: **what already exists** (reuse, don't
+  rebuild), **the scope** (what is touched and what isn't) and **the verification** (the bar).
+  ⚠ **Locate them by intent, not by number.** Measured 2026-08-17 across the 21 records: the scope is
+  in §3 in 13 of 21 (also in §4 and §6), the verification in §5 in only 7 (also §4, §6, §9), and "what
+  already exists" appears as *What was built*, *What will be built*, *Design grounding*, *Locked decisions*
+  or *The model*. `docs/tasks/README.md` §2 explicitly says the headings vary with the work, so
+  addressing by `§N` is the closed list that the convention itself forbids.
+- Whatever its `Builds on` and `Decision record` fields cite.
+- Fixed references, always:
+  - [`CLAUDE.md`](../../../CLAUDE.md) — conventions + authorship rules
+  - [`docs/LOAD-BEARING.md`](../../../docs/LOAD-BEARING.md) — what looks like duplication and isn't, plus
+    the **Never** list of changes already proposed and rejected, with their reason
+  - [`docs/adr/`](../../../docs/adr/) — the decision that governs the area you touch (repo rule 7)
+  - The docblocks of `src/F5Sign/Kernel/` for the categories you use: they are the canonical definition
+    (`grep -rnE "Kernel (sub-)?category" src/F5Sign/Kernel/` to enumerate them)
+  - [`tests/README.md`](../../../tests/README.md) — tiers, layout and the `P-§` convention
 
 ## Outputs
 
-- Código + tests commiteados en la rama de la task.
-- `var/task-runner/TASK-NNN/plan.md` y `context-digest.md`.
-- JSON final: `{"status":"pass|fail","summary":"...","filesChanged":N,"testsAdded":N,"attempts":N,"diagnosis":"..."}`
+- Code + tests committed on the task's branch.
+- `var/task-runner/TASK-NNN/plan.md` and `context-digest.md`.
+- Final JSON: `{"status":"pass|fail","summary":"...","filesChanged":N,"testsAdded":N,"attempts":N,"diagnosis":"..."}`
 
-## Ejecución
+## Execution
 
-### Paso 1 — Contexto
+### Step 1 — Context
 
-1. Leer el `.md` completo.
-2. Leer lo que citan §2, `Builds on` y `Decision record`.
-3. Leer las referencias fijas de arriba.
-4. ⚑ **Si vas a escribir una clase modelada sobre otra existente: `ls` el directorio y lee TODOS los
-   hermanos**, no el primero que encaje. Donde dos hermanos difieren, la diferencia es un bug en uno o una
-   decisión — averigua cuál antes de copiar (regla de autoría 3; aquí un controlador nuevo copió al hermano
-   equivocado y reintrodujo un 500 ya arreglado y documentado).
+1. Read the full `.md`.
+2. Read what §2, `Builds on` and `Decision record` cite.
+3. Read the fixed references above.
+4. ⚑ **If you're going to write a class modeled on an existing one: `ls` the directory and read ALL the
+   siblings**, not just the first one that fits. Where two siblings differ, the difference is a bug in one
+   or a decision — figure out which before copying (authorship rule 3; here a new controller copied the
+   wrong sibling and reintroduced a 500 that had already been fixed and documented).
 
-### Paso 2 — Plan
+### Step 2 — Plan
 
 `var/task-runner/TASK-NNN/plan.md`:
 
 ```markdown
 # Plan — TASK-NNN
 
-## Orden de ejecución (TDD)
-1. [TEST] tests/F5Sign/<BC>/<tier>/...Test::<nombre>  — propiedad: {P-§ o la afirmación de §5}
+## Execution order (TDD)
+1. [TEST] tests/F5Sign/<BC>/<tier>/...Test::<name>  — property: {P-§ or the claim in §5}
 2. [CODE] src/F5Sign/<BC>/...
 ...
 
-## Harness por propiedad
-| Propiedad | Tier | ¿El harness la alcanza? |
+## Harness per property
+| Property | Tier | Does the harness reach it? |
 |---|---|---|
 
-## Decisiones tomadas
-## Desviaciones del .md
-## Status final
+## Decisions made
+## Deviations from the .md
+## Final status
 ```
 
-**La tabla "Harness por propiedad" no es opcional.** Es donde se decide, *antes* de escribir el test, si el
-tier elegido puede ver la propiedad: `Integration/` corre una conexión bajo rollback DAMA (no distingue
-lock de no-lock), `async_events` es `in-memory://` (nada se reentrega), Infection solo mira `src/F5Sign` y
-no ve código sin llamantes. Una propiedad cuyo harness no la alcanza necesita otro tier o una probe
-([`ProbesRowLocks`](../../../tests/F5Sign/Support/ProbesRowLocks.php) ya existe).
+**The "Harness per property" table is not optional.** It's where it's decided, *before* writing the test,
+whether the chosen tier can see the property: `Integration/` runs one connection under DAMA rollback (it
+cannot distinguish lock from no-lock), `async_events` is `in-memory://` (nothing gets redelivered),
+Infection only looks at `src/F5Sign` and doesn't see code with no callers. A property whose harness can't
+reach it needs another tier or a probe
+([`ProbesRowLocks`](../../../tests/F5Sign/Support/ProbesRowLocks.php) already exists).
 
-**Gate de plan:** si al planificar aparece ambigüedad no resoluble con el contexto disponible → devolver
-`status: fail` con `diagnosis` explícito (`"spec contradictorio"` / `"contexto insuficiente"`) y **no
-implementar nada**.
+**Plan gate:** if ambiguity that can't be resolved with the available context shows up while planning →
+return `status: fail` with an explicit `diagnosis` (`"spec contradictorio"` / `"contexto insuficiente"`)
+and **implement nothing**.
 
-### Paso 2b — Gate de decisión: un ADR no se salta, y tampoco se acuña solo
+### Step 2b — Decision gate: an ADR is not skipped, and it is not coined alone either
 
-⛔ **Para y consulta al usuario si el trabajo hace cualquiera de estas cosas.** No es una lista de casos
-sospechosos: es la definición operativa de "decisión transversal" en este repo (regla 7).
+⛔ **Stop and ask the user if the work does any of these things.** This is not a list of suspicious
+cases: it is the operative definition of "cross-cutting decision" in this repo (rule 7).
 
-| Disparador | Por qué es decisión |
+| Trigger | Why it is a decision |
 |---|---|
-| Contradice un ADR **aceptado** | Contradecirlo es un cambio de ADR, nunca una edición silenciosa |
-| Abre una dependencia **cross-BC** nueva | El acceso entre BCs es solo por `Contract/`; ampliarlo cambia el mapa |
-| Cambia un contrato de `src/F5Sign/Kernel/` o `src/F5Sign/Foundation/` | Es substrato: lo hereda todo |
-| Edita el ruleset o las capas de [`deptrac.yaml`](../../../deptrac.yaml), `phpstan.dist.neon`, o añade al `phpstan-baseline.neon` | **Estás editando la regla que te juzga** |
-| Introduce un patrón de realización nuevo (forma de use case, adapter, reactor) | Lo copiará el siguiente |
+| Contradicts an **accepted** ADR | Contradicting it is an ADR change, never a silent edit |
+| Opens a new **cross-BC** dependency | Access between BCs is only through `Contract/`; extending it changes the map |
+| Changes a contract of `src/F5Sign/Kernel/` or `src/F5Sign/Foundation/` | It's substrate: everything inherits it |
+| Edits the ruleset or layers of [`deptrac.yaml`](../../../deptrac.yaml), `phpstan.dist.neon`, or adds to `phpstan-baseline.neon` | **You are editing the rule that judges you** |
+| Introduces a new realization pattern (use case shape, adapter, reactor) | The next one will copy it |
 
-**Qué hacer, en este orden:**
+**What to do, in this order:**
 
-1. **Parar antes de escribir el código que la decisión gobierna.** No "implemento y luego documento": el
-   ADR es la entrada del código, no su acta.
-2. **Redactar el ADR como `Proposed`**, con la plantilla de secciones de
-   [`docs/adr/AUTHORING.md`](../../../docs/adr/AUTHORING.md) — incluidas `Consequences` con sus tres
-   sublistas (**Risks no es opcional**) y `Counterpoint` si hay alternativa creíble. El id se acuña con el
-   sweep de `AUTHORING.md`, **corrido en ese momento y desde la raíz del repo**.
-3. **Presentárselo al usuario y esperar aceptación explícita.** Qué se decide, qué alternativa se descarta
-   y **qué prohíbe a partir de ahora**. Silencio no es aceptación; `status: fail` con
-   `diagnosis: "awaiting-adr-acceptance"` y para ahí.
-4. ⛔ **Nunca escribas `Accepted` por tu cuenta.** En este set *Accepted* significa **ejercitado**, no
-   acordado ([`AUTHORING.md`](../../../docs/adr/AUTHORING.md) § status): un ADR que nadie ha ejercitado
-   todavía se queda `Proposed`, y ponerlo `Accepted` falsifica el estado del repo.
-5. **Si el usuario lo rechaza**, la decisión no es tuya: recorta el scope o cambia de enfoque y vuelve al
-   gate de plan. No lo implementes "de forma más pequeña" para que no haga falta el ADR.
-6. **Cuando el ADR aterrice, aterriza completo — son CINCO sitios**, y `AUTHORING.md` § *Maintenance when
-   adding an ADR* los enumera: (1) fila de índice, (2) grafo de relaciones y (3) fila de crosswalk en
-   [`docs/adr/README.md`](../../../docs/adr/README.md), más el campo `Crosswalk` de la cabecera y las
-   secciones que pide la plantilla; (4) **hacer el ADR alcanzable desde el código que gobierna** con
-   referencias `(ADR-NNNN)` en los docblocks —*"only the pair makes the decision discoverable in both
-   directions"*—; y (5) **reconciliar el modelo de dominio afectado** en `docs/ddd/` y su fila de estado en
-   `docs/ddd/README.md`. Los dos últimos son los que AUTHORING llama *"each conditional but each easy to
-   forget"*, y son justo los que esta lista omitía.
+1. **Stop before writing the code the decision governs.** Not "implement first, document later": the
+   ADR is the input to the code, not its record.
+2. **Draft the ADR as `Proposed`**, with the section template from
+   [`docs/adr/AUTHORING.md`](../../../docs/adr/AUTHORING.md) — including `Consequences` with its three
+   sublists (**Risks is not optional**) and `Counterpoint` if there's a credible alternative. The id is
+   coined with the `AUTHORING.md` sweep, **run at that moment and from the repo root**.
+3. **Present it to the user and wait for explicit acceptance.** What is decided, what alternative is
+   discarded, and **what it forbids from now on**. Silence is not acceptance; `status: fail` with
+   `diagnosis: "awaiting-adr-acceptance"` and stop there.
+4. ⛔ **Never write `Accepted` on your own.** In this set *Accepted* means **exercised**, not
+   agreed ([`AUTHORING.md`](../../../docs/adr/AUTHORING.md) § status): an ADR that no one has exercised
+   yet stays `Proposed`, and setting it to `Accepted` falsifies the state of the repo.
+5. **If the user rejects it**, the decision is not yours: trim the scope or change approach and go back
+   to the plan gate. Don't implement it "in a smaller way" so the ADR isn't needed.
+6. **When the ADR lands, it lands complete — that's FIVE places**, and `AUTHORING.md` § *Maintenance when
+   adding an ADR* lists them: (1) index row, (2) relationship graph and (3) crosswalk row in
+   [`docs/adr/README.md`](../../../docs/adr/README.md), plus the `Crosswalk` field in the header and the
+   sections the template requires; (4) **making the ADR reachable from the code it governs** with
+   `(ADR-NNNN)` references in the docblocks —*"only the pair makes the decision discoverable in both
+   directions"*—; and (5) **reconciling the affected domain model** in `docs/ddd/` and its status row in
+   `docs/ddd/README.md`. The last two are what AUTHORING calls *"each conditional but each easy to
+   forget"*, and they are exactly the ones this list used to omit.
 
-⚑ **El caso que más veces se cuela: ampliar la allowlist para poner el gate verde.** Si `composer arch`
-falla, la respuesta **no** es añadir la capa a la lista de dependencias permitidas — esa edición *es* la
-decisión, y silencia la única cosa que la vigilaba. Igual con una entrada nueva en
-`phpstan-baseline.neon`: cada entrada de ese fichero es un hallazgo de diseño con su *por qué* escrito, no
-un supresor.
+⚑ **The case that slips through most often: extending the allowlist to make the gate green.** If
+`composer arch` fails, the answer is **not** to add the layer to the list of allowed dependencies — that
+edit *is* the decision, and it silences the one thing that was watching it. Same with a new entry in
+`phpstan-baseline.neon`: every entry in that file is a design finding with its *why* written down, not
+a suppressor.
 
-### Paso 3 — Bucle TDD
+### Step 3 — TDD loop
 
-Por cada propiedad de la sección de verificación, en orden:
+For each property in the verification section, in order:
 
-1. **Escribir el test** en el tier que usan sus hermanos (`ls` el directorio de tests del BC; ser el único
-   `*UseCase.php` sin `*UseCaseTest.php` al lado es la señal, y ha acertado siempre). Debe llevar:
-   - `#[CoversClass]` o `#[CoversNothing]` — `phpunit.dist.xml` tiene `requireCoverageMetadata="true"`
-   - `#[UsesClass]` para colaboradores, **incluidas las excepciones que el test asserta**
-   - La cita `P-§` en el docblock si la propiedad está catalogada (`tests/README.md`)
-2. **Ejecutarlo y verlo fallar por la razón correcta** (no por sintaxis ni por clase inexistente):
+1. **Write the test** in the tier used by its siblings (`ls` the BC's test directory; being the only
+   `*UseCase.php` with no `*UseCaseTest.php` next to it is the signal, and it has always been right). It
+   must carry:
+   - `#[CoversClass]` or `#[CoversNothing]` — `phpunit.dist.xml` has `requireCoverageMetadata="true"`
+   - `#[UsesClass]` for collaborators, **including the exceptions the test asserts**
+   - The `P-§` citation in the docblock if the property is catalogued (`tests/README.md`)
+2. **Run it and watch it fail for the right reason** (not a syntax error, not a missing class):
    ```
    docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html \
      f5sign/backend:dev sh -c 'vendor/bin/phpunit --filter=<Clase>::<metodo>'
    ```
-   (o `make -C ../f5sign-infra test` si trabajas en el checkout que monta el stack — ver
-   `task-validate-backend`, precondición.)
-3. **Escribir el código de producción mínimo.**
-4. **Verde.**
-5. ⚑ **Sabotear la guarda y ver el test caer por el motivo correcto; restaurar.** Es el paso que atrapa
-   los tests que no pueden fallar, y sin él la propiedad no está probada — está afirmada.
-6. Suite del módulo, para regresiones.
+   (or `make -C ../f5sign-infra test` if you're working in the checkout that mounts the stack — see
+   `task-validate-backend`, precondition.)
+3. **Write the minimal production code.**
+4. **Green.**
+5. ⚑ **Sabotage the guard and watch the test fail for the right reason; restore it.** This is the step
+   that catches tests that can't fail, and without it the property isn't proven — it's just asserted.
+6. Module suite, for regressions.
 
-**Política de reintentos:** 3 iteraciones de editar-probar por test. Después, diagnóstico:
-`"test mal escrito"` → fail; `"spec contradictorio"` / `"contexto insuficiente"` → fail **sin escalar**;
-`"excede el modelo"` → fail con `diagnosis: "escalate"`.
+**Retry policy:** 3 edit-test iterations per test. After that, diagnosis:
+`"poorly written test"` → fail; `"spec contradictorio"` / `"contexto insuficiente"` → fail **without
+escalating**; `"exceeds the model"` → fail with `diagnosis: "escalate"`.
 
-### Paso 4 — OpenAPI (si tocas `UI/Http/` o `config/routes/`)
+### Step 4 — OpenAPI (if you touch `UI/Http/` or `config/routes/`)
 
-- `#[OA\Response]` por cada código HTTP **alcanzable**, `#[OA\RequestBody]`, DTOs con `#[OA\Property]`
-  tipadas, security scheme si la ruta está protegida.
-- ⚠ **Los strings de `#[OA\*]` se emiten literalmente al spec que ratifica el equipo de frontend.** No son
-  comentarios internos: uno de ellos llegó a decir a los clientes que enviaran un valor que el endpoint no
-  acepta. Entran en el barrido de la regla 1.
-- Verificar: `make -C ../f5sign-infra sf cmd="nelmio:apidoc:dump --format=json"` completa sin error.
+- `#[OA\Response]` for every **reachable** HTTP code, `#[OA\RequestBody]`, DTOs with typed
+  `#[OA\Property]`, security scheme if the route is protected.
+- ⚠ **The strings in `#[OA\*]` are emitted literally into the spec the frontend team ratifies.** They
+  aren't internal comments: one of them ended up telling clients to send a value the endpoint doesn't
+  accept. They're covered by the rule 1 sweep.
+- Verify: `make -C ../f5sign-infra sf cmd="nelmio:apidoc:dump --format=json"` completes without error.
 
-### Paso 5 — Reglas no negociables
+### Step 5 — Non-negotiable rules
 
-- **El dominio no importa Symfony ni Doctrine.** Lo vigila Deptrac (`composer arch`) y las reglas PHPStan
-  de colocación; si lo ves antes que ellas, rehacer.
-- **Entre BCs solo se ve el `Contract/` ajeno.** `deptrac.yaml` declara **38** capas (37 con entrada en `ruleset` más `Vendor`) y lo dice explícitamente:
-  `EnvelopeApplication` puede ver `SessionContract`, `SignatureExecutionContract`,
-  `IdentityAccessContract`… y **ningún `Domain` ni `Infrastructure` de otro BC**. `Kernel` depende de nada
-  (`Kernel: []`). Si necesitas un dato que solo vive en el `Domain` de otro BC, la respuesta es un puerto
-  de lectura en su `Contract/` (ADR-0008), no un import — y **eso es Paso 2b**, no una decisión de mientras
-  implementas.
-- ⚑ **Notification es un BC de soporte: nada puede depender de él** (ADR-0037, categoría (c)). El gate **sí**
-  lo caza: el `ruleset` de deptrac es una **allowlist positiva** y el repo corre con `Uncovered 0`, así que
-  una clase que dependa de una capa no permitida da `DependsOnDisallowedLayer`. Lo que **no** puede ponerse
-  rojo es **añadir la entrada a la allowlist**: eso no viola nada, simplemente deja de vigilar. Así que la
-  pregunta al revisar no es *"¿pasa deptrac?"* sino *"¿toca este diff `deptrac.yaml`?"* — y si lo toca, es
-  el Paso 2b, no una decisión de mientras implementas. Corregido 2026-08-17: esta viñeta decía que el gate
-  era ciego a la dependencia, que es la dirección peligrosa de equivocarse.
-- **Solo los aggregate roots tienen repositorio.** Las entidades subordinadas se modifican por su root.
-- **Comandos por el bus; queries por llamada directa.** ADR-0008: **no hay QueryBus**, y un `QueryHandler`
-  se realiza con un `handle(Query): R` directo — su §Counterpoint rechaza expresamente meter un adaptador en
-  medio. Así que un controlador **sí** inyecta un query handler (tres lo hacen hoy) y eso es conforme; lo que
-  no debe hacer es inyectar un *command* handler saltándose el bus, porque el bus es donde viven la
-  transacción, el tenant y el issuer (ADR-0010).
-- **VOs: la forma depende del tipo, y en bloque es incorrecta** (ADR-0005). Un **wrapper** (un solo campo)
-  es `final readonly`; un **composite** (varios campos) es `final` y **no** readonly — 11 de los 22 del árbol
-  lo son, con constructor público. El modelo a imitar es
-  [`Settings`](../../../src/F5Sign/Envelope/Domain/ValueObject/Settings.php), que lo dice en su propio
-  docblock: *"final (not readonly) per ADR-0005"*. Exigir `final readonly` a todos reintroduce el defecto
-  que ADR-0005 existe para registrar. Named constructors sí, en los dos casos.
-- **Eventos de dominio en pasado** — ADR-0011, ilustrado con eventos que este repo tiene de verdad:
-  `EnvelopeCreated`, `EnvelopeSent`, `EnvelopeCompleted`, `StepCompleted`. ⚠ Y la forma superficial es la
-  mitad **cosmética**: ADR-0011 dice que lo load-bearing es la **partición de propiedad** (el prefijo
-  pertenece a un BC) y el **espejo**, y que el lint de prefijo↔BC es *candidate rule, not yet written*. Ojo
-  con leerlo al pie de la letra: `EnvelopeReadyToSeal` no es un verbo en pasado y **es conforme** (nombre de
-  transición a estado objetivo, §4), y ADR-0011 está en `Proposed`, así que por la regla 7 del repo aún no
-  vincula.
-- **Persistencia solo DBAL.** El ORM se retiró (ADR-0018): `doctrine/orm` no es dependencia y no hay
-  ningún `*.orm.xml`. ⛔ **No escribas un docblock que justifique nada con hidratación/reflexión del ORM,
-  ni con el outbox, ni con `AuditCommandInterface`**: son mecanismos ya retirados, y la regla de autoría 2
-  existe porque volvieron como *razón* en prosa después de desaparecer del árbol.
-- **Un cambio de esquema es una migración**, y si la migración escribe filas que el dominio luego lee,
-  aplica la regla de autoría 6 (enumerar los estados del agregado sobre los que cae la fila; preferir un
-  predicado que enuncie la propiedad — `sent_at IS NOT NULL` — a uno que enumere los estados de hoy).
+- **The domain doesn't import Symfony or Doctrine.** Deptrac (`composer arch`) and the PHPStan placement
+  rules watch this; if you spot it before they do, redo it.
+- **Between BCs, only the other's `Contract/` is visible.** `deptrac.yaml` declares **38** layers (37 with
+  an entry in `ruleset` plus `Vendor`) and says so explicitly: `EnvelopeApplication` can see
+  `SessionContract`, `SignatureExecutionContract`, `IdentityAccessContract`… and **no other BC's `Domain`
+  or `Infrastructure`**. `Kernel` depends on nothing (`Kernel: []`). If you need data that only lives in
+  another BC's `Domain`, the answer is a read port in its `Contract/` (ADR-0008), not an import — and
+  **that's Step 2b**, not a decision made while implementing.
+- ⚑ **Notification is a support BC: nothing can depend on it** (ADR-0037, category (c)). The gate **does**
+  catch this: deptrac's `ruleset` is a **positive allowlist** and the repo runs with `Uncovered 0`, so a
+  class that depends on a disallowed layer produces `DependsOnDisallowedLayer`. What it **can't** catch
+  going red is **adding the entry to the allowlist**: that doesn't violate anything, it just stops
+  watching. So the question when reviewing isn't *"does deptrac pass?"* but *"does this diff touch
+  `deptrac.yaml`?"* — and if it does, that's Step 2b, not a decision made while implementing. Corrected
+  2026-08-17: this bullet used to say the gate was blind to the dependency, which is the dangerous
+  direction to be wrong in.
+- **Only aggregate roots have a repository.** Subordinate entities are modified through their root.
+- **Commands through the bus; queries via direct call.** ADR-0008: **there is no QueryBus**, and a
+  `QueryHandler` is realized with a direct `handle(Query): R` — its §Counterpoint expressly rejects
+  putting an adapter in between. So a controller **does** inject a query handler (three do today) and
+  that's conformant; what it must not do is inject a *command* handler bypassing the bus, because the bus
+  is where the transaction, the tenant and the issuer live (ADR-0010).
+- **VOs: the shape depends on the type, and a blanket rule is wrong** (ADR-0005). A **wrapper** (a single
+  field) is `final readonly`; a **composite** (several fields) is `final` and **not** readonly — 11 of the
+  22 in the tree are, with a public constructor. The model to imitate is
+  [`Settings`](../../../src/F5Sign/Envelope/Domain/ValueObject/Settings.php), which says so in its own
+  docblock: *"final (not readonly) per ADR-0005"*. Requiring `final readonly` across the board reintroduces
+  the defect ADR-0005 exists to record. Named constructors yes, in both cases.
+- **Domain events in the past tense** — ADR-0011, illustrated with events this repo really has:
+  `EnvelopeCreated`, `EnvelopeSent`, `EnvelopeCompleted`, `StepCompleted`. ⚠ And the surface form is only
+  half **cosmetic**: ADR-0011 says what's load-bearing is the **ownership partition** (the prefix belongs
+  to a BC) and the **mirror**, and that the prefix↔BC lint is *candidate rule, not yet written*. Careful
+  about reading it literally: `EnvelopeReadyToSeal` is not a past-tense verb and **is conformant** (name of
+  a transition to a target state, §4), and ADR-0011 is `Proposed`, so under repo rule 7 it does not bind
+  yet.
+- **Persistence is DBAL only.** The ORM was retired (ADR-0018): `doctrine/orm` is not a dependency and
+  there is no `*.orm.xml` anywhere. ⛔ **Don't write a docblock that justifies anything with ORM
+  hydration/reflection, the outbox, or `AuditCommandInterface`**: these are already-retired mechanisms, and
+  authorship rule 2 exists because they came back as a *reason* in prose after disappearing from the tree.
+- **A schema change is a migration**, and if the migration writes rows the domain later reads,
+  authorship rule 6 applies (enumerate the aggregate states the row falls under; prefer a predicate that
+  states the property — `sent_at IS NOT NULL` — over one that enumerates today's states).
 
-### Paso 6 — Commits
+### Step 6 — Commits
 
-**Sin política de commit único.** Este repo integra PRs de varios commits y merges de `develop`; un
-`--amend` sobre algo ya pusheado obliga a `--force-with-lease` sin ganar nada. Commits pequeños y
-coherentes, cada uno con mensaje que diga *por qué*, y `git add` de ficheros concretos (nunca `git add .`).
+**No single-commit policy.** This repo integrates multi-commit PRs and merges from `develop`; an
+`--amend` on something already pushed forces `--force-with-lease` for no gain. Small, coherent commits,
+each with a message that says *why*, and `git add` of specific files (never `git add .`).
 
-Antes del último commit:
+Before the last commit:
 
-1. `git status` no debe traer nada que el alcance de la task declare **Out**.
-2. Si el cambio re-cortó, renombró o re-gateó un concepto: barrido de la regla 1, en un comando —
-   `rg -n '<término retirado>' src tests migrations docs config CLAUDE.md`. **El diff no es la superficie
-   de búsqueda**: un fichero que aún necesita la edición aparece con diff vacío. Y `CLAUDE.md` está en el
-   barrido: es la única superficie que no se queda obsoleta sino que empieza a **instruir mal**.
-3. Si la task descarga un deferral de un ADR, o hace cierto algo que un ADR daba por pendiente, el
-   `Status` / `Enforced by` / `Realized in` de ese ADR van **en este changeset** (regla de autoría 7).
+1. `git status` must not bring in anything the task's scope declares **Out**.
+2. If the change re-scoped, renamed or re-gated a concept: rule 1 sweep, in one command —
+   `rg -n '<retired-term>' src tests migrations docs config CLAUDE.md`. **The diff is not the search
+   surface**: a file that still needs the edit shows up with an empty diff. And `CLAUDE.md` is part of the
+   sweep: it's the one surface that doesn't just go stale but starts **giving bad instructions**.
+3. If the task discharges an ADR deferral, or makes something an ADR had marked pending come true, that
+   ADR's `Status` / `Enforced by` / `Realized in` go **in this changeset** (authorship rule 7).
 
-### Paso 7 — `context-digest.md`
+### Step 7 — `context-digest.md`
 
-≤150 líneas: qué se implementó · reglas de negocio aplicadas · modelo de datos tocado · contratos
-afectados (API y eventos) · invariantes preservadas · decisiones tomadas y por qué · ADRs vinculantes ·
-qué queda fuera (con id de task si existe).
+≤150 lines: what was implemented · business rules applied · data model touched · contracts
+affected (API and events) · invariants preserved · decisions made and why · binding ADRs ·
+what's left out (with task id if it exists).
 
-### Paso 8 — `plan.md § Status final` y JSON
+### Step 8 — `plan.md § Final status` and JSON
 
-Tests nuevos y en verde, sabotajes hechos, suite del módulo, ficheros modificados, desviaciones. Última
-línea de la respuesta: el JSON.
+New tests and green, sabotages performed, module suite, files modified, deviations. Last
+line of the response: the JSON.
 
-## Qué NO hace
+## What it does NOT do
 
-- No audita seguridad, compliance ni performance.
-- No toca documentación fuera del código (eso es `docs-sync`), salvo el OpenAPI inline de Nelmio y las
-  correcciones de prosa que la regla 1 obliga a hacer en el mismo changeset.
-- No abre PR (`pr-ready`) ni actualiza el `Status` de la task (`task-close`).
-- No explora más allá de lo que la task cita: si falta contexto, `status: fail` con diagnóstico.
+- Doesn't audit security, compliance or performance.
+- Doesn't touch documentation outside the code (that's `docs-sync`), except Nelmio's inline OpenAPI and
+  the prose corrections rule 1 requires in the same changeset.
+- Doesn't open a PR (`pr-ready`) or update the task's `Status` (`task-close`).
+- Doesn't explore beyond what the task cites: if context is missing, `status: fail` with a diagnosis.
+</content>

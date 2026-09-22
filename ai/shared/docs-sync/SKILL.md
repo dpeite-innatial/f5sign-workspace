@@ -1,13 +1,13 @@
 ---
 name: docs-sync
-description: 'Actualiza documentación que vive fuera del código tras una tarea: AsyncAPI, ADRs (como borrador), CHANGELOG, .env.example, runbooks de workers, READMEs de módulo. NO toca OpenAPI (Nelmio lo cubre inline). Condicional por tags adr/config/breaking/event/worker/new-module. Úsalo con /docs-sync T{id}. Activar con "sincronizar docs", "actualizar changelog", "crear ADR", "actualizar AsyncAPI", "docs externas de tarea".'
+description: 'Updates documentation that lives outside the code after a task: AsyncAPI, ADRs (as draft), CHANGELOG, .env.example, worker runbooks, module READMEs. Does NOT touch OpenAPI (Nelmio covers it inline). Conditional on the adr/config/breaking/event/worker/new-module tags. Use it with /docs-sync T{id}. Trigger with "sync docs", "update changelog", "create ADR", "update AsyncAPI", "external docs for task".'
 ---
 
 # Docs Sync
 
-Actualización de documentación externa. No es gate duro; fallos emiten warnings.
+External documentation update. Not a hard gate; failures emit warnings.
 
-## Invocación
+## Invocation
 
 ```
 /docs-sync T{id}
@@ -17,10 +17,11 @@ Actualización de documentación externa. No es gate duro; fallos emiten warning
 
 - `var/task-runner/T{id}/changes.diff`
 - `var/task-runner/T{id}/context-digest.md`
-- `var/task-runner/T{id}/contract-check.report.md` (si tag `event`, para saber qué eventos sincronizar en AsyncAPI)
-- `.md` de la tarea
+- `var/task-runner/T{id}/contract-check.report.md` (if tag `event`, to know which events to sync in
+  AsyncAPI)
+- The task's `.md`
 
-Del repo (leer si existen):
+From the repo (read if they exist):
 - `docs/asyncapi/*.yaml`
 - `docs/adr/*.md`
 - `CHANGELOG.md`
@@ -30,134 +31,141 @@ Del repo (leer si existen):
 
 ## Outputs
 
-- Ficheros modificados en el repo (amend al commit existente)
+- Files modified in the repo (amend to the existing commit)
 - `var/task-runner/T{id}/docs-sync.report.md`
 - JSON:
   ```json
   {"status":"pass|warn","summary":"...","filesUpdated":[...],"tagMismatches":[...]}
   ```
 
-## Selección de modelo
+## Model selection
 
-Esta skill puede ejecutarse con **Haiku** (default, para trabajo mecánico) o **Sonnet** (cuando redacta ADR).
+This skill can run with **Haiku** (default, for mechanical work) or **Sonnet** (when drafting an ADR).
 
-Si la tarea tiene tag `adr`: task-runner debe invocar con model=sonnet. Para otros tags: Haiku es suficiente.
+If the task has tag `adr`: task-runner must invoke it with model=sonnet. For other tags: Haiku is
+enough.
 
-## Ejecución
+## Execution
 
-Según tags del `.md`, ejecutar las subsecciones correspondientes. Al final, detectar tag mismatches.
+Based on the `.md`'s tags, run the corresponding subsections. At the end, detect tag mismatches.
 
-### Tag `adr` (requiere Sonnet)
+### Tag `adr` (requires Sonnet)
 
-- Localizar `docs/adr/` (crearlo si no existe)
-- Determinar próximo número: mayor NNNN existente + 1
-- Título kebab-case derivado del título de la tarea o de la decisión principal en `context-digest.md § Decisiones tomadas`
-- Crear `docs/adr/NNNN-titulo-kebab-case.md`:
+- Locate `docs/adr/` (create it if it doesn't exist)
+- Determine the next number: highest existing NNNN + 1
+- Kebab-case title derived from the task's title or from the main decision in
+  `context-digest.md § Decisions made`
+- Create `docs/adr/NNNN-title-kebab-case.md`:
 
 ```markdown
-# ADR NNNN — {Título}
+# ADR NNNN — {Title}
 
 Status: draft
-Date: {fecha actual}
+Date: {current date}
 Origin: T{id}
 
 ## Context
-{extraído de context-digest.md § Reglas de negocio y §/Decisiones}
+{extracted from context-digest.md § Business rules and §/Decisions}
 
 ## Decision
-{extraído literalmente o parafraseado con precisión}
+{extracted literally or paraphrased precisely}
 
 ## Consequences
-{positivas y negativas, inferidas del contexto}
+{positive and negative, inferred from the context}
 
 ## Alternatives considered
-{si se mencionan; si no, sección vacía o "No documentadas"}
+{if mentioned; if not, empty section or "Not documented"}
 ```
 
-**Status inicial `draft`.** El humano lo promueve a `accepted` en un commit manual posterior.
+**Initial status `draft`.** A human promotes it to `accepted` in a later manual commit.
 
-- Añadir entrada al índice `docs/adr/README.md` si existe.
+- Add an entry to the `docs/adr/README.md` index if it exists.
 
 ### Tag `config`
 
-- Detectar env vars nuevas/modificadas en el diff:
-  - Grep en ficheros PHP por `$_ENV`, `$_SERVER`, `getenv(`, `env(`
-  - Grep en `config/packages/*.yaml` y `config/services.yaml` por `%env(...)%`
-- Para cada var nueva no presente en `.env.example`:
-  - Añadir: `VAR_NAME=placeholder-or-default`
-  - Añadir comentario encima explicando qué es (de una línea)
-  - Si es secreta: placeholder tipo `CHANGE_ME` o `your-secret-here`
-- Si existe `docs/configuracion.md` o equivalente: actualizar si hay sección correspondiente
+- Detect new/modified env vars in the diff:
+  - Grep PHP files for `$_ENV`, `$_SERVER`, `getenv(`, `env(`
+  - Grep `config/packages/*.yaml` and `config/services.yaml` for `%env(...)%`
+- For each new var not present in `.env.example`:
+  - Add: `VAR_NAME=placeholder-or-default`
+  - Add a one-line comment above explaining what it is
+  - If it's secret: placeholder like `CHANGE_ME` or `your-secret-here`
+- If `docs/configuracion.md` or equivalent exists: update it if there's a corresponding section
 
 ### Tag `breaking`
 
-- Añadir entrada en `CHANGELOG.md` bajo `## [Unreleased]` → `### Breaking`:
-  - Formato: `- **{área}**: {qué cambia} ({cómo migrar})`
-  - Si afecta API pública: incluir ejemplo antes/después en bloque de código
+- Add an entry to `CHANGELOG.md` under `## [Unreleased]` → `### Breaking`:
+  - Format: `- **{area}**: {what changes} ({how to migrate})`
+  - If it affects the public API: include a before/after example in a code block
 
-Si `CHANGELOG.md` no existe: crear con estructura keepachangelog.com y añadir la entrada.
+If `CHANGELOG.md` doesn't exist: create it with the keepachangelog.com structure and add the entry.
 
 ### Tag `event`
 
-- Revisar `docs/asyncapi/*.yaml` (puede haber varios ficheros por bounded context)
-- Para cada evento nuevo/modificado (extraído de `context-digest.md § Eventos de dominio / Emite`):
-  - Añadir/actualizar `components.schemas.{EventName}` con payload schema 1:1 con propiedades del evento PHP (tipos Jakarta-style: `type: string, format: uuid`, etc.)
-  - Añadir/actualizar `channels.{module}.{event-slug}` con `subscribe` u `operation`
-  - Si el evento hace referencia a queue/topic específico (Messenger config), reflejarlo en el channel binding
+- Review `docs/asyncapi/*.yaml` (there may be several files per bounded context)
+- For each new/modified event (extracted from `context-digest.md § Domain events / Emits`):
+  - Add/update `components.schemas.{EventName}` with a payload schema 1:1 with the PHP event's
+    properties (Jakarta-style types: `type: string, format: uuid`, etc.)
+  - Add/update `channels.{module}.{event-slug}` with `subscribe` or `operation`
+  - If the event references a specific queue/topic (Messenger config), reflect it in the channel binding
 
-Si `docs/asyncapi/` no existe: emitir `warn` "AsyncAPI no presente en el proyecto, evento {X} sin documentar" y seguir. No crear AsyncAPI fantasma.
+If `docs/asyncapi/` doesn't exist: emit `warn` "AsyncAPI not present in the project, event {X}
+undocumented" and continue. Don't create a phantom AsyncAPI.
 
-- Si hay catálogo (`docs/events-catalog.md`), añadir entrada.
+- If a catalog exists (`docs/events-catalog.md`), add an entry.
 
 ### Tag `worker`
 
-- Crear/actualizar `docs/runbooks/{worker-name}.md`:
-  - Nombre del runbook = nombre del handler en kebab-case
-  - Secciones:
-    - Qué procesa (qué cola/mensaje)
-    - Arranque/parada (comando supervisor/systemd)
-    - Métricas a monitorizar (cola length, rate de fallo, p95)
-    - Procedimiento ante atasco (DLQ, reproceso)
-    - Cómo reprocesar mensajes fallidos
+- Create/update `docs/runbooks/{worker-name}.md`:
+  - Runbook name = handler name in kebab-case
+  - Sections:
+    - What it processes (which queue/message)
+    - Start/stop (supervisor/systemd command)
+    - Metrics to monitor (queue length, failure rate, p95)
+    - Procedure for a stuck queue (DLQ, reprocessing)
+    - How to reprocess failed messages
 
 ### Tag `new-module`
 
-- Detectar directorio `src/{Module}/` nuevo en el diff
-- Si no existe `src/{Module}/README.md`, crearlo:
+- Detect a new `src/{Module}/` directory in the diff
+- If `src/{Module}/README.md` doesn't exist, create it:
   ```markdown
   # {Module}
   
-  ## Propósito
-  {2-3 líneas extraídas de context-digest.md}
+  ## Purpose
+  {2-3 lines extracted from context-digest.md}
   
   ## Aggregate roots
-  {listar}
+  {list}
   
-  ## Dependencias con otros módulos
-  {listar, con referencia al Mapa de Módulos si procede}
+  ## Dependencies on other modules
+  {list, with a reference to Mapa de Módulos if applicable}
   
-  ## Eventos de dominio
-  - Emite: {lista}
-  - Consume: {lista}
+  ## Domain events
+  - Emits: {list}
+  - Consumes: {list}
   
   ## Entry points
-  - Endpoints HTTP: {lista}
-  - Handlers async: {lista}
+  - HTTP endpoints: {list}
+  - Async handlers: {list}
   ```
-- Actualizar `Arquitectura/Mapa de Módulos - Bounded Contexts.md` si existe: añadir el nuevo módulo a la lista/diagrama si procede.
+- Update `Arquitectura/Mapa de Módulos - Bounded Contexts.md` if it exists: add the new module to the
+  list/diagram if applicable.
 
-## Paso final — Tag mismatches
+## Final step — Tag mismatches
 
-Para cada tag procesado: si no se pudo generar cambios relevantes porque el diff no contiene evidencia del cambio declarado por el tag, añadir a `tagMismatches`.
+For each processed tag: if relevant changes couldn't be generated because the diff doesn't contain
+evidence of the change declared by the tag, add it to `tagMismatches`.
 
-Ejemplos:
-- Tag `adr` pero no se puede extraer una decisión arquitectónica discernible del context-digest → `adr`
-- Tag `config` pero no se detectaron env vars nuevas → `config`
-- Tag `new-module` pero no hay directorio nuevo en `src/` → `new-module`
+Examples:
+- Tag `adr` but no discernible architectural decision can be extracted from the context-digest → `adr`
+- Tag `config` but no new env vars were detected → `config`
+- Tag `new-module` but there's no new directory under `src/` → `new-module`
 
-## Paso final — Amend al commit
+## Final step — Amend to the commit
 
-Hacer `git add` de los ficheros tocados por docs-sync (solo los modificados en este paso) y `git commit --amend --no-edit`. Preserva la regla "1 commit por tarea".
+Run `git add` on the files touched by docs-sync (only the ones modified in this step) and
+`git commit --amend --no-edit`. Preserves the "1 commit per task" rule.
 
 ## Report
 
@@ -165,36 +173,36 @@ Hacer `git add` de los ficheros tocados por docs-sync (solo los modificados en e
 # docs-sync — T{id}
 
 **Status:** {PASS|WARN}
-**Ficheros actualizados:** {N}
-**Tags procesados:** {lista}
+**Files updated:** {N}
+**Tags processed:** {list}
 
-## Cambios aplicados
-- docs/asyncapi/envelope.yaml: añadido channel `envelope.closed` + schema
-- .env.example: añadida DSS_TIMESTAMP_AUTHORITY_URL
-- docs/adr/0012-tsa-fallback-strategy.md: creado (status: draft)
+## Changes applied
+- docs/asyncapi/envelope.yaml: added channel `envelope.closed` + schema
+- .env.example: added DSS_TIMESTAMP_AUTHORITY_URL
+- docs/adr/0012-tsa-fallback-strategy.md: created (status: draft)
 
-## Omitidos (con razón)
-- AsyncAPI: docs/asyncapi/ no presente en el proyecto; evento EnvelopeClosed sin documentar
+## Skipped (with reason)
+- AsyncAPI: docs/asyncapi/ not present in the project; event EnvelopeClosed undocumented
 
 ## Tag mismatches
-- {lista o "ninguno"}
+- {list or "none"}
 ```
 
-## JSON de retorno
+## Return JSON
 
 ```json
-{"status":"pass","summary":"3 ficheros actualizados, 1 ADR creado como draft","filesUpdated":["docs/asyncapi/envelope.yaml",".env.example","docs/adr/0012-tsa-fallback-strategy.md"],"tagMismatches":[]}
+{"status":"pass","summary":"3 files updated, 1 ADR created as draft","filesUpdated":["docs/asyncapi/envelope.yaml",".env.example","docs/adr/0012-tsa-fallback-strategy.md"],"tagMismatches":[]}
 ```
 
-## Qué NO hace
+## What it does NOT do
 
-- **No toca OpenAPI** (Nelmio lo regenera inline)
-- No edita el `.md` de la tarea (eso es task-close)
-- No escribe descripción del PR (pr-ready)
-- No crea docs no solicitadas por tags
-- No "mejora" documentación existente fuera del scope de la tarea
+- **Does not touch OpenAPI** (Nelmio regenerates it inline)
+- Does not edit the task's `.md` (that's task-close)
+- Does not write the PR description (pr-ready)
+- Does not create docs not requested by tags
+- Does not "improve" existing documentation outside the task's scope
 
-## Referencias
+## References
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/common/05 - Docs Sync.md`
-- Estrategia API docs: `memory/project_api_docs_strategy.md`
+- Full design: `Implementación/Skills de Ejecución de Tareas/common/05 - Docs Sync.md`
+- API docs strategy: `memory/project_api_docs_strategy.md`

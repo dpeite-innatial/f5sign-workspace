@@ -1,13 +1,13 @@
 ---
 name: contract-check-frontend
-description: 'Valida contratos API consumidos desde el frontend: los composables y stores que llaman a endpoints usan los tipos TypeScript generados desde OpenAPI (no tipos ad-hoc), manejan los error codes declarados, cancelan requests pendientes. Si la tarea escucha eventos async (websockets/SSE) verifica coherencia con AsyncAPI. Úsalo con /contract-check-frontend T{id}. Activar con "validar contratos frontend", "check tipos API", "revisar composables de fetch".'
+description: 'Validates API contracts consumed from the frontend: composables and stores calling endpoints use TypeScript types generated from OpenAPI (not ad-hoc types), handle the declared error codes, cancel pending requests. If the task listens to async events (websockets/SSE) it verifies coherence with AsyncAPI. Use with /contract-check-frontend T{id}. Trigger with "validate frontend contracts", "check API types", "review fetch composables".'
 ---
 
 # Contract Check Frontend
 
-Validación de contratos API desde el lado consumidor. Solo si tags incluye `api` o `event`. Gate duro.
+API contract validation from the consumer side. Only if tags include `api` or `event`. Hard gate.
 
-## Invocación
+## Invocation
 
 ```
 /contract-check-frontend T{id}
@@ -17,99 +17,99 @@ Validación de contratos API desde el lado consumidor. Solo si tags incluye `api
 
 - `var/task-runner/T{id}/changes.diff`
 - `var/task-runner/T{id}/context-digest.md`
-- `.md` de la tarea
-- README de la story padre (para AC con error codes)
-- Tipos generados desde OpenAPI (ruta típica: `types/api.ts`, `src/types/openapi.d.ts`, o donde configure el proyecto)
-- `docs/asyncapi/*.yaml` (si la tarea consume eventos async)
+- Task `.md`
+- Parent story README (for AC with error codes)
+- Types generated from OpenAPI (typical path: `types/api.ts`, `src/types/openapi.d.ts`, or wherever the project configures it)
+- `docs/asyncapi/*.yaml` (if the task consumes async events)
 
 ## Outputs
 
 - `var/task-runner/T{id}/contract-check-frontend.report.md`
 - JSON: `{"status":"pass|fail|warn","summary":"...","issues":[...],"tagMismatches":[...]}`
 
-## Precondición
+## Precondition
 
-Si el proyecto NO tiene tooling OpenAPI→TS configurado (no existe fichero de tipos generados ni script `openapi:generate`): emitir WARN "OpenAPI→TS no configurado, tipos ad-hoc permitidos" y saltar los checks de tipos. Seguir con el resto.
+If the project does NOT have OpenAPI→TS tooling configured (no generated types file nor an `openapi:generate` script exists): emit WARN "OpenAPI→TS not configured, ad-hoc types allowed" and skip the type checks. Continue with the rest.
 
-## Ejecución
+## Execution
 
-### Paso 1 — Detectar tag mismatch
+### Step 1 — Detect tag mismatch
 
-- Si tag `api` y el diff no contiene composables con `fetch`/`$fetch`/`useFetch`/`axios` ni stores con llamadas HTTP → `tagMismatches: ["api"]`
-- Si tag `event` y el diff no contiene código de websocket/SSE/EventSource → `tagMismatches: ["event"]`
+- If tag `api` and the diff does not contain composables with `fetch`/`$fetch`/`useFetch`/`axios` or stores with HTTP calls → `tagMismatches: ["api"]`
+- If tag `event` and the diff does not contain websocket/SSE/EventSource code → `tagMismatches: ["event"]`
 
-### Paso 2 — Checks tag `api`
+### Step 2 — Checks for tag `api`
 
-#### Tipos generados
-Localizar composables/stores del diff que hagan llamadas HTTP. Para cada llamada:
+#### Generated types
+Locate composables/stores in the diff that make HTTP calls. For each call:
 
-- [ ] El tipo de request (body) viene de los tipos generados (importado de `@/types/api` o equivalente)
+- [ ] The request (body) type comes from generated types (imported from `@/types/api` or equivalent)
   - Grep patterns: `import type { X } from '@/types/api'`, `paths['...']['post']['requestBody']`, etc.
-- [ ] El tipo de response idem
-- [ ] No hay `any` en request/response
-- [ ] No hay interfaces/types ad-hoc duplicando lo que ya está en los tipos generados
+- [ ] Same for the response type
+- [ ] No `any` in request/response
+- [ ] No ad-hoc interfaces/types duplicating what's already in the generated types
 
 #### Error codes
-Para cada endpoint consumido, cruzar con AC de la story:
+For each consumed endpoint, cross-reference with the story's AC:
 
-- [ ] Si AC declara error HTTP X con codigo Y (ej. 409 ENVELOPE_ALREADY_CLOSED), el código frontend lo maneja explícitamente:
-  - Captura del error (try/catch o `.catch()`)
-  - Discriminación por código (switch/if sobre `error.code` o `error.response.status`)
-  - Traducción a UX (toast, mensaje en formulario, redirección)
-- [ ] Errores no listados en AC tienen un handler genérico (no se silencian)
-- [ ] Errores 401 desencadenan logout/refresh según convención del proyecto
-- [ ] Errores 5xx muestran mensaje genérico al usuario y loggean al sistema de monitoring (si existe)
+- [ ] If the AC declares HTTP error X with code Y (e.g. 409 ENVELOPE_ALREADY_CLOSED), the frontend code handles it explicitly:
+  - Error capture (try/catch or `.catch()`)
+  - Discrimination by code (switch/if on `error.code` or `error.response.status`)
+  - Translation to UX (toast, form message, redirect)
+- [ ] Errors not listed in the AC have a generic handler (not silenced)
+- [ ] 401 errors trigger logout/refresh according to the project's convention
+- [ ] 5xx errors show a generic message to the user and log to the monitoring system (if one exists)
 
-#### Cancelación de requests
-- [ ] Si el composable ejecuta fetch en un watcher o effect: proporciona un mecanismo de cancelación (AbortController)
-- [ ] Al desmontar el componente que usa el composable: pending requests se cancelan
-- [ ] `onUnmounted` / `onScopeDispose` con cleanup
+#### Request cancellation
+- [ ] If the composable runs a fetch in a watcher or effect: it provides a cancellation mechanism (AbortController)
+- [ ] On unmount of the component using the composable: pending requests are cancelled
+- [ ] `onUnmounted` / `onScopeDispose` with cleanup
 
-#### Actualización de tipos
-- [ ] Si el backend cambió su OpenAPI (y los tipos se regeneraron) y esta tarea consume esos cambios: el import está actualizado
-- [ ] Si se detecta que el composable usa un shape obsoleto → `warn` "tipos pueden estar desactualizados, verificar versión del OpenAPI"
+#### Type updates
+- [ ] If the backend changed its OpenAPI (and types were regenerated) and this task consumes those changes: the import is updated
+- [ ] If a composable is detected using a stale shape → `warn` "types may be outdated, verify OpenAPI version"
 
-### Paso 3 — Checks tag `event` (websockets, SSE, realtime)
+### Step 3 — Checks for tag `event` (websockets, SSE, realtime)
 
 #### AsyncAPI
-Si `docs/asyncapi/` existe:
-- [ ] Los eventos escuchados por el frontend están documentados en AsyncAPI
-- [ ] El schema del payload coincide con el tipo TS que el código asume
-- [ ] El channel/topic usado coincide con la config
+If `docs/asyncapi/` exists:
+- [ ] Events listened to by the frontend are documented in AsyncAPI
+- [ ] The payload schema matches the TS type assumed by the code
+- [ ] The channel/topic used matches the config
 
-Si AsyncAPI no existe: WARN "AsyncAPI no presente, eventos sin contrato formal" (no FAIL, consistente con backend).
+If AsyncAPI doesn't exist: WARN "AsyncAPI not present, events without a formal contract" (not FAIL, consistent with backend).
 
 #### Typing
-- [ ] Los eventos recibidos se tipan; no se accede con `any` a sus propiedades
-- [ ] Si el proyecto tiene tipos generados para eventos (ej. desde AsyncAPI), se usan
+- [ ] Received events are typed; their properties are not accessed with `any`
+- [ ] If the project has generated types for events (e.g. from AsyncAPI), they are used
 
 #### Cleanup
-- [ ] Las subscripciones a eventos se limpian al desmontar (`onUnmounted(() => socket.off(...))`)
-- [ ] No hay memory leaks de listeners huérfanos
+- [ ] Event subscriptions are cleaned up on unmount (`onUnmounted(() => socket.off(...))`)
+- [ ] No orphaned listener memory leaks
 
-### Paso 4 — Intersección (tags `api` + `event`)
+### Step 4 — Intersection (tags `api` + `event`)
 
-Si la tarea tiene ambos:
-- [ ] Si el flujo es "POST al backend → esperar evento de confirmación via websocket": timeout y fallback definidos si el evento no llega
+If the task has both:
+- [ ] If the flow is "POST to backend → wait for confirmation event via websocket": timeout and fallback are defined in case the event doesn't arrive
 
-### Paso 5 — Tests
+### Step 5 — Tests
 
-- [ ] Los composables que consumen endpoints tienen test unitario que mockea la API y verifica:
+- [ ] Composables consuming endpoints have a unit test that mocks the API and verifies:
   - Happy path
-  - Al menos un error case del AC
-  - Cancelación si aplica
+  - At least one AC error case
+  - Cancellation if applicable
 
-## Gravedad
+## Severity
 
 - **FAIL:**
-  - Uso de `any` en request/response cuando existen tipos generados
-  - Error code de AC no manejado
-  - Evento escuchado sin cleanup al desmontar (memory leak potencial)
-  - Schema AsyncAPI del evento diverge del tipo asumido en TS
+  - Use of `any` in request/response when generated types exist
+  - AC error code not handled
+  - Event listened to without cleanup on unmount (potential memory leak)
+  - AsyncAPI event schema diverges from the TS type assumed
 - **WARN:**
-  - Tipos ad-hoc duplicando los generados
-  - AsyncAPI no presente
-  - Tipos potencialmente desactualizados
+  - Ad-hoc types duplicating generated ones
+  - AsyncAPI not present
+  - Potentially outdated types
 
 ## Report
 
@@ -117,41 +117,41 @@ Si la tarea tiene ambos:
 # contract-check-frontend — T{id}
 
 **Status:** {PASS|FAIL|WARN}
-**Tags evaluados:** {api, event}
-**Issues:** {B} bloqueantes, {W} warnings
+**Tags evaluated:** {api, event}
+**Issues:** {B} blocking, {W} warnings
 
-## Bloqueantes
-- [{categoría}] {fichero:línea} {mensaje}
+## Blocking
+- [{category}] {file:line} {message}
 
 ## Warnings
-- [{categoría}] {mensaje}
+- [{category}] {message}
 
-## Endpoints consumidos (desde el diff)
+## Endpoints consumed (from the diff)
 - POST /api/v1/envelopes/{id}/close — composables/useEnvelopes.ts:45
-  - Tipos: paths['/api/v1/envelopes/{id}/close']['post'] ✓
-  - Errores manejados: 409 ENVELOPE_ALREADY_CLOSED ✓, 403 ✓, 5xx ✓
+  - Types: paths['/api/v1/envelopes/{id}/close']['post'] ✓
+  - Errors handled: 409 ENVELOPE_ALREADY_CLOSED ✓, 403 ✓, 5xx ✓
 
-## Eventos escuchados
-- (ninguno)
+## Events listened to
+- (none)
 
 ## Tag mismatches
-- {lista o "ninguno"}
+- {list or "none"}
 ```
 
-## JSON de retorno
+## Return JSON
 
 ```json
-{"status":"fail","summary":"1 error code de AC no manejado","issues":[{"severity":"fail","category":"error-unhandled","file":"composables/useEnvelopes.ts:52","message":"AC-04 exige manejar 409 ENVELOPE_ALREADY_CLOSED, no hay rama de error"}],"tagMismatches":[]}
+{"status":"fail","summary":"1 AC error code not handled","issues":[{"severity":"fail","category":"error-unhandled","file":"composables/useEnvelopes.ts:52","message":"AC-04 requires handling 409 ENVELOPE_ALREADY_CLOSED, no error branch"}],"tagMismatches":[]}
 ```
 
-## Qué NO hace
+## What it does NOT do
 
-- No valida implementación del endpoint en backend (eso es `contract-check-backend`)
-- No genera los tipos desde OpenAPI — asume que el proyecto tiene ese tooling
-- No valida UX de manejo de errores (solo que se manejen)
-- No audita seguridad del client (`security-audit-frontend`)
+- Does not validate the endpoint's backend implementation (that's `contract-check-backend`)
+- Does not generate types from OpenAPI — assumes the project has that tooling
+- Does not validate error-handling UX (only that errors are handled)
+- Does not audit client security (`security-audit-frontend`)
 
-## Referencias
+## References
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/` (nueva sección)
-- Estrategia API docs: `memory/project_api_docs_strategy.md`
+- Full design: `Implementación/Skills de Ejecución de Tareas/` (new section)
+- API docs strategy: `memory/project_api_docs_strategy.md`

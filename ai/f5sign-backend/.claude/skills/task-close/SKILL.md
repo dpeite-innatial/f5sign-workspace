@@ -1,17 +1,17 @@
 ---
 name: task-close
-description: 'Cierra documentalmente una task tras la implementación y las validaciones, y es la dueña del paso que nadie tenía: proponer el salto de un ADR de Proposed a Accepted cuando la task lo ejercita, nombrando el artefacto y esperando tu OK. También actualiza su Status en la tabla de cabecera nombrando rama y commit, añade la sección de desviaciones al final (sin renumerar), y —lo que más importa— lleva cada deferral y cada aprendizaje a un home durable en el repo (§Open follow-ups + fila de docs/BACKLOG.md), nunca a un memo suelto. Úsalo con /task-close TASK-NNN. Activar con "cerrar task", "actualizar el .md", "consolidar aprendizajes", "marcar task como review".'
+description: 'Closes a task''s documentation after implementation and validations, and owns the step nobody had: proposing the move of an ADR from Proposed to Accepted when the task exercises it, naming the artifact and waiting for your OK. It also updates its Status in the header table naming branch and commit, adds the deviations section at the end (without renumbering), and — most importantly — takes every deferral and every learning to a durable home in the repo (§Open follow-ups + a docs/BACKLOG.md row), never to a loose memo. Use it with /task-close TASK-NNN. Trigger with "close task", "update the .md", "consolidate learnings", "mark task as review".'
 ---
 
 # Task Close
 
-Cierre documental de la task. No es gate duro, pero **es el único paso que impide que lo aprendido se
-pierda**.
+Documentation closure for the task. It's not a hard gate, but **it's the only step that keeps what was
+learned from being lost**.
 
-> Convención del formato: [`docs/tasks/README.md`](../../../docs/tasks/README.md). Si discrepa de esta
-> skill, gana el README.
+> Format convention: [`docs/tasks/README.md`](../../../docs/tasks/README.md). If it disagrees with this
+> skill, the README wins.
 
-## Invocación
+## Invocation
 
 ```
 /task-close TASK-NNN
@@ -19,148 +19,149 @@ pierda**.
 
 ## Inputs
 
-- `var/task-runner/TASK-NNN/` — todos los `*.report.md`, `context-digest.md`, `plan.md`
-  (⚠ si `var/` es de root y los reports acabaron en el scratchpad, léelos de allí; `task-runner` Fase 0
-  dice dónde quedaron)
-- El `.md` de la task, para editarlo
+- `var/task-runner/TASK-NNN/` — all `*.report.md`, `context-digest.md`, `plan.md`
+  (⚠ if `var/` is owned by root and the reports ended up in the scratchpad, read them from there;
+  `task-runner` Phase 0 says where they landed)
+- The task's `.md`, to edit it
 
 ## Outputs
 
-- El `.md` editado: `Status` + sección de desviaciones + `Open follow-ups` completados
-- Fila(s) nuevas en [`docs/BACKLOG.md`](../../../docs/BACKLOG.md) si aparecieron deferrals
+- The edited `.md`: `Status` + deviations section + completed `Open follow-ups`
+- New row(s) in [`docs/BACKLOG.md`](../../../docs/BACKLOG.md) if deferrals came up
 - `var/task-runner/TASK-NNN/task-close.report.md`
 - JSON: `{"status":"pass|warn","summary":"...","mdSectionsUpdated":[...],"deferralsHomed":N}`
 
-## Ejecución
+## Execution
 
-### Paso 1 — Leer los reports
+### Step 1 — Read the reports
 
-De cada `*.report.md`: status, WARNs no resueltos, issues abiertos, y **el `harness` que declaró
-`task-validate-backend`** (hace falta para el Status; un verde sin harness no es un verde).
+From each `*.report.md`: status, unresolved WARNs, open issues, and **the `harness` that
+`task-validate-backend` declared** (needed for the Status; a green without a harness isn't a green).
 
-### Paso 2 — `Status`, falsificable y nombrando el código
+### Step 2 — `Status`, falsifiable and naming the code
 
-**No hay tabla *Seguimiento*, ni campos `Estado` / `Fin` / `Commit SHA`** — eso era el formato `Planning/`.
-Lo que hay es el campo **`Status`** de la tabla de cabecera, y la regla del README §3: **si afirma que
-existe código, nombra rama o commit.**
+**There's no *Seguimiento* table, nor `Estado` / `Fin` / `Commit SHA` fields** — that was the `Planning/`
+format. What exists is the **`Status`** field in the header table, and the README §3 rule: **if it claims
+code exists, it names a branch or commit.**
 
-Forma a escribir:
+Form to write:
 
 ```
-| **Status** | **Implemented on `feat/<slug>`** (<sha corto>), 2026-08-17 — suite verde bajo
-{harness}. Pendiente de review. {qué quedó fuera, si algo}. |
+| **Status** | **Implemented on `feat/<slug>`** (<short sha>), 2026-08-17 — suite green under
+{harness}. Pending review. {what was left out, if anything}. |
 ```
 
-- Fecha **absoluta** siempre.
-- ⛔ **Nunca escribir `merged` / `✅` desde aquí.** Esta skill corre antes del PR: afirmar integración es
-  falsificar el estado, que es el error que el README §3 previene.
-- Si el trabajo quedó a medias, decirlo en el `Status` en vez de dejarlo optimista: el campo se lee dentro
-  de seis semanas, que es exactamente cuando el optimismo cuesta.
+- Date always **absolute**.
+- ⛔ **Never write `merged` / `✅` from here.** This skill runs before the PR: claiming integration is
+  falsifying the status, which is the error README §3 prevents.
+- If the work was left half-done, say so in the `Status` instead of leaving it optimistic: the field gets
+  read six weeks from now, which is exactly when optimism costs you.
 
-### Paso 3 — La sección de desviaciones va **al final**, y no se renumera nada
+### Step 3 — The deviations section goes **at the end**, and nothing gets renumbered
 
-Las secciones se citan como `§N` desde ADRs, desde otras tasks y desde `CLAUDE.md`, así que **añadir en
-medio rompe anclas**. Añadir `## N. Deviations & honest notes` como **última** sección (el número que
-toque), nunca insertarla tras otra ni recolocar las existentes.
+Sections are cited as `§N` from ADRs, from other tasks, and from `CLAUDE.md`, so **adding in the
+middle breaks anchors**. Add `## N. Deviations & honest notes` as the **last** section (whatever number
+that turns out to be), never insert it after another one or reshuffle the existing ones.
 
-Contenido, y las subsecciones vacías se escriben como "Ninguna" en vez de omitirse:
+Content, and empty subsections are written as "None" instead of omitted:
 
 ```markdown
 ### Scope
-- {ficheros del diff que el alcance no anticipaba, o "Ninguna"}
+- {diff files the scope didn't anticipate, or "None"}
 
-### Decisiones tomadas durante la implementación
-- {de context-digest.md; cada una con su por qué}
+### Decisions made during implementation
+- {from context-digest.md; each with its why}
 
-### Decisiones que necesitaron ADR
-- {ADR-NNNN, propuesto y aceptado por el usuario el YYYY-MM-DD — o "Ninguna"}
+### Decisions that needed an ADR
+- {ADR-NNNN, proposed and accepted by the user on YYYY-MM-DD — or "None"}
 
-### Propiedades declaradas y no probadas
-- {de validate.report.md: la afirmación + por qué el harness no la alcanza}
+### Declared and unproven properties
+- {from validate.report.md: the claim + why the harness doesn't reach it}
 
-### Deuda dejada, y dónde vive ahora
-- {cada una con su home: §Open follow-ups de esta task, fila BL-NNN, o el ADR que la registra}
+### Debt left behind, and where it lives now
+- {each with its home: this task's §Open follow-ups, a BL-NNN row, or the ADR that records it}
 ```
 
-### Paso 4 — Cada deferral y cada aprendizaje, a un home durable
+### Step 4 — Every deferral and every learning, to a durable home
 
-⚑ **Este es el paso que justifica la skill, y el que la versión anterior hacía mal.** Escribía los
-aprendizajes en un `notes.md` bajo `var/`, que está gitignorado: un memo que nadie volverá a leer. Este
-repo ya pagó ese error dos veces — hubo que reconstruir a mano *"eight deferrals that lived only in an
-untracked memo"*. **Un aprendizaje que solo existe en `var/` es un aprendizaje perdido.**
+⚑ **This is the step that justifies the skill, and the one the previous version got wrong.** It wrote
+learnings to a `notes.md` under `var/`, which is gitignored: a memo nobody will ever read again. This
+repo already paid for that mistake twice — someone had to manually reconstruct *"eight deferrals that lived
+only in an untracked memo"*. **A learning that only exists in `var/` is a learning that's lost.**
 
-Los homes reales, por tipo:
+The real homes, by type:
 
-| Lo que apareció | Dónde vive |
+| What came up | Where it lives |
 |---|---|
-| Algo decidido y **no hecho** | `§Open follow-ups` de esta task (el home de verdad) **+ una fila en `docs/BACKLOG.md`** que lo indexa apuntando aquí |
-| Una decisión transversal tomada | Su ADR. Si aún no existe → es `implement-backend` Paso 2b, no una nota |
-| Un ADR que esta task hizo cierto | El `Status` / `Enforced by` / `Realized in` **de ese ADR**, en este changeset (regla de autoría 7) — ver Paso 4b, que es quien lo ejecuta |
-| Una guarda que ningún harness alcanza | Fila de BACKLOG, citando qué harness haría falta |
-| Prosa que quedó obsoleta en otro fichero | Se corrige ahora, no se apunta: es el barrido de la regla 1 |
-| Fricción del proceso (entorno, tooling) | `var/…/task-close.report.md` está bien **solo** si es efímero de esta corrida; si se va a repetir, va al BACKLOG |
+| Something decided and **not done** | This task's `§Open follow-ups` (the real home) **+ a row in `docs/BACKLOG.md`** indexing it back here |
+| A cross-cutting decision made | Its ADR. If it doesn't exist yet → that's `implement-backend` Step 2b, not a note |
+| An ADR this task made true | That ADR's `Status` / `Enforced by` / `Realized in`, in this changeset (authoring rule 7) — see Step 4b, which is the one that executes it |
+| A guard no harness reaches | A BACKLOG row, citing what harness would be needed |
+| Prose that went stale in another file | Fixed now, not noted: that's the sweep from rule 1 |
+| Process friction (environment, tooling) | `var/…/task-close.report.md` is fine **only** if it's ephemeral to this run; if it's going to repeat, it goes to BACKLOG |
 
-Para la fila de BACKLOG: **re-derivar el id por grep en el momento**, sobre todas las ramas, con el
-pathspec absoluto (`':(top)docs/BACKLOG.md'`) — el mismo fallo en abierto que tenían los sweeps de ids.
+For the BACKLOG row: **re-derive the id by grep at the moment**, across all branches, with the
+absolute pathspec (`':(top)docs/BACKLOG.md'`) — the same fail-open bug the id sweeps had.
 
-### Paso 4b — Mover un ADR de `Proposed` a `Accepted` (esta skill es la dueña, con tu OK)
+### Step 4b — Moving an ADR from `Proposed` to `Accepted` (this skill owns it, with your OK)
 
-⚑ **Nadie era dueño de esta transición y por eso ADR-0018 y ADR-0035 se quedaron diciendo *not yet* mientras
-su trabajo ya estaba en `master`.** `implement-backend` redacta el ADR como `Proposed` y para; `docs-sync` no
-puede marcarlo `Accepted`; y aquí es donde por fin se sabe qué quedó verde. Así que el cambio de estado se
-propone **aquí**, y solo aquí.
+⚑ **Nobody owned this transition, and that's why ADR-0018 and ADR-0035 kept saying *not yet* while
+their work was already in `master`.** `implement-backend` drafts the ADR as `Proposed` and stops; `docs-sync`
+can't mark it `Accepted`; and this is finally where you know what turned out green. So the state change is
+proposed **here**, and only here.
 
-En este set **`Accepted` significa ejercitado**, no acordado. Por tanto:
+In this set, **`Accepted` means exercised**, not agreed upon. Therefore:
 
-- [ ] ¿La decisión del ADR está **ejercitada por algo que se puede señalar** — un test que la prueba, un
-      camino de código que la aplica, una regla que la enforza? Si no, se queda `Proposed`. *"Ya está
-      implementado"* no basta: hay que nombrar el artefacto.
-- [ ] Rellenar **`Enforced by (in-repo)`** y **`Realized in (in-repo)`** con esos artefactos, por símbolo o
-      patrón de grep, **nunca por número de línea**.
-- [ ] **Proponerlo al usuario y esperar su OK**, igual que `implement-backend` hace al acuñarlo: *"ADR-NNNN
-      pasa de Proposed a Accepted porque {artefacto} lo ejercita"*. ⛔ Sin respuesta no se toca el campo.
-- [ ] Si la task ejercita **parte** de la decisión, existe el matiz: `Accepted (enforcement partial)` es una
-      forma en uso en este repo (ADR-0045). Mejor eso que un `Accepted` que promete más de lo que hay.
+- [ ] Is the ADR's decision **exercised by something you can point to** — a test that proves it, a
+      code path that applies it, a rule that enforces it? If not, it stays `Proposed`. *"It's already
+      implemented"* isn't enough: you have to name the artifact.
+- [ ] Fill in **`Enforced by (in-repo)`** and **`Realized in (in-repo)`** with those artifacts, by symbol or
+      grep pattern, **never by line number**.
+- [ ] **Propose it to the user and wait for their OK**, the same way `implement-backend` does when coining it:
+      *"ADR-NNNN moves from Proposed to Accepted because {artifact} exercises it"*. ⛔ Without a response, the
+      field isn't touched.
+- [ ] If the task exercises **part** of the decision, there's a nuance for that: `Accepted (enforcement partial)`
+      is a form in use in this repo (ADR-0045). Better that than an `Accepted` that promises more than what's there.
 
-### Paso 5 — Los `Open follow-ups` que la task ya resolvió
+### Step 5 — The `Open follow-ups` the task already resolved
 
-Si la implementación cerró alguno de los puntos de `§Open follow-ups`, **marcarlo cerrado ahí y en su fila
-de BACKLOG**, con fecha. Un follow-up que sigue abierto en el papel y cerrado en el código es la misma
-clase de mentira que un `Status` obsoleto, en la dirección contraria.
+If the implementation closed any of the `§Open follow-ups` items, **mark it closed there and in its
+BACKLOG row**, with a date. A follow-up that's still open on paper and closed in the code is the same
+kind of lie as a stale `Status`, in the opposite direction.
 
-### Paso 6 — Commit
+### Step 6 — Commit
 
-Esta skill **sí commitea sus propias ediciones** (`docs/` y el `.md`), como un commit de documentación
-normal. No hay `--amend` que esperar: `pr-ready` ya no reescribe historia.
+This skill **does commit its own edits** (`docs/` and the `.md`), like a normal documentation commit.
+There's no `--amend` to wait for: `pr-ready` no longer rewrites history.
 
 ## Report
 
 ```markdown
 # task-close — TASK-NNN
 
-**Status:** {PASS|WARN} · **Secciones editadas:** {N} · **Deferrals con home:** {N}
+**Status:** {PASS|WARN} · **Sections edited:** {N} · **Deferrals with a home:** {N}
 
-## Cambios en el .md
-- Status → {texto literal escrito}
-- Sección {N} "Deviations & honest notes" añadida al final
+## Changes to the .md
+- Status → {literal text written}
+- Section {N} "Deviations & honest notes" added at the end
 
-## Deferrals y aprendizajes, con su home
-- {qué} → {§Open follow-ups | BL-NNN | ADR-NNNN}
+## Deferrals and learnings, with their home
+- {what} → {§Open follow-ups | BL-NNN | ADR-NNNN}
 
-## Fricción del proceso en esta corrida
-- {entorno, tooling; y si se repetirá, la fila de BACKLOG que lo recoge}
+## Process friction in this run
+- {environment, tooling; and if it will repeat, the BACKLOG row that captures it}
 ```
 
-## Manejo de fallos
+## Failure handling
 
-- Un report ilegible → WARN, no FAIL.
-- Sin commit en la rama → FAIL: `implement-backend` no llegó a correr.
-- `.md` no parseable → FAIL.
+- An unreadable report → WARN, not FAIL.
+- No commit on the branch → FAIL: `implement-backend` never got to run.
+- `.md` not parseable → FAIL.
 
-## Qué NO hace
+## What it does NOT do
 
-- No abre PR (`pr-ready`).
-- No **redacta** ADRs (los propone `implement-backend`, los escribe `docs-sync`) — pero **sí es quien mueve
-  su estado** cuando la task los ejercita, con tu confirmación (Paso 4b).
-- No decide si se publica.
-- No corrige código ni tests.
+- Doesn't open a PR (`pr-ready`).
+- Doesn't **draft** ADRs (`implement-backend` proposes them, `docs-sync` writes them) — but it **is** the one
+  that moves their state when the task exercises them, with your confirmation (Step 4b).
+- Doesn't decide whether it gets published.
+- Doesn't fix code or tests.

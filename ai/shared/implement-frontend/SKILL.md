@@ -1,13 +1,13 @@
 ---
 name: implement-frontend
-description: Implementa una tarea frontend (Nuxt 3 + Vue 3 + TypeScript + Tailwind + Pinia) del Planning/ siguiendo TDD (Vitest para unit/component, Playwright para E2E), respetando la separación páginas/composables/componentes y las convenciones de i18n y design system. Lee el .md de la tarea y su Contexto requerido, escribe código + tests, y produce artefactos context-digest.md, plan.md y un único commit final. Solo para repositorios frontend. Úsalo con /implement-frontend T{id}. Activar con "implementa frontend T{id}", "codifica tarea Vue...", "implementa componente...".
+description: Implements a frontend task (Nuxt 3 + Vue 3 + TypeScript + Tailwind + Pinia) from Planning/ following TDD (Vitest for unit/component, Playwright for E2E), respecting the pages/composables/components separation and i18n and design system conventions. Reads the task's .md and its Contexto requerido, writes code + tests, and produces context-digest.md, plan.md artifacts and a single final commit. Frontend repositories only. Use with /implement-frontend T{id}. Trigger with "implement frontend T{id}", "code Vue task...", "implement component...".
 ---
 
 # Implement Frontend
 
-Implementación TDD de una tarea frontend. El modelo se elige según `Complejidad` (Sonnet para baja/media, Opus para alta).
+TDD implementation of a frontend task. The model is chosen based on `Complejidad` (Sonnet for low/medium, Opus for high).
 
-## Invocación
+## Invocation
 
 ```
 /implement-frontend T{id}
@@ -17,191 +17,191 @@ Implementación TDD de una tarea frontend. El modelo se elige según `Complejida
 
 ## Inputs
 
-- `.md` de la tarea
-- Ficheros listados en `## Contexto requerido`
-- ⚑ **Los traspasos pendientes del backend: `../f5sign-backend/docs/frontend-handoff/*.md`.** Un cambio de
-  contrato en el backend y su adopción aquí son **dos PRs** (regla 4 del workspace: dos proyectos, dos PRs
-  coordinados), así que ese directorio es el único sitio donde está escrito *qué cambió y qué hay que hacer
-  en este repo*. Cada fichero nombra su commit de origen — compáralo con lo que ya está aplicado para saber
-  si vas por detrás — y lee su sección *"Lo que NO está listo todavía"* **antes** de construir contra un
-  endpoint: media utilidad de ese documento es frenar trabajo contra un seam incompleto.
-  Si el directorio no es alcanzable (acceso solo a este repo), **pide al usuario el fichero de traspaso** en
-  vez de inferir el contrato; y los tipos se regeneran del OpenAPI, que es la verdad legible por máquina,
-  nunca a mano desde la prosa del traspaso.
-- Si `--amplified-context`: README de story padre + README de epic padre + `.md` de dependencias + catálogo de eventos si aplica
-- Referencias fijas: `Arquitectura/Arquitectura Frontend.md`, `.claude/skills/planning-detail/references/wireframe-conventions.md`
-- `tailwind.config.ts` (tokens canónicos)
+- Task `.md`
+- Files listed in `## Contexto requerido`
+- ⚑ **Pending backend handoffs: `../f5sign-backend/docs/frontend-handoff/*.md`.** A contract change in the
+  backend and its adoption here are **two PRs** (workspace rule 4: two projects, two coordinated PRs),
+  so that directory is the only place where *what changed and what needs to be done in this repo* is
+  written. Each file names its source commit — compare it against what's already applied to know
+  if you're behind — and read its *"What is NOT ready yet"* section **before** building against an
+  endpoint: half the value of that document is stopping work against an incomplete seam.
+  If the directory is not reachable (access to this repo only), **ask the user for the handoff file**
+  instead of inferring the contract; and types are regenerated from OpenAPI, which is the machine-readable
+  source of truth, never by hand from the handoff prose.
+- If `--amplified-context`: parent story README + parent epic README + dependencies' `.md` + event catalog if applicable
+- Fixed references: `Arquitectura/Arquitectura Frontend.md`, `.claude/skills/planning-detail/references/wireframe-conventions.md`
+- `tailwind.config.ts` (canonical tokens)
 
 ## Outputs
 
-- Código + tests commiteados (1 único commit) en la rama `feat/T{id}-*`
+- Code + tests committed (1 single commit) on branch `feat/T{id}-*`
 - `var/task-runner/T{id}/plan.md`
 - `var/task-runner/T{id}/context-digest.md`
 - JSON: `{"status":"pass|fail","summary":"...","filesChanged":N,"testsAdded":N,"attempts":N,"diagnosis":"..."}`
 
-## Ejecución
+## Execution
 
-### Paso 1 — Carga de contexto
+### Step 1 — Load context
 
-1. Leer `.md` de la tarea completo
-2. Leer ficheros de `## Contexto requerido`
-3. Leer referencias fijas (arquitectura frontend + wireframe conventions)
-4. Leer `tailwind.config.ts` para conocer tokens
-5. Si el proyecto tiene tipos generados desde OpenAPI (ej. `types/api.ts` o similar): leerlos si la tarea consume endpoints
+1. Read the task's `.md` in full
+2. Read files from `## Contexto requerido`
+3. Read fixed references (frontend architecture + wireframe conventions)
+4. Read `tailwind.config.ts` to learn tokens
+5. If the project has types generated from OpenAPI (e.g. `types/api.ts` or similar): read them if the task consumes endpoints
 
-### Paso 2 — Plan
+### Step 2 — Plan
 
-Redactar `var/task-runner/T{id}/plan.md` con orden TDD. Si detectas ambigüedad no resoluble:
-- diagnóstico = "spec contradictorio" o "contexto insuficiente" → `status: fail` sin implementar
+Draft `var/task-runner/T{id}/plan.md` with TDD order. If you detect unresolvable ambiguity:
+- diagnosis = "contradictory spec" or "insufficient context" → `status: fail` without implementing
 
-### Paso 3 — TDD loop
+### Step 3 — TDD loop
 
-Por cada entrada de la tabla `## Tests`:
+For each entry in the `## Tests` table:
 
-1. Escribir test (Vitest unit/component o Playwright E2E según corresponda)
-   - Incluir `AC-xx` en nombre del test
-   - Componentes: usar `@vue/test-utils` con `mount`/`shallowMount`
-   - Composables: tests aislados pasando mocks de stores
-   - Stores Pinia: tests con `createTestingPinia()`
-2. Ejecutar el test → debe fallar por la razón correcta
-   - `npm run test:unit -- {path}` o `npm run test:e2e -- {path}`
-3. Escribir código de producción mínimo
-4. Ejecutar el test → verde
-5. Ejecutar tests del módulo/feature para no introducir regresiones
+1. Write the test (Vitest unit/component or Playwright E2E as appropriate)
+   - Include `AC-xx` in the test name
+   - Components: use `@vue/test-utils` with `mount`/`shallowMount`
+   - Composables: isolated tests passing store mocks
+   - Pinia stores: tests with `createTestingPinia()`
+2. Run the test → it must fail for the right reason
+   - `npm run test:unit -- {path}` or `npm run test:e2e -- {path}`
+3. Write minimal production code
+4. Run the test → green
+5. Run module/feature tests to avoid introducing regressions
 
-**Política de reintentos y escalada:** igual que implement-backend (3 intentos modelo asignado + diagnóstico + 3 intentos Opus con contexto ampliado si el diagnóstico justifica escalar).
+**Retry and escalation policy:** same as implement-backend (3 attempts with the assigned model + diagnosis + 3 Opus attempts with amplified context if the diagnosis justifies escalating).
 
-### Paso 4 — Reglas no negociables
+### Step 4 — Non-negotiable rules
 
-#### Arquitectura de capas
-- **Páginas (`pages/`)**: orquestan. Llaman composables, renderizan componentes. NO contienen lógica de negocio.
-- **Composables (`composables/`)**: capa de uso. Encapsulan estado + API + side effects. Retornan `{ state, actions, getters }` reactivos.
-- **Componentes (`components/`)**: presentacionales. Reciben props, emiten eventos. NO importan stores ni hacen fetch directo (salvo componentes específicos "container" claramente documentados).
-- **Stores (`stores/`)**: Pinia stores con state/actions/getters tipados.
+#### Layer architecture
+- **Pages (`pages/`)**: orchestrate. Call composables, render components. NO business logic.
+- **Composables (`composables/`)**: usage layer. Encapsulate state + API + side effects. Return reactive `{ state, actions, getters }`.
+- **Components (`components/`)**: presentational. Receive props, emit events. Do NOT import stores or fetch directly (except specific clearly documented "container" components).
+- **Stores (`stores/`)**: typed Pinia stores with state/actions/getters.
 
-Violación → rehacer antes de seguir.
+Violation → redo before continuing.
 
 #### TypeScript strict
-- Sin `any` (si inevitable, comentar razón y usar `unknown` + narrowing)
-- Sin `@ts-ignore` salvo justificación documentada
-- `defineProps<T>()` con interfaz explícita
+- No `any` (if unavoidable, comment the reason and use `unknown` + narrowing)
+- No `@ts-ignore` unless documented justification
+- `defineProps<T>()` with an explicit interface
 - `defineEmits<{(e: 'eventName', payload: T): void}>()`
-- Respuestas de API con los tipos generados desde OpenAPI (si el proyecto tiene ese tooling)
+- API responses use types generated from OpenAPI (if the project has that tooling)
 
 #### i18n
-- Sin strings hardcoded en templates. Todo pasa por `$t('key')` / `useI18n().t()`
-- Las claves de traducción se añaden en los ficheros `locales/*.json` / `i18n/*.json` del proyecto
-- Formatos de fecha/número con `$d()` / `$n()`, no `toLocaleString` directo
+- No hardcoded strings in templates. Everything goes through `$t('key')` / `useI18n().t()`
+- Translation keys are added to the project's `locales/*.json` / `i18n/*.json` files
+- Date/number formats with `$d()` / `$n()`, not direct `toLocaleString`
 
 #### Tailwind / Design system
-- Usa clases del design system (colores `primary-*`, spacing `xs/sm/md/...`, etc. definidos en `tailwind.config.ts`)
-- Evita valores arbitrarios `[13px]`, `[#ff5733]`. Si imprescindible, comenta razón
-- Reutiliza componentes base del sistema (Button, Input, Modal según wireframe-conventions) en lugar de reimplementar
+- Use design system classes (colors `primary-*`, spacing `xs/sm/md/...`, etc. defined in `tailwind.config.ts`)
+- Avoid arbitrary values `[13px]`, `[#ff5733]`. If unavoidable, comment the reason
+- Reuse the system's base components (Button, Input, Modal per wireframe-conventions) instead of reimplementing
 
-#### Accesibilidad básica (el check exhaustivo lo hace `a11y-check`)
-- `<label>` asociado a cada input
-- `alt` en cada `<img>` (vacío si decorativa)
-- Botones reales (`<button>`) en vez de `<div role="button">`
-- Focus visible (no `outline: none` sin reemplazo)
-- `tabindex` coherente
+#### Basic accessibility (the exhaustive check is done by `a11y-check`)
+- `<label>` associated with each input
+- `alt` on every `<img>` (empty if decorative)
+- Real buttons (`<button>`) instead of `<div role="button">`
+- Visible focus (no `outline: none` without a replacement)
+- Coherent `tabindex`
 
 #### Tests
-- Vitest para unit (utils, composables) y component (@vue/test-utils)
-- Playwright para E2E (flujos críticos)
-- Cada AC aplicable con al menos 1 test que lo cubra
+- Vitest for unit (utils, composables) and component (@vue/test-utils)
+- Playwright for E2E (critical flows)
+- Every applicable AC covered by at least 1 test
 
-### Paso 5 — Si consume API
+### Step 5 — If it consumes an API
 
-- Si la tarea tiene tag `api`: verificar que el composable/store que llama al backend:
-  - Usa tipos generados desde OpenAPI (si el proyecto tiene `openapi-typescript` configurado)
-  - Maneja todos los error codes declarados en el AC (no ignorar 4xx silenciosamente)
-  - Cancela requests pendientes al desmontar el componente (AbortController)
+- If the task has tag `api`: verify that the composable/store calling the backend:
+  - Uses types generated from OpenAPI (if the project has `openapi-typescript` configured)
+  - Handles all error codes declared in the AC (does not silently ignore 4xx)
+  - Cancels pending requests on component unmount (AbortController)
 
-### Paso 6 — Consolidación del commit
+### Step 6 — Commit consolidation
 
-1. Verificar `git status`: ficheros declarados en `## Archivos a crear/modificar` están presentes
-2. Si hay extras: documentar en `plan.md § Desviaciones`
-3. Si faltan declarados: FAIL
-4. `git add <ficheros-tocados>`
-5. Commit único:
+1. Verify `git status`: files declared in `## Archivos a crear/modificar` are present
+2. If there are extras: document in `plan.md § Desviaciones`
+3. If declared files are missing: FAIL
+4. `git add <touched-files>`
+5. Single commit:
    ```
-   feat(T{id}): {título de la tarea}
+   feat(T{id}): {task title}
    
-   {resumen 2-3 líneas}
+   {2-3 line summary}
    ```
 6. `git diff {base}..HEAD > var/task-runner/T{id}/changes.diff`
 
-### Paso 7 — context-digest.md
+### Step 7 — context-digest.md
 
-Escribir `var/task-runner/T{id}/context-digest.md` (≤ 150 líneas), adaptado a frontend:
+Write `var/task-runner/T{id}/context-digest.md` (≤ 150 lines), adapted for frontend:
 
 ```markdown
 # Context Digest — T{id}
 
 ## Task summary
-{2-3 líneas: qué se implementó}
+{2-3 lines: what was implemented}
 
-## Rutas / páginas afectadas
-- /ruta/path — nueva / modificada
+## Routes / pages affected
+- /path/route — new / modified
 
-## Componentes tocados
-- components/Button.vue — props nuevas, emits
-- components/SignerCard.vue — nuevo componente
+## Components touched
+- components/Button.vue — new props, emits
+- components/SignerCard.vue — new component
 
-## Composables nuevos / modificados
+## New / modified composables
 - composables/useEnvelopes.ts
 
-## Stores Pinia
-- stores/envelope.ts — acción `closeEnvelope` añadida
+## Pinia stores
+- stores/envelope.ts — `closeEnvelope` action added
 
-## Endpoints consumidos
+## Endpoints consumed
 - POST /api/v1/envelopes/{id}/close
-  - Tipos: request CloseEnvelopeRequest, response EnvelopeResponse (generados)
+  - Types: request CloseEnvelopeRequest, response EnvelopeResponse (generated)
 
-## Eventos emitidos / escuchados
-- `envelope:closed` (emit interno via event bus), `push:envelope.closed` (websocket)
+## Events emitted / listened to
+- `envelope:closed` (internal emit via event bus), `push:envelope.closed` (websocket)
 
-## Claves i18n añadidas
+## i18n keys added
 - envelope.actions.close
 - envelope.errors.alreadyClosed
 
-## Decisiones tomadas durante implementación
-- {decisión + why}
+## Decisions made during implementation
+- {decision + why}
 
-## Alcance fuera de esta tarea
+## Scope outside this task
 - ...
 ```
 
-### Paso 8 — plan.md § Status final
+### Step 8 — plan.md § Final status
 
-Actualizar la sección final de `plan.md`:
+Update the final section of `plan.md`:
 ```
-## Status final
-- Tests nuevos: N (todos en verde)
-- Suite del módulo: PASS
+## Final status
+- New tests: N (all green)
+- Module suite: PASS
 - Build: PASS (vite build)
-- Ficheros modificados: N
-- Desviaciones documentadas: {sí|no}
+- Files modified: N
+- Deviations documented: {yes|no}
 ```
 
-### Paso 9 — Devolver JSON
+### Step 9 — Return JSON
 
 ```json
-{"status":"pass","summary":"T{id} implementada, N tests verde, 1 commit","filesChanged":N,"testsAdded":N,"attempts":N}
+{"status":"pass","summary":"T{id} implemented, N tests green, 1 commit","filesChanged":N,"testsAdded":N,"attempts":N}
 ```
 
-## Qué NO hace
+## What it does NOT do
 
-- No valida a11y exhaustiva (`a11y-check`)
-- No valida coherencia design system (`design-system-check`)
-- No valida contratos API (`contract-check-frontend`)
-- No audita seguridad (`security-audit-core` + `security-audit-frontend`)
-- No mide performance (`perf-smoke-frontend`)
-- No actualiza docs externos (`docs-sync`)
-- No abre PR ni actualiza el `.md`
+- Does not run exhaustive a11y validation (`a11y-check`)
+- Does not validate design system coherence (`design-system-check`)
+- Does not validate API contracts (`contract-check-frontend`)
+- Does not audit security (`security-audit-core` + `security-audit-frontend`)
+- Does not measure performance (`perf-smoke-frontend`)
+- Does not update external docs (`docs-sync`)
+- Does not open a PR or update the `.md`
 
-## Referencias
+## References
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/frontend/01 - Implement Frontend.md`
-- Arquitectura: `Arquitectura/Arquitectura Frontend.md`
-- Wireframes y design: `.claude/skills/planning-detail/references/wireframe-conventions.md`
+- Full design: `Implementación/Skills de Ejecución de Tareas/frontend/01 - Implement Frontend.md`
+- Architecture: `Arquitectura/Arquitectura Frontend.md`
+- Wireframes and design: `.claude/skills/planning-detail/references/wireframe-conventions.md`

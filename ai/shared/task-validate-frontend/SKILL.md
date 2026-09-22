@@ -1,13 +1,13 @@
 ---
 name: task-validate-frontend
-description: 'Gate duro de calidad funcional en frontend (Nuxt 3 + Vue 3 + TypeScript): ejecuta npm run lint, type-check (vue-tsc), tests unit/component (Vitest) y e2e (Playwright si aplica), build (vite), valida cobertura mínima del 80%, y verifica que los AC de la story están cubiertos por tests. Solo para repositorios frontend. Úsalo con /task-validate-frontend T{id}. Activar con "validar tarea frontend", "run vitest", "check tests Vue/TS".'
+description: 'Hard functional-quality gate on frontend (Nuxt 3 + Vue 3 + TypeScript): runs npm run lint, type-check (vue-tsc), unit/component tests (Vitest) and e2e (Playwright if applicable), build (vite), validates minimum 80% coverage, and verifies that the story ACs are covered by tests. Frontend repositories only. Use with /task-validate-frontend T{id}. Trigger with "validate frontend task", "run vitest", "check Vue/TS tests".'
 ---
 
 # Task Validate Frontend
 
-Gate duro de calidad funcional en frontend. Se invoca siempre en repo frontend.
+Hard functional-quality gate on frontend. Always invoked in a frontend repo.
 
-## Invocación
+## Invocation
 
 ```
 /task-validate-frontend T{id}
@@ -16,105 +16,105 @@ Gate duro de calidad funcional en frontend. Se invoca siempre en repo frontend.
 ## Inputs
 
 - `var/task-runner/T{id}/changes.diff`
-- `.md` de la tarea
-- README de la story padre (para AC)
+- Task `.md`
+- Parent story README (for AC)
 
 ## Outputs
 
 - `var/task-runner/T{id}/validate.report.md`
-- `var/task-runner/T{id}/test-results.json` (salida estructurada de Vitest)
+- `var/task-runner/T{id}/test-results.json` (structured Vitest output)
 - JSON: `{"status":"pass|fail","summary":"...","issues":[...],"acCovered":[...],"acFailed":[],"coverage":0.87}`
 
-## Precondición
+## Precondition
 
-Servicios dependientes levantados: backend API mock o real accesible si los tests E2E requieren. Si no, emitir `fail, summary: "backend no accesible para E2E"`.
+Dependent services up: mock or real backend API accessible if E2E tests require it. If not, emit `fail, summary: "backend not accessible for E2E"`.
 
-## Ejecución
+## Execution
 
-### Paso 1 — Lint
+### Step 1 — Lint
 
 ```bash
 npm run lint -- --format=json
 ```
 
 - [ ] Exit code 0
-- [ ] Sin errors (warnings permitidos con umbral bajo, ej. ≤3)
+- [ ] No errors (warnings allowed under a low threshold, e.g. ≤3)
 
-Si el lint está configurado con `--fix` automático: NO ejecutarlo aquí (solo validar, no modificar). El lint debería haberlo hecho `implement-frontend`.
+If lint is configured with automatic `--fix`: do NOT run it here (validate only, do not modify). Lint should have been done by `implement-frontend`.
 
-### Paso 2 — Type check
+### Step 2 — Type check
 
 ```bash
 npm run type-check
 ```
 
-Equivale a `vue-tsc --noEmit` o similar según proyecto.
+Equivalent to `vue-tsc --noEmit` or similar depending on the project.
 
 - [ ] Exit code 0
-- [ ] Sin errores nuevos en ficheros del diff
+- [ ] No new errors in diff files
 
-### Paso 3 — Tests unit + component
+### Step 3 — Unit + component tests
 
 ```bash
 npm run test:unit -- --reporter=json --coverage --coverage-reporter=clover
 ```
 
 - [ ] Exit code 0
-- [ ] Número de tests ejecutados = tests declarados en la tabla `## Tests` del `.md`
-  - Diff negativo → FAIL
-  - Diff positivo → WARN
+- [ ] Number of tests run = tests declared in the `.md`'s `## Tests` table
+  - Negative diff → FAIL
+  - Positive diff → WARN
 
-Parsear output JSON, extraer:
+Parse the JSON output, extract:
 - Total tests, passed, failed, skipped
-- Tests que cubren cada `AC-xx` (grep en nombres/DocBlocks)
+- Tests covering each `AC-xx` (grep in names/DocBlocks)
 
-### Paso 4 — Coverage
+### Step 4 — Coverage
 
-- Coverage de líneas nuevas/modificadas (del diff)
-  - Parsear clover.xml + cruzar con líneas del diff
-- Umbral: **80%** (sin excepciones)
+- Coverage of new/modified lines (from the diff)
+  - Parse clover.xml + cross-reference with diff lines
+- Threshold: **80%** (no exceptions)
   - < 78% → FAIL
   - 78-80% → WARN
   - ≥ 80% → pass
 
-### Paso 5 — Tests E2E (si aplica)
+### Step 5 — E2E tests (if applicable)
 
-Condiciones para ejecutar E2E:
-- Tarea tiene tag `critical-path`, O
-- Tabla `## Tests` del `.md` declara tests E2E, O
-- AC de la story involucran flujo completo (login + acción + resultado)
+Conditions to run E2E:
+- Task has tag `critical-path`, OR
+- The `.md`'s `## Tests` table declares E2E tests, OR
+- Story ACs involve a full flow (login + action + result)
 
 ```bash
 npm run test:e2e -- --reporter=json
 ```
 
 - [ ] Exit 0
-- [ ] Tests declarados ejecutados
-- [ ] AC críticos cubiertos por E2E
+- [ ] Declared tests run
+- [ ] Critical ACs covered by E2E
 
-### Paso 6 — Build
+### Step 6 — Build
 
 ```bash
 npm run build
 ```
 
-- [ ] Exit 0 (el código compila limpio en modo producción)
-- [ ] Sin warnings de build críticos
+- [ ] Exit 0 (code compiles cleanly in production mode)
+- [ ] No critical build warnings
 
-### Paso 7 — Cobertura de AC
+### Step 7 — AC coverage
 
-Para cada `AC-\d+` aplicable a la tarea:
-- [ ] Existe al menos un test cuyo nombre o DocBlock incluye `AC-{xx}`
-- [ ] El test ha sido ejecutado y pasa
+For each `AC-\d+` applicable to the task:
+- [ ] There is at least one test whose name or DocBlock includes `AC-{xx}`
+- [ ] The test has run and passes
 
-Lista `acCovered` / `acFailed` / `acUncovered`.
+List `acCovered` / `acFailed` / `acUncovered`.
 
-### Paso 8 — Ficheros declarados vs reales
+### Step 8 — Declared vs actual files
 
-- Parsear tabla `## Archivos a crear/modificar`
+- Parse the `## Archivos a crear/modificar` table
 - `git diff --name-only {base}..HEAD`
-- Ficheros declarados ausentes → FAIL
-- Ficheros extra → WARN
+- Declared files missing → FAIL
+- Extra files → WARN
 
 ## Report
 
@@ -124,39 +124,39 @@ Lista `acCovered` / `acFailed` / `acUncovered`.
 **Status:** {PASS|FAIL}
 **Lint:** PASS (0 errors, 2 warnings)
 **Type check:** PASS
-**Tests unit/component:** {total} total, {passed} passed, {failed} failed
-**Tests E2E:** {total} total, {passed} passed (si se ejecutaron)
-**Coverage:** {%} (umbral 80%)
+**Unit/component tests:** {total} total, {passed} passed, {failed} failed
+**E2E tests:** {total} total, {passed} passed (if run)
+**Coverage:** {%} (threshold 80%)
 **Build:** PASS
-**AC cubiertos:** {N}/{total}
+**ACs covered:** {N}/{total}
 
 ## Failed tests
-- {fichero}::{método}
+- {file}::{method}
   - Expected: {x}
   - Actual: {y}
 
-## AC no cubiertos
-- AC-{xx}: ningún test lo verifica
+## Uncovered ACs
+- AC-{xx}: no test verifies it
 
-## Ficheros fuera de scope
-- {lista o "ninguno"}
+## Files out of scope
+- {list or "none"}
 ```
 
-## JSON de retorno
+## Return JSON
 
 ```json
-{"status":"fail","summary":"2 tests fallan + coverage 76% < 80%","issues":[{"severity":"fail","category":"test-failure","test":"SignerForm.spec.ts::testValidation","message":"..."}],"acCovered":["AC-01","AC-02"],"acFailed":[],"acUncovered":["AC-03"],"coverage":0.76}
+{"status":"fail","summary":"2 tests fail + coverage 76% < 80%","issues":[{"severity":"fail","category":"test-failure","test":"SignerForm.spec.ts::testValidation","message":"..."}],"acCovered":["AC-01","AC-02"],"acFailed":[],"acUncovered":["AC-03"],"coverage":0.76}
 ```
 
-## Qué NO hace
+## What it does NOT do
 
-- No audita seguridad (`security-audit-core` + `security-audit-frontend`)
-- No valida a11y (`a11y-check`)
-- No valida design system (`design-system-check`)
-- No mide performance (`perf-smoke-frontend`)
-- No corrige código ni tests
-- No ejecuta lint `--fix` ni formateo
+- Does not audit security (`security-audit-core` + `security-audit-frontend`)
+- Does not validate a11y (`a11y-check`)
+- Does not validate the design system (`design-system-check`)
+- Does not measure performance (`perf-smoke-frontend`)
+- Does not fix code or tests
+- Does not run lint `--fix` or formatting
 
-## Referencias
+## References
 
-- Diseño completo: `Implementación/Skills de Ejecución de Tareas/frontend/05 - Task Validate Frontend.md`
+- Full design: `Implementación/Skills de Ejecución de Tareas/frontend/05 - Task Validate Frontend.md`

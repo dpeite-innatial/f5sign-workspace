@@ -1,13 +1,13 @@
 ---
 name: task-validate-backend
-description: 'Gate duro de calidad funcional en backend (PHP/Symfony): corre la suite (composer test), PHPStan nivel 9, Deptrac, lint, y mide fuerza estructural con covered-MSI de Infection en vez de porcentaje de líneas. Vigila el diff de deptrac.yaml/phpstan y comprueba que las cuatro formas load-bearing del ruleset siguen intactas — el gate sí caza una dependencia prohibida, pero no puede cazar que alguien amplíe la allowlist para permitirla — reportando el delta y exigiendo el ADR que lo declare, y comprueba que un ADR que aterriza lo hace completo. Comprueba que las propiedades declaradas en §Verification de la task se ejecutan de verdad, y que el diff no se sale de su §Scope. Solo para repositorios con stack PHP/Symfony. Úsalo con /task-validate-backend TASK-NNN. Activar con "validar tarea backend", "run phpunit", "check PHPStan y deptrac".'
+description: 'Hard gate for functional quality in backend (PHP/Symfony): runs the suite (composer test), PHPStan level 9, Deptrac, lint, and measures structural strength with Infection''s covered-MSI instead of a line-coverage percentage. Watches the diff of deptrac.yaml/phpstan and checks that the ruleset''s four load-bearing shapes stay intact — the gate does catch a forbidden dependency, but it can''t catch someone extending the allowlist to permit it — reporting the delta and requiring the ADR that declares it, and checks that an ADR that lands does so complete. Checks that the properties declared in the task''s §Verification are actually executed, and that the diff doesn''t stray outside its §Scope. Only for repositories with a PHP/Symfony stack. Use it with /task-validate-backend TASK-NNN. Trigger with "validate backend task", "run phpunit", "check PHPStan and deptrac".'
 ---
 
 # Task Validate (backend)
 
-Gate duro de calidad funcional. Se invoca siempre.
+Hard gate for functional quality. Always invoked.
 
-## Invocación
+## Invocation
 
 ```
 /task-validate-backend TASK-NNN
@@ -16,214 +16,219 @@ Gate duro de calidad funcional. Se invoca siempre.
 ## Inputs
 
 - `var/task-runner/TASK-NNN/changes.diff`
-- El `.md` de la task — sus secciones de **alcance** y **verificación**, localizadas por intención: no están
-  en `§3` y `§5` de forma fiable (medido: alcance en §3 en 13 de 21; verificación en §5 en 7 de 21)
+- The task's `.md` — its **scope** and **verification** sections, located by intent: they are not
+  reliably in `§3` and `§5` (measured: scope in §3 in 13 of 21; verification in §5 in 7 of 21)
 
 ## Outputs
 
 - `var/task-runner/TASK-NNN/validate.report.md`
-- `var/task-runner/TASK-NNN/test-results.xml` (JUnit) — ⚠ **solo si lo pides explícitamente**:
-  `phpunit.dist.xml` no tiene bloque `<logging>` y `composer test` no pasa `--log-junit`, así que la orden
-  del Paso 1 tal cual **no produce ningún fichero**. Para el cruce con la sección de verificación, añade
-  `--log-junit var/task-runner/TASK-NNN/test-results.xml` a la invocación de phpunit, o lee los nombres del
-  stdout
+- `var/task-runner/TASK-NNN/test-results.xml` (JUnit) — ⚠ **only if explicitly requested**:
+  `phpunit.dist.xml` has no `<logging>` block and `composer test` doesn't pass `--log-junit`, so Step 1's
+  command as it stands **produces no file**. To cross-check against the verification section, add
+  `--log-junit var/task-runner/TASK-NNN/test-results.xml` to the phpunit invocation, or read the names
+  from stdout
 - JSON: `{"status":"pass|fail","summary":"...","issues":[...],"harness":"...","msi":0.91,"propertiesUnproven":[]}`
 
-## Precondición crítica — declarar el harness, y comprobar que apunta a TU árbol
+## Critical precondition — declare the harness, and check it points to YOUR tree
 
-Los servicios que la suite necesita (Postgres, RabbitMQ, MinIO, Mailpit) los levanta
-`../f5sign-infra`. **Nunca `docker compose` desde este repo** (regla 5). Y antes de correr nada:
+The services the suite needs (Postgres, RabbitMQ, MinIO, Mailpit) are brought up by
+`../f5sign-infra`. **Never `docker compose` from this repo** (rule 5). And before running anything:
 
-⚑ **`f5sign-infra/docker-compose.override.yml` monta `../f5sign-backend`.** Si trabajas en un worktree
-enlazado, `make test` valida el otro árbol y su verde no dice nada de tu código. Elegir vía y **escribirla
-en el campo `harness` del JSON**:
+⚑ **`f5sign-infra/docker-compose.override.yml` mounts `../f5sign-backend`.** If you're working in a
+linked worktree, `make test` validates the other tree and its green says nothing about your code. Choose
+a route and **write it in the JSON's `harness` field**:
 
-| Vía | Sirve para | Limitación conocida |
+| Route | Good for | Known limitation |
 |---|---|---|
-| `make -C ../f5sign-infra test` | El checkout principal | Valida `../f5sign-backend`, no un worktree |
-| `make -C ../f5sign-infra wt-backend src=$(pwd)` | Un worktree | Solo postgres: storage **falla** (`host: minio`) y broker se salta. Muere además en el timeout de 300 s de Composer, pero **no por la duración de la suite** (~74 s medidos aparte): mete install + migraciones + suite en un proceso |
-| `docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html f5sign/backend:dev sh -c 'php -d memory_limit=-1 bin/phpunit --no-progress'` | Un worktree, suite completa | Requiere el stack arriba; migra antes contra `postgres-test` |
+| `make -C ../f5sign-infra test` | The main checkout | Validates `../f5sign-backend`, not a worktree |
+| `make -C ../f5sign-infra wt-backend src=$(pwd)` | A worktree | Postgres only: storage **fails** (`host: minio`) and the broker is skipped. It also dies at Composer's 300 s timeout, but **not because of the suite's duration** (~74 s measured separately): it packs install + migrations + suite into one process |
+| `docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html f5sign/backend:dev sh -c 'php -d memory_limit=-1 bin/phpunit --no-progress'` | A worktree, full suite | Requires the stack up; migrate first against `postgres-test` |
 
-Si un servicio está caído durante la ejecución → `status: fail`, `summary: "infrastructure unavailable: X"`.
-**No reintentar automáticamente, y no confundirlo con un fallo de código:** el síntoma clásico es
-`Connection could not be established with host` (Mailpit desconectado de la red) o
-`Could not resolve host: minio`. Ambos son entorno, no regresión.
+If a service is down during the run → `status: fail`, `summary: "infrastructure unavailable: X"`.
+**Don't retry automatically, and don't mistake it for a code failure:** the classic symptom is
+`Connection could not be established with host` (Mailpit disconnected from the network) or
+`Could not resolve host: minio`. Both are environment, not regression.
 
-## Ejecución
+## Execution
 
-### Paso 1 — Suite
+### Step 1 — Suite
 
 ```bash
-composer test        # un solo tier; NO existen test:unit / test:integration / test:e2e
+composer test        # single tier; test:unit / test:integration / test:e2e do NOT exist
 ```
 
-Los tiers de este repo son **directorios**, no scripts (ADR-0035): `Unit/`, `Application/` (herméticos),
-`Integration/` (DB real, rollback DAMA), `Acceptance/` (HTTP). ⚠ **Para acotar, `--filter`, no
-`--testsuite`**: `phpunit.dist.xml` declara exactamente dos suites, `default` (todo `tests/`) y
-`phpstan-rules` (`phpstan/tests`), y **ninguna es un tier**. `tests/README.md` registra las suites por tier
-como *"(target)"*, o sea no construidas: `--testsuite Unit` da error.
+This repo's tiers are **directories**, not scripts (ADR-0035): `Unit/`, `Application/` (hermetic),
+`Integration/` (real DB, DAMA rollback), `Acceptance/` (HTTP). ⚠ **To narrow it down, use `--filter`,
+not `--testsuite`**: `phpunit.dist.xml` declares exactly two suites, `default` (all of `tests/`) and
+`phpstan-rules` (`phpstan/tests`), and **neither one is a tier**. `tests/README.md` records the per-tier
+suites as *"(target)"*, i.e. not yet built: `--testsuite Unit` errors out.
 
 - [ ] Exit code 0.
-- [ ] Los tests que la sección de verificación nombra **existen y se han ejecutado** (buscarlos por nombre en el
-      JUnit). Un test nombrado en la task y ausente del run es `fail` categoría `property-unproven`.
+- [ ] The tests the verification section names **exist and have been run** (look them up by name in the
+      JUnit). A test named in the task and absent from the run is `fail` category `property-unproven`.
 
-### Paso 2 — Fuerza estructural: covered-MSI, no porcentaje de líneas
+### Step 2 — Structural strength: covered-MSI, not line percentage
 
 ```bash
 composer infection
 ```
 
-**Este repo no tiene umbral de cobertura de líneas y no se debe inventar uno.** El gate es el covered-MSI
-de Infection (ADR-0035). `composer coverage:text` / `coverage:clover` existen para inspección, no como bar.
+**This repo has no line-coverage threshold and one must not be invented.** The gate is Infection's
+covered-MSI (ADR-0035). `composer coverage:text` / `coverage:clover` exist for inspection, not as a bar.
 
-- **Son DOS puertas y `composer infection` falla con cualquiera de las dos.** `infection.json5.dist`
-  declara `minCoveredMsi` (profundidad: de lo cubierto, cuánto resiste) **y `minMsi`** (amplitud: incluye lo
-  no cubierto). Leer los dos números de ahí, no de aquí ni de memoria.
-- ⛔ **Si cae `minMsi`, no lo repares atribuyendo los flujos anchos.** El propio fichero lo advierte: *"the
-  cheapest way to raise MSI is to attribute the broad flows"* — y eso deshace la regla de dos tiers de
-  ADR-0035. El arreglo es test, no atribución.
-- ⚠ **Infection no ve código sin llamantes**, y su `source` es `src/F5Sign` solamente. Un artefacto nuevo
-  sin ningún llamante puntúa como si no existiera, y el test de una regla PHPStan propia (que vive en
-  `phpstan/`) es su **única** guarda. Si el diff añade superficie en esas zonas, decirlo en el report en vez
-  de dejar que el MSI hable por ella.
+- **There are TWO gates and `composer infection` fails on either one.** `infection.json5.dist`
+  declares `minCoveredMsi` (depth: of what's covered, how much survives) **and `minMsi`** (breadth:
+  includes what isn't covered). Read both numbers from there, not from here or from memory.
+- ⛔ **If `minMsi` drops, don't fix it by attributing the broad flows.** The file itself warns about
+  this: *"the cheapest way to raise MSI is to attribute the broad flows"* — and that undoes ADR-0035's
+  two-tier rule. The fix is a test, not attribution.
+- ⚠ **Infection doesn't see code with no callers**, and its `source` is `src/F5Sign` only. A new
+  artifact with no caller scores as if it didn't exist, and the test of a custom PHPStan rule (which
+  lives in `phpstan/`) is its **only** guard. If the diff adds surface in those areas, say so in the
+  report instead of letting the MSI speak for it.
 
-### Paso 3 — Estático y arquitectura
+### Step 3 — Static analysis and architecture
 
 ```bash
-composer phpstan     # nivel 9
-composer arch        # Deptrac: contrato de visibilidad entre capas y BCs
-composer lint        # PHP-CS-Fixer en modo check
+composer phpstan     # level 9
+composer arch        # Deptrac: visibility contract between layers and BCs
+composer lint        # PHP-CS-Fixer in check mode
 ```
 
-- [ ] PHPStan sin errores nuevos. **No ampliar `phpstan-baseline.neon` para pasar el gate**: cada entrada
-      del baseline es un hallazgo de diseño con su *por qué* escrito. Añadir una es una decisión, no un fix.
-- [ ] Deptrac sin violaciones. **No tiene baseline**: una violación se reporta como hallazgo, no se silencia.
-- [ ] Lint limpio.
-- [ ] Si el diff añade tests: llevan `#[CoversClass]` o `#[CoversNothing]` (`phpunit.dist.xml` tiene
-      `requireCoverageMetadata="true"`), y `#[UsesClass]` para colaboradores, incluidas las excepciones que
-      el test asserta.
+- [ ] PHPStan with no new errors. **Don't extend `phpstan-baseline.neon` to pass the gate**: every entry
+      in the baseline is a design finding with its *why* written down. Adding one is a decision, not a fix.
+- [ ] Deptrac with no violations. **It has no baseline**: a violation is reported as a finding, not silenced.
+- [ ] Lint clean.
+- [ ] If the diff adds tests: they carry `#[CoversClass]` or `#[CoversNothing]` (`phpunit.dist.xml` has
+      `requireCoverageMetadata="true"`), and `#[UsesClass]` for collaborators, including the exceptions
+      the test asserts.
 
-### Paso 3b — La separación entre dominios, afirmada en vez de contada
+### Step 3b — Domain separation, asserted instead of counted
 
-`composer arch` responde *"¿hay violaciones?"*, y hay dos formas de que responda **no** sin que la
-propiedad se cumpla. Este paso cubre las dos.
+`composer arch` answers *"are there violations?"*, and there are two ways it can answer **no** without
+the property actually holding. This step covers both.
 
-**a) El delta de la allowlist.** Si el diff toca [`deptrac.yaml`](../../../deptrac.yaml) (capas o ruleset),
-`phpstan.dist.neon`, o añade entradas a `phpstan-baseline.neon`:
+**a) The allowlist delta.** If the diff touches [`deptrac.yaml`](../../../deptrac.yaml) (layers or
+ruleset), `phpstan.dist.neon`, or adds entries to `phpstan-baseline.neon`:
 
-- [ ] **Reportar el delta en prosa**, no solo "fichero tocado": qué capa gana qué dependencia, qué regla se
-      relaja, qué hallazgo se silencia. Es la única forma de que un reviewer lo vea.
-- [ ] **Exigir ADR citado en el changeset** → si no hay: `fail`, categoría `undeclared-decision`. Ampliar
-      la allowlist para que el gate pase **es la decisión**, no el arreglo (`implement-backend` Paso 2b).
+- [ ] **Report the delta in prose**, not just "file touched": which layer gains which dependency, which
+      rule is relaxed, which finding is silenced. It's the only way a reviewer will see it.
+- [ ] **Require an ADR cited in the changeset** → if there isn't one: `fail`, category
+      `undeclared-decision`. Extending the allowlist so the gate passes **is the decision**, not the fix
+      (`implement-backend` Step 2b).
 
-**b) Las cuatro formas load-bearing de `deptrac.yaml`, leídas como datos.**
+**b) The four load-bearing shapes of `deptrac.yaml`, read as data.**
 
-⚠ **Corregido 2026-08-17, y la corrección importa:** una versión anterior de este paso decía que estas
-reglas *"no pueden ponerse rojas"*. Falso. El `ruleset` es una **allowlist positiva** y el repo corre con
-`Uncovered 0 / Allowed 3755`, así que una clase que dependa de una capa no permitida **sí** produce
-`DependsOnDisallowedLayer`. Lo que no puede ponerse rojo es **ampliar la allowlist**: eso no viola nada,
-simplemente deja de vigilar. Por eso el check real es el (a) de arriba —mirar el diff del fichero— más
-comprobar que estas cuatro formas siguen intactas:
+⚠ **Corrected 2026-08-17, and the correction matters:** an earlier version of this step said these
+rules *"can't go red"*. False. The `ruleset` is a **positive allowlist** and the repo runs with
+`Uncovered 0 / Allowed 3755`, so a class that depends on a disallowed layer **does** produce
+`DependsOnDisallowedLayer`. What can't go red is **extending the allowlist**: that doesn't violate
+anything, it just stops watching. That's why the real check is (a) above —look at the file's diff— plus
+checking that these four shapes stay intact:
 
-- [ ] **`Kernel: []`** — no depende de nada.
-- [ ] **`Foundation: [Kernel, Vendor]` y nada más.** `LOAD-BEARING.md` §1.13 la marca como *"la más probable
-      de todas de deshacerse, y por razón mecánica: un ruleset relajado no falla nada"*. Añadirle un
-      `…Contract` disuelve la inversión de dependencia que ADR-0044 existe para forzar.
-- [ ] **Entre BCs, solo `…Contract`** — ninguna lista nombra un `Domain`/`Application`/`Infrastructure`/`UI`
-      ajeno. Y ninguna capa fuera de Notification nombra una `Notification*` (ADR-0037).
-- [ ] **`IdentityAccessApplication` e `IdentityAccessInfrastructure` tienen lista de hermanos VACÍA**
-      (ADR-0044, `LOAD-BEARING.md` §1.11). *"Completarla por simetría"* —porque parece un olvido al lado de
-      once listas pobladas— es el modo de destrucción documentado.
+- [ ] **`Kernel: []`** — depends on nothing.
+- [ ] **`Foundation: [Kernel, Vendor]` and nothing else.** `LOAD-BEARING.md` §1.13 marks it as *"the most
+      likely of all of these to come undone, and for a mechanical reason: a relaxed ruleset fails
+      nothing"*. Adding a `…Contract` to it dissolves the dependency inversion ADR-0044 exists to force.
+- [ ] **Between BCs, only `…Contract`** — no list names another BC's `Domain`/`Application`/
+      `Infrastructure`/`UI`. And no layer outside Notification names a `Notification*` (ADR-0037).
+- [ ] **`IdentityAccessApplication` and `IdentityAccessInfrastructure` have an EMPTY sibling list**
+      (ADR-0044, `LOAD-BEARING.md` §1.11). *"Filling it in for symmetry"* —because it looks like an
+      oversight next to eleven populated lists— is the documented mode of destruction.
 
-⚑ **Y el collector `Vendor` es una allowlist de namespaces**, así que un vendor que no esté en su regex no
-pertenece a ninguna capa y un `Domain/` puede importarlo sin violar nada. Hoy `Lexik\` está en
-`composer.json` y **no** en la regex. Si el diff añade una dependencia de vendor, comprobar que su namespace
-entra en el collector.
+⚑ **And the `Vendor` collector is a namespace allowlist**, so a vendor not in its regex belongs to no
+layer and a `Domain/` can import it without violating anything. Today `Lexik\` is in `composer.json` and
+**not** in the regex. If the diff adds a vendor dependency, check that its namespace is covered by the
+collector.
 
-### Paso 3c — Un ADR que aterriza, aterriza completo
+### Step 3c — An ADR that lands, lands complete
 
-Si el diff añade o cambia el estado de un `docs/adr/ADR-*.md`:
+If the diff adds or changes the status of a `docs/adr/ADR-*.md`:
 
-- [ ] `Status` no es `Accepted` a menos que la decisión esté **ejercitada** en este mismo diff — en este set
-      *Accepted* significa ejercitado, no acordado.
-- [ ] Están las **tres** ediciones de [`docs/adr/README.md`](../../../docs/adr/README.md): fila de índice,
-      grafo de relaciones, fila de crosswalk. Falta alguna → `fail`, categoría `adr-index-incomplete`.
-- [ ] Y las **dos que `AUTHORING.md` llama fáciles de olvidar**, porque son cinco sitios en total: la
-      referencia `(ADR-NNNN)` en los docblocks del código que gobierna (*"only the pair makes the decision
-      discoverable in both directions"*), y la reconciliación del modelo de dominio en `docs/ddd/` **más su
-      fila de estado** en `docs/ddd/README.md`.
-- [ ] Está el campo `Crosswalk` de la cabecera y las secciones que exige `AUTHORING.md`
-      (`Consequences` con **Risks**, `Enforced by`, `Realized in`).
-- [ ] Si el diff hace cierto algo que otro ADR daba por pendiente, **ese** ADR mueve su
-      `Status` / `Enforced by` / `Realized in` aquí y no después.
+- [ ] `Status` is not `Accepted` unless the decision is **exercised** in this very diff — in this set
+      *Accepted* means exercised, not agreed.
+- [ ] The **three** edits to [`docs/adr/README.md`](../../../docs/adr/README.md) are there: index row,
+      relationship graph, crosswalk row. Missing any → `fail`, category `adr-index-incomplete`.
+- [ ] And the **two that `AUTHORING.md` calls easy to forget**, because there are five places in total:
+      the `(ADR-NNNN)` reference in the docblocks of the code it governs (*"only the pair makes the
+      decision discoverable in both directions"*), and the reconciliation of the domain model in
+      `docs/ddd/` **plus its status row** in `docs/ddd/README.md`.
+- [ ] The `Crosswalk` header field and the sections `AUTHORING.md` requires are present
+      (`Consequences` with **Risks**, `Enforced by`, `Realized in`).
+- [ ] If the diff makes true something another ADR had marked pending, **that** ADR moves its
+      `Status` / `Enforced by` / `Realized in` here and not later.
 
-### Paso 4 — Las propiedades declaradas se prueban de verdad
+### Step 4 — Declared properties are actually proven
 
-Por cada afirmación de la sección de verificación, comprobar que **el harness elegido puede verla**. Es el paso que
-distingue esta skill de "correr la suite", y existe porque el repo ha shippeado guardas verdes que nada
-ejecutaba (`CLAUDE.md` regla de autoría 4):
+For each claim in the verification section, check that **the chosen harness can see it**. This is the
+step that distinguishes this skill from "run the suite", and it exists because the repo has shipped
+green guards that nothing executed (`CLAUDE.md` authorship rule 4):
 
-- **Locks de fila**: `Integration/` corre **una conexión** bajo rollback DAMA, así que con y sin
-  `FOR UPDATE` es indistinguible. Se necesita una segunda conexión
+- **Row locks**: `Integration/` runs **one connection** under DAMA rollback, so with and without
+  `FOR UPDATE` is indistinguishable. A second connection is needed
   ([`ProbesRowLocks`](../../../tests/F5Sign/Support/ProbesRowLocks.php)).
-- **Redelivery / reintentos**: `async_events` es `in-memory://` en test; nada se reentrega.
-- **Identidad tras serializar**: un fake que devuelve la instancia que guardó no prueba nada de `save()`.
-- **Fixtures que no discriminan**: si dos variables siempre concuerdan en los datos de prueba, una
-  proyección que filtra por la equivocada pasa igual. Exigir el caso donde **discrepan**.
+- **Redelivery / retries**: `async_events` is `in-memory://` in test; nothing gets redelivered.
+- **Identity after serialization**: a fake that returns the instance it saved proves nothing about
+  `save()`.
+- **Fixtures that don't discriminate**: if two variables always agree in the test data, a projection
+  that filters on the wrong one still passes. Require the case where they **disagree**.
 
-- **Redelivery / reintentos**: `async_events` es `in-memory://` en test… **pero no es toda la verdad**:
-  `when@test` declara además dos transportes AMQP reales (`async_events_amqp`,
-  `async_events_unroutable_amqp`) para que los tests de broker alcancen propiedades de redelivery. Antes de
-  declarar una propiedad inalcanzable, comprobar si le sirve uno de esos.
-- ⚑ **La probe de locks necesita `#[SkipDatabaseRollback]`.** Su propio docblock lo dice: sin ese atributo la
-  conexión estática de DAMA da a cada "sesión" la misma conexión física, **y un lock nunca choca consigo
-  mismo**. Añadirla sin él reproduce el verde-que-no-prueba-nada que este paso existe para cazar.
+- **Redelivery / retries**: `async_events` is `in-memory://` in test… **but that's not the whole truth**:
+  `when@test` also declares two real AMQP transports (`async_events_amqp`,
+  `async_events_unroutable_amqp`) so broker tests can reach redelivery properties. Before declaring a
+  property unreachable, check whether one of those serves it.
+- ⚑ **The locks probe needs `#[SkipDatabaseRollback]`.** Its own docblock says so: without that
+  attribute DAMA's static connection gives every "session" the same physical connection, **and a lock
+  never collides with itself**. Adding it without that reproduces the green-that-proves-nothing this step
+  exists to catch.
 
-**Dos formas de contaminar el run que hacen que un VERDE no valga nada** (`tests/README.md` § *Two ways to
+**Two ways to contaminate the run that make a GREEN worthless** (`tests/README.md` § *Two ways to
 get an untrustworthy run*):
 
-- [ ] **`worker` o `relay` arriba durante la suite**: consumidores compitiendo en el mismo broker, se comen
-      los mensajes que el test espera. `make worker-down`, confirmar con `make worker-status`. `ensure-stack`
-      **no** lo comprueba.
-- [ ] **Dos `phpunit` a la vez contra la misma DB de test**: el aislamiento de DAMA es por *conexión*, no por
-      proceso — *"falla cerca del 100 % de las veces y se parece exactamente a una tormenta de flakes"*.
-- [ ] Entorno: `ensure-stack` exige `redis` (que los tests no usan, `LOCK_DSN=flock`) y **no** exige `minio`
-      (que sí usan), así que `make test` puede arrancar en verde con el storage caído.
+- [ ] **`worker` or `relay` up during the suite**: consumers competing on the same broker eat the
+      messages the test expects. `make worker-down`, confirm with `make worker-status`. `ensure-stack`
+      **doesn't** check this.
+- [ ] **Two `phpunit` runs at once against the same test DB**: DAMA's isolation is per *connection*, not
+      per process — *"fails close to 100% of the time and looks exactly like a storm of flakes"*.
+- [ ] Environment: `ensure-stack` requires `redis` (which the tests don't use, `LOCK_DSN=flock`) and
+      **doesn't** require `minio` (which they do use), so `make test` can start green with storage down.
 
-⚑ **Antes de rehacer a mano una comprobación estructural, mira si ya hay un test que la cierra.** Dos existen
-y ninguno de estos pasos los sustituye:
-[`OpenApiSpecTest`](../../../tests/F5Sign/Acceptance/OpenApiSpecTest.php) cierra el conjunto de claves del
-spec **en las dos direcciones**, con control positivo, y censa cada enum publicado; y
-[`SchemaConformanceTest`](../../../tests/F5Sign/Integration/SchemaConformanceTest.php) afirma el scoping por
-tenant y la RLS canónica contra la DB viva, con su taxonomía de exenciones. **Ejecútalos y lee su salida en
-vez de reproducirlos**; si falta un caso, se añade allí.
+⚑ **Before redoing a structural check by hand, check whether a test already closes it.** Two exist and
+none of these steps replace them:
+[`OpenApiSpecTest`](../../../tests/F5Sign/Acceptance/OpenApiSpecTest.php) closes the spec's key set
+**in both directions**, with positive control, and audits every published enum; and
+[`SchemaConformanceTest`](../../../tests/F5Sign/Integration/SchemaConformanceTest.php) asserts
+per-tenant scoping and the canonical RLS against the live DB, with its exemption taxonomy. **Run them
+and read their output instead of reproducing them**; if a case is missing, add it there.
 
-Lo que no pueda probarse con este harness va a `propertiesUnproven` y es `fail` si la task lo declaraba probado.
+Whatever can't be proven with this harness goes to `propertiesUnproven` and is `fail` if the task
+declared it proven.
 
-### Paso 5 — El diff no se sale del alcance declarado
+### Step 5 — The diff doesn't stray outside the declared scope
 
-Este formato de task **no lleva tabla de "Archivos a crear/modificar"** (eso era el `Planning/` legado).
-La diana es la prosa de la sección de alcance, con sus listas **In** y **Out**:
+This task format **doesn't carry a "files to create/modify" table** (that was the legacy `Planning/`).
+The target is the prose of the scope section, with its **In** and **Out** lists:
 
 - `git diff --name-only $(git merge-base HEAD develop)..HEAD`.
-- [ ] Nada del diff cae en algo declarado **Out** → si cae: `fail` categoría `out-of-scope`.
-- [ ] Ficheros fuera de lo anticipado pero no prohibidos: `warn` categoría `undeclared-file`.
-- ⚑ Si el cambio re-corta o renombra un concepto, comprobar el barrido de la regla 1:
-      `rg -n '<término retirado>' src tests migrations docs config CLAUDE.md`. Un fichero que aún necesita
-      la edición aparece con **diff vacío**, así que el diff no es la superficie de búsqueda.
+- [ ] Nothing in the diff falls under something declared **Out** → if it does: `fail` category
+      `out-of-scope`.
+- [ ] Files outside what was anticipated but not forbidden: `warn` category `undeclared-file`.
+- ⚑ If the change re-scopes or renames a concept, check the rule 1 sweep:
+      `rg -n '<retired-term>' src tests migrations docs config CLAUDE.md`. A file that still needs
+      the edit shows up with an **empty diff**, so the diff is not the search surface.
 
-### Paso 6 — Migraciones (si el diff toca `migrations/`)
+### Step 6 — Migrations (if the diff touches `migrations/`)
 
-⛔ **No con `make sf`.** Tres razones: monta `../f5sign-backend`, así que en un worktree valida **otro
-árbol**; usa el rol `f5sign_app`, que no es superusuario (el target `migrate` del Makefile usa
-`$(PHP_ADMIN)`); y `--dry-run` **solo imprime SQL**, así que no dice nada de `down()`. Usa el contenedor
-puntual con la URL de admin, como en la precondición.
+⛔ **Not with `make sf`.** Three reasons: it mounts `../f5sign-backend`, so in a worktree it validates
+**a different tree**; it uses the `f5sign_app` role, which is not a superuser (the Makefile's `migrate`
+target uses `$(PHP_ADMIN)`); and `--dry-run` **only prints SQL**, so it says nothing about `down()`. Use
+the one-off container with the admin URL, as in the precondition.
 
-- [ ] `up()` aplica sin errores contra un `postgres-test` recién migrado.
-- [ ] **`down()` se ejercita de verdad** — `--dry-run` no lo prueba; o se aplica y se revierte, o el report
-      dice explícitamente que la reversibilidad quedó sin comprobar.
-- [ ] Si la migración **escribe filas que el dominio luego lee**, es `doctrine-guard` quien lo audita
-      (regla de autoría 6); aquí basta con marcarlo en el report para que no se pierda.
+- [ ] `up()` applies without errors against a freshly migrated `postgres-test`.
+- [ ] **`down()` is actually exercised** — `--dry-run` doesn't prove it; either it's applied and
+      reverted, or the report explicitly states that reversibility was left unchecked.
+- [ ] If the migration **writes rows the domain later reads**, `doctrine-guard` is the one that audits it
+      (authorship rule 6); here it's enough to flag it in the report so it isn't lost.
 
 ## Report
 
@@ -231,35 +236,36 @@ puntual con la URL de admin, como en la precondición.
 # task-validate-backend — TASK-NNN
 
 **Status:** {PASS|FAIL}
-**Harness:** {la vía elegida, literal}
+**Harness:** {the chosen route, literal}
 **Tests:** {passed} passed, {failed} failed, {skipped} skipped
-**Covered-MSI:** {%} (umbral ADR-0035)
-**PHPStan:** {N} errores nuevos · **Deptrac:** {N} violaciones · **Lint:** {N}
+**Covered-MSI:** {%} (ADR-0035 threshold)
+**PHPStan:** {N} new errors · **Deptrac:** {N} violations · **Lint:** {N}
 
-## Separación de dominios
-- Contract-only entre BCs: {ok | la capa X gana Y}
-- Nada depende de Notification: {ok | X → NotificationZ}
-- `Kernel: []`: {ok | depende de X}
-- Reglas relajadas en este diff: {ninguna | el delta en prosa + el ADR que lo declara}
+## Domain separation
+- Contract-only between BCs: {ok | layer X gains Y}
+- Nothing depends on Notification: {ok | X → NotificationZ}
+- `Kernel: []`: {ok | depends on X}
+- Relaxed rules in this diff: {none | the delta in prose + the ADR that declares it}
 
-## Propiedades declaradas y no probadas
-- {afirmación de la sección de verificación} → el harness no la alcanza porque {razón}
+## Declared and unproven properties
+- {claim from the verification section} → the harness doesn't reach it because {reason}
 
-## Fuera de §Scope
-- {lista o "ninguno"}
+## Outside §Scope
+- {list or "none"}
 
-## Servicios no disponibles
-- {lista o "ninguno"} (entorno, no regresión)
+## Unavailable services
+- {list or "none"} (environment, not regression)
 ```
 
-## Qué NO hace
+## What it does NOT do
 
-- No audita seguridad, compliance ni performance.
-- No escribe tests que falten — solo detecta que faltan.
-- No corrige código ni tests.
-- No amplía baselines para pasar.
+- Doesn't audit security, compliance or performance.
+- Doesn't write missing tests — only detects that they're missing.
+- Doesn't fix code or tests.
+- Doesn't extend baselines to pass.
 
-## Protocolo de corrección
+## Correction protocol
 
-Si `task-runner` reintenta con este report como input, la instrucción es *"corregir los issues sin cambiar
-el scope"*. Máximo 2 iteraciones automáticas; al tercer intento, intervención humana.
+If `task-runner` retries with this report as input, the instruction is *"fix the issues without
+changing the scope"*. Maximum 2 automatic iterations; on the third attempt, human intervention.
+</content>

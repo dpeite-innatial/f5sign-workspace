@@ -1,53 +1,58 @@
 ---
 name: perf-smoke-backend
-description: 'Smoke de performance en backend (PHP/Symfony). Su mitad ESTÁTICA sí corre hoy y es la útil: N+1 por lectura de código, índice efectivo para las consultas nuevas, trabajo pesado (o llamadas de red) dentro de una transacción o un lock, y trabajo síncrono en el camino HTTP que debería ir por Messenger. La mitad DINÁMICA (p95, throughput, memoria) no es ejecutable: depende de composer perf:seed, que no existe en este repo, y se reporta como skipped con su razón, nunca como verde. Emite warnings, no bloquea. Solo para repositorios con stack PHP/Symfony. Úsalo con /perf-smoke-backend TASK-NNN. Activar con "smoke perf backend", "benchmark API PHP", "check N+1".'
+description: 'Performance smoke test on the backend (PHP/Symfony). Its STATIC half runs today and is the useful one: N+1 by reading the code, an effective index for the new queries, heavy work (or network calls) inside a transaction or a lock, and synchronous work on the HTTP path that should go through Messenger. The DYNAMIC half (p95, throughput, memory) is not runnable: it depends on composer perf:seed, which doesn''t exist in this repo, and is reported as skipped with its reason, never as green. Emits warnings, doesn''t block. Only for repositories with a PHP/Symfony stack. Use it with /perf-smoke-backend TASK-NNN. Trigger with "smoke perf backend", "benchmark API PHP", "check N+1".'
 ---
 
 # Perf Smoke (backend)
 
-⛔ **La mitad dinámica no es ejecutable hoy.** Depende de `composer perf:seed`, que **no existe**: los
-scripts de este repo son `test`, `coverage`, `coverage:text`, `coverage:clover`, `phpstan`, `arch`, `lint`,
-`format`, `infection`, `qa` (comprobar con `composer run-script --list`, no fiarse de esta lista). Sin
-fixtures no hay p95, ni throughput, ni consumo comparable, y **`task-runner` la salta declarándolo en
-`run.log` como `skipped` con su razón — nunca como verde**.
+⛔ **The dynamic half is not runnable today.** It depends on `composer perf:seed`, which **doesn't
+exist**: this repo's scripts are `test`, `coverage`, `coverage:text`, `coverage:clover`, `phpstan`,
+`arch`, `lint`, `format`, `infection`, `qa` (check with `composer run-script --list`, don't trust
+this list). Without fixtures there's no p95, no throughput, no comparable consumption, and
+**`task-runner` skips it, declaring it in `run.log` as `skipped` with its reason — never as green**.
 
-✅ **La mitad estática sí vale, y es la que más ha pagado en este repo.** Se puede hacer sin fixtures:
+✅ **The static half does hold up, and it's the one that has paid off most in this repo.** It can be
+done without fixtures:
 
-- [ ] **N+1 por lectura del código**: un bucle que consulta por elemento en vez de una consulta por lote.
-- [ ] **Índice efectivo para las consultas que el diff añade**: que exista uno cuyo prefijo sea el `WHERE`
-      real (en tablas de tenant, empezando por `tenant_id`), no un índice cualquiera sobre la columna.
-- [ ] **Trabajo pesado dentro de una transacción**: sobre todo una llamada de red dentro de un lock. ⚑
-      `BL-17` está abierto justo por eso — nada acota la ventana de lock durante DSS: `lock_timeout` y
-      `statement_timeout` no aparecen en `src/`, `config/` ni en infra, mientras la transacción de firma
-      abarca N documentos a través de la latencia de DSS. Si el diff amplía ese tramo, decirlo.
-- [ ] **Trabajo síncrono en el camino HTTP** que debería ir por Messenger (regla 3 del repo).
+- [ ] **N+1 by reading the code**: a loop that queries per element instead of one batched query.
+- [ ] **Effective index for the queries the diff adds**: one whose prefix matches the actual `WHERE`
+      (on tenant tables, starting with `tenant_id`), not just any index on the column.
+- [ ] **Heavy work inside a transaction**: especially a network call inside a lock. ⚑ `BL-17` is open
+      for exactly this — nothing bounds the lock window during DSS: `lock_timeout` and
+      `statement_timeout` don't appear in `src/`, `config/` or infra, while the signing transaction
+      spans N documents across DSS latency. If the diff widens that span, say so.
+- [ ] **Synchronous work on the HTTP path** that should go through Messenger (repo rule 3).
 
-Lo estático emite `warn`, no bloquea. Lo dinámico se reporta como no ejecutado.
+The static half emits `warn`, it doesn't block. The dynamic half is reported as not run.
 
-Smoke test de performance. Se invoca cuando el diff toca un camino caliente (consulta en bucle, transacción larga, worker, endpoint de lista). NO es gate duro — emite warnings.
+Performance smoke test. Invoked when the diff touches a hot path (query in a loop, long
+transaction, worker, list endpoint). It is NOT a hard gate — it emits warnings.
 
-## Invocación
+## Invocation
 
 ```
 /perf-smoke-backend TASK-NNN
 ```
 
-## Precondición
+## Precondition
 
-⚠ **No hay `composer perf:seed` en este repo**, así que los fixtures nunca están cargados: la parte dinámica se reporta `skipped` con esa razón literal y se ejecuta solo la estática de arriba. No bloquea. Crear el seed es una decisión (y una fila de BACKLOG), no algo que esta skill improvise.
+⚠ **There's no `composer perf:seed` in this repo**, so fixtures are never loaded: the dynamic part
+is reported `skipped` with that literal reason and only the static checks above run. It doesn't
+block. Creating the seed is a decision (and a BACKLOG row), not something this skill improvises.
 
 ## Inputs
 
 - `var/task-runner/TASK-NNN/changes.diff`
 - `var/task-runner/TASK-NNN/context-digest.md`
-- `var/task-runner/TASK-NNN/doctrine-guard.report.md` (si existe; para correlacionar índices)
-- `.md` de la tarea (tags + umbrales overrideados si los declara)
+- `var/task-runner/TASK-NNN/doctrine-guard.report.md` (if it exists; to correlate indexes)
+- the task's `.md` (tags + overridden thresholds if declared)
 
-Umbrales por defecto (overridables en el `.md`):
-- Endpoint HTTP: p95 < 300ms → pass; 300-800ms → warn; > 800ms → warn alta
-- Worker: throughput ⚠ **sin diana: ningún fichero de `config/` define un mínimo de throughput**, así que esta comparación no tiene lado derecho. Reportar la medida cruda, no un veredicto
-- Memoria: endpoint < 50MB por request
-(Frontend perf se mide con la skill `perf-smoke-frontend` en su propio repo.)
+Default thresholds (overridable in the `.md`):
+- HTTP endpoint: p95 < 300ms → pass; 300-800ms → warn; > 800ms → warn high
+- Worker: throughput ⚠ **no target: no file in `config/` defines a minimum throughput**, so this
+  comparison has no right-hand side. Report the raw measurement, not a verdict
+- Memory: endpoint < 50MB per request
+(Frontend perf is measured with the `perf-smoke-frontend` skill in its own repo.)
 
 ## Outputs
 
@@ -58,53 +63,60 @@ Umbrales por defecto (overridables en el `.md`):
   {"status":"pass|warn|fail","summary":"...","issues":[...],"metrics":{"endpoints":{...},"workers":{...}}}
   ```
 
-`status: fail` SOLO si la skill no pudo ejecutarse (entorno roto). Issues de perf son siempre `warn`.
+`status: fail` ONLY if the skill couldn't run (broken environment). Perf issues are always `warn`.
 
-## Ejecución
+## Execution
 
-### Paso 1 — Detectar qué medir
+### Step 1 — Detect what to measure
 
-Según tags y diff:
-- Si tag `api`: identificar endpoints nuevos/modificados (buscar Controllers en el diff, extraer paths)
-- Si tag `worker`: identificar handlers nuevos/modificados
-- No hay tags que validar: la condición de entrada es lo que toca el diff, y la evalúa quien delega.
+By tags and diff:
+- If tag `api`: identify new/modified endpoints (search Controllers in the diff, extract paths)
+- If tag `worker`: identify new/modified handlers
+- No tags to validate: the entry condition is whatever the diff touches, and it's evaluated by
+  whoever delegates.
 
-Si no hay nada medible → `status: pass`, `summary: "nada medible en el diff"`. Sin `tagMismatches`: no hay tags en este formato.
+If nothing is measurable → `status: pass`, `summary: "nothing measurable in the diff"`. No
+`tagMismatches`: this format has no tags.
 
-### Paso 2 — Análisis estático de queries (si hay código de persistencia en diff)
+### Step 2 — Static query analysis (if there's persistence code in the diff)
 
-- ⛔ **No hay Doctrine SQL logger que habilitar**: DBAL 4 retiró la API `SQLLogger` en favor de middleware, el ORM se retiró entero (ADR-0018) y no hay WebProfiler. Para contar consultas: instrumentar un middleware de DBAL o leer el log de Postgres
-- Para cada endpoint nuevo: llamarlo una vez contra datos del seed
-- Contar queries ejecutadas; si > 5 cuando debería ser 1 por colección → `warn` "N+1 sospechoso"
-- `EXPLAIN ANALYZE` sobre cada query nueva:
-  - Seq Scan en tabla > 1000 filas → `warn`
-  - Sort sin índice → `warn`
-  - Join sin índice en FK → `warn` (doctrine-guard debería haberlo pillado, pero doble check)
+- ⛔ **There's no Doctrine SQL logger to enable**: DBAL 4 retired the `SQLLogger` API in favor of
+  middleware, the ORM was retired entirely (ADR-0018), and there's no WebProfiler. To count queries:
+  instrument a DBAL middleware or read the Postgres log
+- For each new endpoint: call it once against seed data
+- Count executed queries; if > 5 when it should be 1 per collection → `warn` "suspected N+1"
+- `EXPLAIN ANALYZE` on each new query:
+  - Seq Scan on a table > 1000 rows → `warn`
+  - Sort without an index → `warn`
+  - Join without an index on the FK → `warn` (doctrine-guard should have caught it, but double check)
 
-### Paso 3 — Benchmark de endpoints (si tag `api`)
+### Step 3 — Endpoint benchmark (if tag `api`)
 
-Para cada endpoint nuevo:
-- **Warm-up:** 10 requests ignorados
-- **Medición:** 100 requests secuenciales (no concurrentes — esto no es load test)
-- Capturar tiempos en ms; calcular p50, p95, p99, max
-- Comparar con umbrales (defaults o los declarados en el `.md`)
-- Resultado → metrics JSON
+For each new endpoint:
+- **Warm-up:** 10 requests ignored
+- **Measurement:** 100 sequential requests (not concurrent — this isn't a load test)
+- Capture times in ms; compute p50, p95, p99, max
+- Compare against thresholds (defaults or those declared in the `.md`)
+- Result → metrics JSON
 
-### Paso 4 — Benchmark de workers (si tag `worker`)
+### Step 4 — Worker benchmark (if tag `worker`)
 
-- Encolar 50 mensajes de prueba contra el handler nuevo
-- Medir throughput (msg/s) y tiempo medio por mensaje
-- Comparar con mínimo del proyecto
+- Enqueue 50 test messages against the new handler
+- Measure throughput (msg/s) and average time per message
+- Compare against the project minimum
 
-### Paso 5 — Memoria
+### Step 5 — Memory
 
-- Durante la ejecución del endpoint, medir uso de memoria (`memory_get_peak_usage`)
-- Si > 50MB → `warn`
-- Si el código tiene `findAll`/`fetchAll` sobre tablas grandes sin paginación → `warn` "fetch sin paginación"
+- During endpoint execution, measure memory usage (`memory_get_peak_usage`)
+- If > 50MB → `warn`
+- If the code has `findAll`/`fetchAll` on large tables without pagination → `warn` "fetch without
+  pagination"
 
-### Paso 6 — Fallback
+### Step 6 — Fallback
 
-⚠ **El tooling dinámico no está**: PHPBench no es dependencia de este repo, y Lighthouse es de frontend (vive en `perf-smoke-frontend`, no aquí). Reportar `skipped` con la razón y quedarse en la mitad estática.
+⚠ **The dynamic tooling isn't there**: PHPBench isn't a dependency of this repo, and Lighthouse is
+frontend (lives in `perf-smoke-frontend`, not here). Report `skipped` with the reason and stay on
+the static half.
 
 ## Report
 
@@ -112,38 +124,43 @@ Para cada endpoint nuevo:
 # perf-smoke — TASK-NNN
 
 **Status:** {PASS|WARN}
-**Issues:** {N} warnings ({alta}/{media})
+**Issues:** {N} warnings ({high}/{medium})
 
-## Métricas clave
+## Key metrics
 - POST /api/v1/envelopes/{id}/close
   - p50: 145ms | p95: 312ms | p99: 480ms | max: 620ms
-  - Queries por request: 8 (esperado: ≤5)
+  - Queries per request: 8 (expected: ≤5)
 - Worker SignEnvelopeHandler
-  - Throughput: 12 msg/s (umbral: 10 msg/s) ✓
+  - Throughput: 12 msg/s (threshold: 10 msg/s) ✓
 
 ## Warnings
-- [N+1 sospechoso] GET /api/v1/envelopes/{id} ejecuta 1+N queries al cargar signers; considerar fetch join (gravedad alta)
-- [p95 límite] POST /api/v1/envelopes/{id}/close p95=312ms, rozando umbral 300ms (gravedad media)
+- [suspected N+1] GET /api/v1/envelopes/{id} runs 1+N queries when loading signers; consider a fetch join (high severity)
+- [p95 near limit] POST /api/v1/envelopes/{id}/close p95=312ms, close to the 300ms threshold (medium severity)
 ```
 
-## JSON de retorno
+## Return JSON
 
 ```json
-{"status":"warn","summary":"2 warnings (1 alta)","issues":[{"severity":"warn","category":"n+1","endpoint":"GET /api/v1/envelopes/{id}","message":"1+N queries"}],"metrics":{"endpoints":{"POST /api/v1/envelopes/{id}/close":{"p50":145,"p95":312,"p99":480}}}}
+{"status":"warn","summary":"2 warnings (1 high)","issues":[{"severity":"warn","category":"n+1","endpoint":"GET /api/v1/envelopes/{id}","message":"1+N queries"}],"metrics":{"endpoints":{"POST /api/v1/envelopes/{id}/close":{"p50":145,"p95":312,"p99":480}}}}
 ```
 
-## Interacción con el loop
+## Interaction with the loop
 
-Nunca dispara reintento automático. Si modo supervised y hay WARN alta, task-runner pregunta al usuario si iterar o dejar la deuda técnica documentada en `notes.md` (lo recoge task-close).
+Never triggers an automatic retry. In supervised mode, if there's a high WARN, task-runner asks the
+user whether to iterate or leave the technical debt documented in `notes.md` (picked up by
+task-close).
 
-## Qué NO hace
+## What it does NOT do
 
-- No es load testing (sin concurrencia, sin picos)
-- No hace profiling línea a línea (XHProf, Blackfire se hacen manualmente si la deuda justifica)
-- No audita performance de código base no tocado
-- No optimiza código — solo detecta
+- It's not load testing (no concurrency, no spikes)
+- Doesn't do line-by-line profiling (XHProf, Blackfire are done manually if the debt justifies it)
+- Doesn't audit performance of untouched base code
+- Doesn't optimize code — only detects
 
-## Referencias
+## References
 
-- <!-- OFFREPO --> Diseño original (prototipo, superado): `Implementación/Skills de Ejecución de Tareas/backend/07 - Perf Smoke Backend.md`
-- ⚠ **No hay task que provea `composer perf:seed`**: el puntero anterior (`T26.2.3`, formato de ids legado) no resuelve a nada. Crear el seed es una decisión y necesita su fila de BACKLOG, que **hoy tampoco existe**
+- <!-- OFFREPO --> Original design (prototype, superseded): `Implementación/Skills de Ejecución de
+  Tareas/backend/07 - Perf Smoke Backend.md`
+- ⚠ **There's no task that provides `composer perf:seed`**: the earlier pointer (`T26.2.3`, legacy id
+  format) resolves to nothing. Creating the seed is a decision and needs its BACKLOG row, which
+  **doesn't exist today either**
