@@ -30,6 +30,18 @@ wouldn't say anything about this code.
 If `make` fails because the stack isn't up (`ensure-stack`), or the lane aborts because `eu-dss` is missing,
 **don't bring anything up**: return `result: ENV` with the literal message.
 
+## Waiting for a run longer than one shell call
+
+A foreground shell call stops at 10 minutes, and a worktree lane or an e2e run takes longer. Then:
+
+- Launch it **in the background** with your own end marker: `<command> > "$LOG" 2>&1; echo "exit=$?" >> "$LOG"`.
+  The harness notifies you when the background command exits; waiting for that notification is enough.
+- If you poll instead, poll **only for that `exit=` line**, and with a deadline:
+  `timeout 2400 sh -c "until grep -q '^exit=' $LOG; do sleep 15; done"`. ⛔ Never wait for a text you
+  expect the tool to print (*"cleanup complete"*, *"Teardown"*): if the script never prints it, the loop
+  waits forever after the run has ended, and you never report.
+- If the deadline passes, return `result: TIMEOUT` with the last lines of the log. Don't relaunch.
+
 ## 2. Forbidden (every point has already cost hours)
 
 - A manual `docker run` instead of these targets: it blocks on `var/cache` and shares the Postgres cluster,
@@ -45,7 +57,7 @@ Save the full output to a log (`… 2>&1 | tee "$(mktemp --suffix=.log)"`) and r
 ```
 harness:   main (make test) | worktree lane (wt-backend, WT_GATES=…)
 tree:      <git rev-parse --short HEAD> <branch>
-result:    OK | FAIL | ENV
+result:    OK | FAIL | ENV | TIMEOUT
 counts:    the literal from each tool (PHPUnit "Tests: N, Assertions: M, Failures: F…", PHPStan, lint, deptrac)
 failures:  up to 20: test or file:line + first lines of the message, literal. If there are more, how many more.
 log:       <path>
