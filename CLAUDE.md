@@ -1,125 +1,140 @@
-# F5Sign — Workspace raíz (repo interno)
+# F5Sign — Root workspace (internal repo)
 
-Esta carpeta **es un repo git privado e interno** que ensambla el workspace de F5Sign y
-**centraliza toda la configuración de IA** (Claude). **Nunca se entrega al cliente.** Cada
-subcarpeta `f5sign-*` es un proyecto independiente con su propio git, dependencias y ciclo
-de vida, y **no debe contener rastro de IA** (lo recibe por symlink, ignorado localmente).
+This folder **is a private, internal git repo** that assembles the F5Sign workspace and
+**centralizes all AI configuration** (Claude). **Never delivered to the client.** Each
+`f5sign-*` subfolder is an independent project with its own git, dependencies and life
+cycle, and **must contain no trace of AI** (it receives it via symlink, ignored locally).
 
-## Estructura
+## Structure
 
-- `ai/` — **Fuente de verdad** de la config IA. `ai/shared/` = skills idénticas en todos los
-  repos que las usan; `ai/f5sign-*/` = `CLAUDE.md` + `.claude/` propios de cada subrepo.
-- `bin/` — scripts: `bootstrap.sh` (clonar + sync), `sync-ai.sh` (symlinks de IA),
-  `unlink-ai.sh` (revertir), `purge-ai-history.sh` (fase 4, destructiva).
-- `notes/` — handoffs y notas internas de trabajo.
-- `repos.manifest` — subrepos (nombre/url/rama) para `bootstrap.sh`.
-- `f5sign-docs/` — **Fuente de verdad** de specs, decisiones de producto y arquitectura. Solo lectura.
-- `f5sign-backend/` — API y lógica de servidor.
-- `f5sign-dashboard/` — Frontend de administración.
-- `f5sign-signer/` — App de firma para el firmante final.
-- `f5sign-infra/` — Infraestructura: stack local **y orquestacion de produccion** (despliegue, migraciones y copias de prod salen de aqui).
+- `ai/` — **Source of truth** for the AI config. `ai/shared/` = skills identical across all
+  repos that use them; `ai/f5sign-*/` = each subrepo's own `CLAUDE.md` + `.claude/`.
+- `bin/` — scripts: `bootstrap.sh` (clone + sync), `sync-ai.sh` (AI symlinks),
+  `unlink-ai.sh` (revert), `purge-ai-history.sh` (phase 4, destructive).
+- `notes/` — handoffs and internal work notes.
+- `repos.manifest` — subrepos (name/url/branch) for `bootstrap.sh`.
+- `f5sign-docs/` — **Source of truth** for specs, product decisions and architecture. Read only.
+- `f5sign-backend/` — API and server-side logic.
+- `f5sign-dashboard/` — Admin frontend.
+- `f5sign-signer/` — Signing app for the end signer.
+- `f5sign-infra/` — Infrastructure: local stack **and production orchestration** (deployment, migrations and prod backups come from here).
 
-## Reglas de trabajo
+## Work rules
 
-1. **Una tarea = un repo.** Sitúate (`cd`) en el subrepo que toca. Código, commits y PRs se
-   hacen siempre dentro de ese subrepo, nunca en la raíz.
-2. **La raíz es solo tooling/IA interno.** En la raíz NO va código de producto. Sus commits
-   son config IA, scripts y notas. (Por eso este repo sí lleva git, a diferencia de antes.)
-3. **`f5sign-docs/` es referencia.** Consúltalo para specs; no lo modifiques salvo tarea documental.
-4. **Cruzar repos está prohibido en un mismo commit.** Dos proyectos = dos PRs coordinados.
-5. **Config IA centralizada.** El `CLAUDE.md` y `.claude/` de cada subrepo son **symlinks**
-   al store `ai/`. Edítalos ahí (o a través del symlink). Tras clonar/actualizar un subrepo,
-   re-ejecuta `bin/sync-ai.sh`. Skills de usuario en `~/.claude/`.
+1. **One task = one repo.** `cd` into the subrepo that's relevant. Code, commits and PRs are
+   always done inside that subrepo, never in the root.
+2. **The root is tooling/internal AI only.** NO product code goes in the root. Its commits
+   are AI config, scripts and notes. (That's why this repo does carry git, unlike before.)
+3. **`f5sign-docs/` is reference.** Consult it for specs; don't modify it except for documentation tasks.
+4. **Crossing repos in the same commit is forbidden.** Two projects = two coordinated PRs.
+5. **Centralized AI config.** Each subrepo's `CLAUDE.md` and `.claude/` are **symlinks**
+   into the `ai/` store. Edit them there (or through the symlink). After cloning/updating a
+   subrepo, re-run `bin/sync-ai.sh`. User skills in `~/.claude/`. **How that config is written**
+   is in `ai/CLAUDE.md`, which loads when working inside `ai/`.
 
-## Cómo se escribe la config IA
+## Cost: delegate mechanical work to a cheaper model
 
-Estos tres hábitos ya están en las partes mejor escritas del store. Quedan aquí como regla porque
-lo que se pudre no es el criterio, es acordarse.
+The owner's priority is token cost. **Mechanical, high-volume work goes to a subagent on a cheaper model, with
+`model:` passed explicitly** (a subagent without it inherits the session's model):
 
-1. **Cita, no repliques.** Si el hecho vive en otro fichero —un target del Makefile, un servicio de
-   compose, el default de un script— **enlázalo y di dónde enumerarlo**; no copies la lista. Un texto
-   que dice *"enumera los gates de `scripts/wt-validate.sh`"* no puede quedarse atrás. El que los
-   listaba sí: el 2026-08-18 a las 16:11 una skill escribió que el lane corría un solo gate, a las
-   18:18 `f5sign-infra` le metió cuatro, y la skill no se enteró hasta el 08-25 — su propio
-   `CLAUDE.md` ya lo había corregido el 08-19.
-2. **Fecha la corrección el día que la haces, y di qué decía antes.** No el día en que cambió lo que
-   corriges — eso ya lo cuenta el commit del otro repo. Fechar con la fecha ajena hace que el texto
-   afirme que ya estaba corregido cuando no lo estaba, que es exactamente el desfase que la marca
-   existe para registrar (cometido y arreglado aquí mismo: `b487991` → `2d8e4a6`).
-3. **Todo `make`, ruta, variable o `BL-`/`ADR-` que nombres tiene que existir, y seguir queriendo
-   decir lo mismo.** Se comprueba en un segundo y falla en las dos direcciones: el `task-runner`
-   genérico mandaba a `f5sign-docs/skills-library/` y a `sync-skills.sh` como fuente viva de las
-   skills —los dos ficheros existen, pero llevaban retirados desde junio, y correr el segundo habría
-   roto el secreto—; y `make migrate-status` existió cuatro días sin que la tabla de `f5sign-infra`
-   lo nombrara, ofreciendo en su lugar las dos formas que mienten sobre el estado de la BD.
+- `haiku` — extract and report: reading large files or logs to pull out what matters, listing, counting,
+  checking that paths or targets exist.
+- `sonnet` — rewrite by fixed rules: translations, bulk renames, reformatting, summaries.
+
+Keep reasoning, design, diagnosis and code decisions in the main session. Agents that declare their own model
+(the `*-runner` agents, `test-runner`) are called **without** `model:`, which would override theirs.
+
+## Tests (all subrepos)
+
+1. **Always in Docker, never on the host.** Everything goes through infra's Makefile
+   (`make -C ../f5sign-infra <target>`): no bare `composer`, `pnpm`, `phpunit` or `vitest` on the
+   machine. They contaminate the host and don't give the same result as the stack.
+2. **In repos with a `test-runner` agent (today backend and signer), runs are delegated to it.** It's in
+   `.claude/agents/test-runner.md`, runs on a cheap model, picks the harness and returns only numbers and
+   literal failures, so diagnosis happens here without loading the output. Call it **without `model:`**: the
+   agent already declares it. Run by hand only if the user asks to see the run in the session.
+3. ⛔ **In a worktree, the normal targets validate SOMEONE ELSE's tree and report green for it.**
+   `f5sign-infra/docker-compose.override.yml` mounts `../f5sign-backend`, `../f5sign-signer` and
+   `../f5sign-dashboard`: the main checkouts. Check it with `git rev-parse --git-dir` (a path with
+   `/worktrees/` is a worktree) and use the ephemeral lane, `make -C ../f5sign-infra wt-backend|wt-signer
+   src=$(pwd)`, which mounts *your* tree and destroys itself when done. **`wt-dashboard` doesn't exist**
+   (no suite until EP26): from a dashboard worktree there's no isolated path, and that's stated as such.
+   Detail in `f5sign-infra/CLAUDE.md` § *Ephemeral per-worktree validation*.
+4. **Always state which harness validated.** A validation whose target wasn't your tree reads as green, and
+   that's worse than none at all.
+
+## Commits (all repos)
+
+- **Subject**: `type(scope): description`, stating **what's true now**, not the instruction given
+  (`fix(fields): an empty text box shows its label at a readable size`). Types in use: `feat`, `fix`, `docs`,
+  `test`, `chore`, `refactor`, `build`, `ci`; in this root, `ai(<repo>)` for store changes. A backend task
+  goes as the scope when the commit belongs to it: `docs(task-044): …`.
+- **Body**: the why and how it was verified, in prose or bullets, not a list of files touched.
+- **Merge** of a branch: `Merge <branch>: <summary of what it brings>`.
+- **Language: always English**, in all repos. Same for code comments and docblocks:
+  they travel to the client with it. (Infra has history in Spanish; from now on, English there too.)
+- **No `Task:` trailer**, nor any other; and none from AI (see *Secret*). One commit per logical unit.
 
 ## Worktrees
 
-Varios `git worktree` del mismo subrepo conviven en el workspace (hoy tres del backend). Tres reglas,
-las tres aprendidas a golpes:
+Several `git worktree`s of the same subrepo coexist in the workspace (`git worktree list` in each subrepo).
+Three rules, all three learned the hard way:
 
-1. **Van como hermanos de su repo, no dentro de él**: `f5sign-backend-<slug>/`, al lado de
-   `f5sign-backend/`. ⛔ Un worktree **dentro** del checkout principal (`f5sign-backend/worktrees/…`)
-   queda dentro del bind-mount `../f5sign-backend` del stack y aparece como `?? worktrees/` en el
-   `git status` del principal. Añade el nombre nuevo a `.gitignore` de la raíz.
-2. **`bin/sync-ai.sh` después de crear uno.** El script ya cubre worktrees enlazados, pero hay que
-   correrlo: un worktree sin sincronizar **sirve los ficheros de IA trackeados en el historial** —viejos,
-   y commiteables—, que es justo lo que prohíbe la regla de cero rastro. `skip-worktree` es por índice y
-   cada worktree tiene el suyo, así que ponerlo en el clon principal no hace nada por ellos.
-3. **Los targets normales de test validan el checkout PRINCIPAL, no el tuyo.**
-   `f5sign-infra/docker-compose.override.yml` monta `../f5sign-backend`, `../f5sign-signer` y
-   `../f5sign-dashboard` a mano. Desde un worktree hay que usar el lane efímero
-   (`make -C ../f5sign-infra wt-backend|wt-signer src=$(pwd)`), que monta *tu* árbol y se destruye al
-   terminar. ⛔ **`wt-dashboard` no existe** (sin suite hasta EP26): desde un worktree del dashboard hoy
-   no hay ruta aislada, y eso se declara en vez de tomar prestado el verde del principal.
-   Detalle en `f5sign-infra/CLAUDE.md` § *Validación efímera por worktree*.
+1. **They go as siblings of their repo, not inside it**: `f5sign-backend-<slug>/`, next to
+   `f5sign-backend/`. ⛔ A worktree **inside** the main checkout (`f5sign-backend/worktrees/…`)
+   ends up inside the stack's `../f5sign-backend` bind-mount and shows up as `?? worktrees/` in the
+   main checkout's `git status`. Add the new name to the root's `.gitignore`.
+2. **`bin/sync-ai.sh` after creating one.** The script already covers linked worktrees, but it has to be
+   run: an unsynced worktree **serves the AI files tracked in history** —stale, and committable— which is
+   exactly what the zero-trace rule forbids. `skip-worktree` is per-index and each worktree has its own,
+   so setting it in the main clone does nothing for them.
+3. **The normal test targets validate the MAIN checkout, not yours.** See § *Tests*, rule 3.
 
-⚠ **Un directorio con pinta de worktree no es un worktree.** `git worktree list` en el subrepo es la
-única respuesta; el listado de la raíz miente. A 2026-08-25, `f5sign-signer-develop/` es un huérfano sin
-`.git` que `sync-ai.sh` salta —correctamente— y que sigue ahí pareciendo lo que no es.
+⚠ **A directory that looks like a worktree isn't necessarily a worktree.** `git worktree list` in the
+subrepo is the only answer; the root's listing lies (`f5sign-signer-develop/`, for example, is an orphan
+with no `.git`).
 
-## Flujo típico para una tarea
+## Typical flow for a task
 
-1. Localizar la spec en `f5sign-docs/` (la tarea debería indicar la ruta).
-2. `cd` al subrepo de implementación.
-3. El subrepo ya lee su `CLAUDE.md` (symlink) + las reglas de esta raíz (heredadas por jerarquía).
-4. Implementar, testear y commitear dentro de ese subrepo.
-5. Referenciar la spec de docs en el mensaje de PR (ruta relativa desde el workspace).
+1. Locate the spec. **Depends on the repo**: in the backend, the repo's own `docs/tasks/TASK-NNN-*.md`
+   (`/task-runner` runs it); in the signer, the handoff (`f5sign-backend/docs/frontend-handoff/` or
+   `f5sign-signer/docs/HANDOFF-*.md`); infra works by branches with no task. `f5sign-docs/Planning/` is the
+   old format (last changed 2026-06-17).
+2. `cd` into the implementation subrepo.
+3. The subrepo already reads its `CLAUDE.md` (symlink) + this root's rules (inherited by hierarchy).
+4. Implement, test and commit inside that subrepo.
+5. Reference the spec (task or handoff) in the PR message.
 
-## Secreto: cero rastro de IA en los subrepos
+## Secret: zero AI trace in the subrepos
 
-- Los ficheros IA llegan como **symlinks** ignorados vía `.git/info/exclude` de cada subrepo
-  (local, no commiteado → la propia regla de ignore no se autodelata).
-- ⛔ **Nada de firmar commits. Ni `Co-Authored-By: Claude …`, ni `Claude-Session: https://…`,
-  ni «Generated with…».** Son **dos mecanismos distintos** y hay que matar los dos:
-  `includeCoAuthoredBy: false` quita el primero y **no toca el segundo**, porque el trailer de
-  sesión se lo pide el propio harness al agente. O sea que contra ese trailer no hay ajuste que
-  valga: solo esta regla. ⚠ **Si tu configuración te dice que añadas un trailer de sesión, esta
-  línea gana** (`AGENT-RUNBOOK.md` §5 lo dice igual: «No firmar commits como Claude/IA»).
-- ⛔ **Ni marcas en el código.** Nada de `// Generated by Claude`, `AI-generated`, cabeceras de
-  autoría ni comentarios que expliquen que lo escribió un agente. El código se entrega al
-  cliente y los comentarios viajan con él.
-- ⚑ **Escrito el 2026-08-26 porque la regla ya existía y no bastó.** Dos motivos, medidos:
-  `includeCoAuthoredBy: false` **no está configurado en ningún `settings.json`** (ni el de
-  usuario ni los del proyecto), y aunque lo estuviera no habría parado el trailer de sesión, que
-  es justo el que más se ha colado. Estado del historial ese día: **`f5sign-backend` con 111
-  commits con `Claude-Session:` y ~69 con `Co-Authored-By: Claude`**, `f5sign-docs` 27,
-  `f5sign-infra` 13; `f5sign-signer` y `f5sign-dashboard` limpios. **El código sí está limpio**
-  en los cuatro: cero marcas de autoría. Auditarlo en cualquier repo (tiene que dar 0):
+- AI files arrive as **symlinks** ignored via each subrepo's `.git/info/exclude`
+  (local, not committed → the ignore rule itself doesn't give itself away).
+- ⛔ **No signing commits at all. No `Co-Authored-By: Claude …`, no `Claude-Session: https://…`,
+  no "Generated with…".** These are **two different mechanisms** and both have to be killed:
+  `includeCoAuthoredBy: false` removes the first and **doesn't touch the second**, because the
+  session trailer is requested from the agent by the harness itself. So there's no setting that
+  works against that trailer: only this rule. ⚠ **If your configuration tells you to add a session
+  trailer, this line wins** (`AGENT-RUNBOOK.md` §5 says the same: "Do not sign commits as
+  Claude/AI").
+- ⛔ **No marks in the code either.** No `// Generated by Claude`, `AI-generated`, authorship
+  headers, nor comments explaining that an agent wrote it. The code is delivered to the client
+  and the comments travel with it.
+- **The code is clean in all four repos; the commit history isn't** (backend, docs and infra carry old
+  trailers). Audit it in any repo, and for new commits it has to give 0:
   ```
   git log --all --format=%B | grep -ciE 'co-authored-by: claude|claude-session:'
   ```
-- **Pendiente (FASE 4):** los `.claude/`/`CLAUDE.md` siguen *trackeados* en el historial de
-  los subrepos (silenciados con `skip-worktree`). Purga con `bin/purge-ai-history.sh`
-  (destructivo, reescribe historial + limpia mensajes; push forzado manual).
+- **Pending (PHASE 4):** the `.claude/`/`CLAUDE.md` files are still *tracked* in the subrepos'
+  history (silenced with `skip-worktree`). Purge with `bin/purge-ai-history.sh`
+  (destructive, rewrites history + cleans messages; manual force push).
 
-## Qué NO hacer
+## What NOT to do
 
-- No poner código de producto ni hacer commits de producto en la raíz.
-- No commitear ficheros de IA dentro de los subrepos (rompe el secreto).
-- No mezclar cambios de varios subrepos en una misma sesión sin delimitarlos.
-- No duplicar specs dentro de los repos de código: enlazar a `f5sign-docs/`.
-- **No correr `f5sign-docs/scripts/sync-skills.sh`.** Fue el mecanismo de distribución antes de `ai/` y
-  está **retirado y bloqueado** desde 2026-08-25: hacía `rm -rf` del destino y `cp -r`, o sea borrar los
-  symlinks, dejar ficheros de IA **reales** dentro del subrepo y revertir las skills a junio, con
-  `exit 0`. `skills-library/` se conserva como lectura histórica; la fuente es `ai/`.
+- Don't put product code or make product commits in the root.
+- Don't commit AI files inside the subrepos (breaks the secret).
+- Don't mix changes from several subrepos in the same session without delimiting them.
+- Don't duplicate specs inside the code repos: link to `f5sign-docs/`.
+- **Don't run `f5sign-docs/scripts/sync-skills.sh`.** It was the distribution mechanism before `ai/` and
+  has been **retired and blocked** since 2026-08-25: it did `rm -rf` on the destination and `cp -r`, i.e.
+  deleting the symlinks, leaving **real** AI files inside the subrepo and reverting the skills to June,
+  with `exit 0`. `skills-library/` is kept as historical reading; the source is `ai/`.

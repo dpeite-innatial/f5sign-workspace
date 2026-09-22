@@ -1,62 +1,62 @@
-# f5sign-infra — Guia operativa para Claude Code
+# f5sign-infra — Operating guide for Claude Code
 
-Repo de infraestructura del producto F5Sign. Contiene la orquestacion Docker (local y produccion), los Dockerfiles personalizados, configuracion de Caddy, scripts de init y automatismos (`Makefile`, pipelines CI/CD cuando apliquen). Es el repo que arranca el stack completo: backend + dashboard + signer + servicios (PostgreSQL, RabbitMQ, Redis, MinIO, EU DSS).
+Infrastructure repo for the F5Sign product. Contains the Docker orchestration (local and production), custom Dockerfiles, Caddy configuration, init scripts and automation (`Makefile`, CI/CD pipelines where applicable). It's the repo that starts the full stack: backend + dashboard + signer + services (PostgreSQL, RabbitMQ, Redis, MinIO, EU DSS).
 
-## Proposito del repo
+## Repo purpose
 
-- **Orquestacion**: `docker-compose.yml` que levanta todos los servicios del MVP en un solo comando.
-- **Dockerfiles custom**: para servicios que no tienen imagen oficial valida (PHP-FPM con extensiones Symfony, build de EU DSS, scripts de init de MinIO).
-- **Configuracion de servicios**: `docker/caddy/Caddyfile{,.dev}`, `docker/php/php.ini`, `docker/minio/init-buckets.sh`, etc.
-- **Makefile**: automatismos para el equipo (`make up`, `make test`, `make sf cmd=...`).
-- **Env template**: `.env.example` con todas las variables compartidas.
-- **CI/CD** (se anade en fases posteriores): workflows de build/deploy de las tres apps.
+- **Orchestration**: `docker-compose.yml` that brings up all the MVP services in a single command.
+- **Custom Dockerfiles**: for services that don't have a valid official image (PHP-FPM with Symfony extensions, EU DSS build, MinIO init scripts).
+- **Service configuration**: `docker/caddy/Caddyfile{,.dev}`, `docker/php/php.ini`, `docker/minio/init-buckets.sh`, etc.
+- **Makefile**: automation for the team (`make up`, `make test`, `make sf cmd=...`).
+- **Env template**: `.env.example` with all the shared variables.
+- **CI/CD** (added in later phases): build/deploy workflows for the three apps.
 
 ## Stack
 
 - **Docker** / **Docker Compose** (v2)
-- **Caddy** 2 alpine (`caddy:2-alpine`, reverse proxy de la API en dev y en prod)
-- **PostgreSQL** 18 alpine (imagen propia: `docker/postgres/Dockerfile` = base oficial + pgBackRest)
-- **RabbitMQ** 4.2 management (imagen propia: `docker/rabbitmq/Dockerfile` + plugin delayed-message v4.2.0)
+- **Caddy** 2 alpine (`caddy:2-alpine`, reverse proxy for the API in dev and prod)
+- **PostgreSQL** 18 alpine (own image: `docker/postgres/Dockerfile` = official base + pgBackRest)
+- **RabbitMQ** 4.2 management (own image: `docker/rabbitmq/Dockerfile` + delayed-message plugin v4.2.0)
 - **Redis** 8 alpine
-- **MinIO** latest + `mc` para init
-- **EU DSS** (`nowina-solutions/dss-webapp:6.4`, imagen Java)
-- **PHP** 8.5 fpm alpine (el Dockerfile vive en `f5sign-backend`, ver regla 7)
-- **Node** 24 alpine (para los contenedores de dev de dashboard y signer)
-- **GNU Make** para el Makefile
+- **MinIO** `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z` (dev only) + **AWS CLI** `2.36.47` for init. ⚑ Corrected 2026-09-17: it said *"MinIO latest + `mc` for init"*; that day Docker Hub pulled `minio/minio` and `minio/mc`, init moved to the AWS CLI (reason in the header of `docker/minio/init-buckets.sh`) and `mc` became the dev `mc` service (profile `tools`) for the shortcuts
+- **EU DSS** (`nowina-solutions/dss-webapp:6.4`, Java image)
+- **PHP** 8.5 fpm alpine (the Dockerfile lives in `f5sign-backend`, see rule 7)
+- **Node** 24 alpine (for the dashboard and signer dev containers)
+- **GNU Make** for the Makefile
 
-⚑ **Versiones revisadas y subidas el 2026-08-26.** Esta lista tenia **dos entradas falsas**: decia
-*"RabbitMQ 3.13"* cuando el compose llevaba 4.0 desde hacia meses (un major entero de desfase) y
-*"PHP 8.4"* cuando `f5sign-backend/Dockerfile` es `php:8.5-fpm-alpine`. En el mismo repaso se
-subio **Node 20 -> 24** (la 20 esta FUERA DE SOPORTE desde el 2026-04-30), **Redis 7 -> 8** y
-**RabbitMQ 4.0 -> 4.2**. ⛔ **RabbitMQ no puede pasar de 4.2** aunque el broker publique 4.3: el
-plugin `delayed-message-exchange` se queda en v4.2.0 y su serie debe seguir a la del broker.
-PostgreSQL 16 -> 18 se hizo el mismo dia (ver README § *Copias de seguridad*). EU DSS 6.4 se
-queda: la 6.5 solo tiene RC1.
+⚑ **Versions reviewed and bumped on 2026-08-26.** This list had **two false entries**: it said
+*"RabbitMQ 3.13"* when the compose had been on 4.0 for months (a full major version behind) and
+*"PHP 8.4"* when `f5sign-backend/Dockerfile` is `php:8.5-fpm-alpine`. In the same pass we
+bumped **Node 20 -> 24** (20 has been OUT OF SUPPORT since 2026-04-30), **Redis 7 -> 8** and
+**RabbitMQ 4.0 -> 4.2**. ⛔ **RabbitMQ can't go past 4.2** even if the broker ships 4.3: the
+`delayed-message-exchange` plugin stays at v4.2.0 and its series has to track the broker's.
+PostgreSQL 16 -> 18 was done the same day (see README § *Copias de seguridad*). EU DSS stays at
+6.4: 6.5 only has an RC1.
 
-## Estructura del repo
+## Repo structure
 
 ```
 f5sign-infra/
-├── docker-compose.yml             ← base prod-safe
-├── docker-compose.override.yml    ← overrides de dev (auto-carga en `up`)
-├── docker-compose.prod.yml        ← overrides de produccion (imagenes GHCR)
-├── docker-compose.test.yml        ← servicios de test (profile `test`)
+├── docker-compose.yml             ← prod-safe base
+├── docker-compose.override.yml    ← dev overrides (auto-loads on `up`)
+├── docker-compose.prod.yml        ← production overrides (GHCR images)
+├── docker-compose.test.yml        ← test services (profile `test`)
 ├── Makefile
-├── .env.example                   ← entorno dev
-├── .env.prod.example              ← entorno prod (plantilla)
+├── .env.example                   ← dev environment
+├── .env.prod.example              ← prod environment (template)
 ├── .gitignore
-├── docker-compose.mock-signer.yml ← signer simulado
-├── docker-compose.wt.{signer,backend}.yml  ← lanes efimeros por worktree
+├── docker-compose.mock-signer.yml ← simulated signer
+├── docker-compose.wt.{signer,backend}.yml  ← ephemeral per-worktree lanes
 ├── docker/
 │   ├── caddy/
 │   │   ├── Caddyfile              ← prod
 │   │   ├── Caddyfile.dev          ← dev
-│   │   └── conf.d/                ← sitios locales, no versionados
+│   │   └── conf.d/                ← local sites, not version-controlled
 │   ├── php/
-│   │   ├── php.ini                ← SOLO config; el Dockerfile vive en
-│   │   └── xdebug.ini               f5sign-backend (ver regla 7)
+│   │   ├── php.ini                ← config ONLY; the Dockerfile lives in
+│   │   └── xdebug.ini               f5sign-backend (see rule 7)
 │   ├── postgres/
-│   │   ├── init-app-role.sh       ← roles a nivel CLUSTER (`make init-roles`)
+│   │   ├── init-app-role.sh       ← CLUSTER-level roles (`make init-roles`)
 │   │   └── init-test.sql
 │   ├── rabbitmq/
 │   │   ├── Dockerfile
@@ -73,432 +73,432 @@ f5sign-infra/
 │   │   └── scripts/{entrypoint,generate-self-signed-keystore,wait-for-tl}.sh
 │   └── scripts/{agent-smoke,check-event-dlx,check-seal,wait-for-healthy}.sh
 └── scripts/
-    └── wt-validate.sh             ← driver de los lanes `wt-*`
+    └── wt-validate.sh             ← driver for the `wt-*` lanes
 ```
 
-> No hay `.github/workflows/` en este repo: el CI de cada app vive en su propio repo.
+> There's no `.github/workflows/` in this repo: each app's CI lives in its own repo.
 
-## Layout del workspace y bind mounts
+## Workspace layout and bind mounts
 
-`f5sign-infra` es un **repo hermano** de los otros tres de codigo:
+`f5sign-infra` is a **sibling repo** to the other three code repos:
 
 ```
 factor5_others/f5sign/
 ├── f5sign-backend/
 ├── f5sign-dashboard/
 ├── f5sign-signer/
-├── f5sign-infra/           ← este repo
+├── f5sign-infra/           ← this repo
 └── f5sign-docs/
 ```
 
-Por tanto, los bind mounts en `docker-compose.yml` referencian los repos hermanos con rutas relativas:
+So the bind mounts in `docker-compose.yml` reference the sibling repos with relative paths:
 
 - `../f5sign-backend:/var/www/html` (php-fpm, caddy, worker)
-- `../f5sign-dashboard:/app` (contenedor dashboard)
-- `../f5sign-signer:/app` (contenedor signer)
+- `../f5sign-dashboard:/app` (dashboard container)
+- `../f5sign-signer:/app` (signer container)
 
-El directorio `./docker/` se refiere a subdirectorios **dentro de este repo** (config de caddy, php, etc.).
+The `./docker/` directory refers to subdirectories **inside this repo** (caddy, php config, etc.).
 
-## Comandos
+## Commands
 
-Todos los comandos se ejecutan desde la raiz de **este** repo:
+All commands run from the root of **this** repo:
 
-| Accion | Comando |
+| Action | Command |
 |--------|---------|
-| Arrancar stack | `docker compose up -d` o `make up` |
-| Parar stack | `docker compose down` o `make down` |
-| Destruir stack + volumenes | `make destroy` |
-| Ver logs | `make logs` / `make logs s=php-fpm` |
-| Shell en contenedor PHP | `make shell` |
-| Consola Symfony | `make sf cmd="doctrine:migrations:migrate"` |
-| Tests backend | `make test` |
-| Tests signer (lint+typecheck+unit) | `make test-signer` |
-| Tests signer (solo unit, Vitest) | `make test-signer-unit` |
-| Tests signer E2E (Playwright, 4 perfiles) | `make test-signer-e2e` |
-| Tests signer E2E (smoke mobile) | `make test-signer-e2e-mobile` |
-| Reset BD (drop+create+migrate+fixtures) | `make reset-db` |
-| **Estado de las migraciones** | **`make migrate-status`** — ⛔ no lo consultes de otra forma, ver abajo |
-| Deshacer la ultima migracion (NO destruye la BD) | `make migrate-prev` |
-| Migrar a una version concreta (arriba o abajo) | `make migrate-to v=Version...` |
-| Build imagenes | `docker compose build` o `make build` |
-| Setup inicial | `make install` (build + up + init-db) |
-| Build+push las imagenes propias de prod (GHCR) | `make release-prod TAG=v1.2.3` |
-| Release SOLO backend | `make release-backend BACKEND_TAG=v1.2.4` |
-| Validar merge de prod | `make config-prod PROD_ENV=.env.prod.example` |
-| Crear los roles de cluster en un volumen ya existente | `make init-roles` |
-| Deploy completo en host de prod | `make deploy-prod` (preflight + pull + up, req. `.env.prod`) |
-| Deploy SOLO backend (php-fpm+worker) | `make deploy-backend` — ⚠ **NO incluye el relay**, ver abajo |
-| Deploy SOLO signer | `make deploy-signer` (bumpea `SIGNER_TAG` en `.env.prod`) |
-| **Copia de la ventana de despliegue** | **`make backup-prod LABEL=...`** — el suelo del corte, ver abajo |
-| **Restaurar prod** | **`make restore-prod CONFIRM=si-restaurar`** — destructivo; `TARGET="fecha hora"` para PITR |
-| Backup continuo (full/incremental) | `make backup-full-prod` / `make backup-incr-prod` (cron; ver README) |
-| Estado del archivado de WAL | `make pgbackrest-status-prod` — ⛔ el watchdog, ver abajo |
-| Secretos que ningun backup de BD cubre | `make backup-secrets` (.env.prod + seal.p12 + certs, cifrado) |
-| **Migraciones en prod** | **`make migrate-prod`** — ⛔ no va dentro de `deploy-prod`, ver abajo |
-| Estado de las migraciones en prod | `make migrate-status-prod` (mismo motivo que `migrate-status`) |
-| Roles de cluster en el host de prod | `make init-roles-prod` — ANTES de migrar si el release trae roles |
-| Solo descargar las imagenes del release | `make pull-prod` (sin tocar lo que corre) |
+| Start the stack | `docker compose up -d` or `make up` |
+| Stop the stack | `docker compose down` or `make down` |
+| Destroy stack + volumes | `make destroy` |
+| View logs | `make logs` / `make logs s=php-fpm` |
+| Shell in PHP container | `make shell` |
+| Symfony console | `make sf cmd="doctrine:migrations:migrate"` |
+| Backend tests | `make test` |
+| Signer tests (lint+typecheck+unit) | `make test-signer` |
+| Signer tests (unit only, Vitest) | `make test-signer-unit` |
+| Signer E2E tests (Playwright, 4 profiles) | `make test-signer-e2e` |
+| Signer E2E tests (mobile smoke) | `make test-signer-e2e-mobile` |
+| Reset DB (drop+create+migrate+fixtures) | `make reset-db` |
+| **Migration status** | **`make migrate-status`** — ⛔ don't check it any other way, see below |
+| Undo the last migration (does NOT destroy the DB) | `make migrate-prev` |
+| Migrate to a specific version (up or down) | `make migrate-to v=Version...` |
+| Build images | `docker compose build` or `make build` |
+| Initial setup | `make install` (build + up + init-db) |
+| Build+push prod's own images (GHCR) | `make release-prod TAG=v1.2.3` |
+| Release backend ONLY | `make release-backend BACKEND_TAG=v1.2.4` |
+| Validate prod merge | `make config-prod PROD_ENV=.env.prod.example` |
+| Create cluster roles on an already-existing volume | `make init-roles` |
+| Full deploy on the prod host | `make deploy-prod` (preflight + pull + up, requires `.env.prod`) |
+| Deploy backend ONLY (php-fpm+worker) | `make deploy-backend` — ⚠ **does NOT include the relay**, see below |
+| Deploy signer ONLY | `make deploy-signer` (bumps `SIGNER_TAG` in `.env.prod`) |
+| **Deployment-window backup** | **`make backup-prod LABEL=...`** — the floor of the cutover, see below |
+| **Restore prod** | **`make restore-prod CONFIRM=si-restaurar`** — destructive; `TARGET="fecha hora"` for PITR |
+| Continuous backup (full/incremental) | `make backup-full-prod` / `make backup-incr-prod` (cron; see README) |
+| WAL archiving status | `make pgbackrest-status-prod` — ⛔ the watchdog, see below |
+| Secrets no DB backup covers | `make backup-secrets` (.env.prod + seal.p12 + certs, encrypted) |
+| **Migrations in prod** | **`make migrate-prod`** — ⛔ does not go inside `deploy-prod`, see below |
+| Migration status in prod | `make migrate-status-prod` (same reason as `migrate-status`) |
+| Cluster roles on the prod host | `make init-roles-prod` — BEFORE migrating if the release brings roles |
+| Only download the release images | `make pull-prod` (without touching what's running) |
 
-> **No enumero aqui los 21 targets `*-prod`**, que es la lista que se queda atras.
-> `make help` los lista todos; **`README.md` § *Despliegue en preprod / produccion* §5 da la SECUENCIA**,
-> que es lo que de verdad hace falta y no cabe en una tabla: hay dos, una para releases aditivos y otra
-> para los que no lo son.
+> **I'm not listing the 21 `*-prod` targets here**, since that's the list that goes stale.
+> `make help` lists all of them; **`README.md` § *Despliegue en preprod / produccion* §5 gives the SEQUENCE**,
+> which is what actually matters and doesn't fit in a table: there are two, one for additive releases and
+> one for releases that aren't.
 
-⛔ **El estado de las migraciones SOLO se consulta con `make migrate-status`, y el motivo es peor que el
-de `migrate-prev`.** Preguntarlo con `make sf` o un `docker compose exec php-fpm` pelado corre como
-`f5sign_app`, que **no ve `doctrine_migration_versions`**. No falla: responde tan tranquilo `Executed 0` y
-marca las 26 migraciones como *not migrated* sobre una base que esta al dia. Donde `migrate-prev` revienta
-ruidosamente con *permission denied* y te enteras, esto te contesta una cifra falsa. ⚠ **Y la reaccion
-natural a "la BD esta vacia" es `make reset-db`, que la vacia de verdad y se lleva la API key
-aprovisionada, que solo se muestra una vez.** Medido el 2026-08-21: el mismo comando decia `0 de 26` como
-`f5sign_app` y *"Already at latest version"* como owner.
-⚑ **Anadido 2026-08-25.** El target existe desde el 2026-08-21 (`07b29b1`) y esta tabla, escrita el 08-18,
-no lo listaba — o sea que documentaba las dos formas ruidosas y no la unica que dice la verdad.
+⛔ **Migration status is ONLY checked with `make migrate-status`, and the reason is worse than the one
+for `migrate-prev`.** Asking with `make sf` or a bare `docker compose exec php-fpm` runs as
+`f5sign_app`, which **can't see `doctrine_migration_versions`**. It doesn't fail: it calmly answers `Executed 0` and
+marks all 26 migrations as *not migrated* on a database that's fully up to date. Where `migrate-prev` blows up
+loudly with *permission denied* and you notice, this one hands you a false number. ⚠ **And the natural
+reaction to "the DB is empty" is `make reset-db`, which really does empty it and takes the provisioned
+API key with it — the one that's only shown once.** Measured on 2026-08-21: the same command said `0 de 26`
+as `f5sign_app` and *"Already at latest version"* as owner.
+⚑ **Added 2026-08-25.** The target has existed since 2026-08-21 (`07b29b1`) and this table, written on 08-18,
+didn't list it — meaning it documented the two noisy ways and not the only one that tells the truth.
 
-⛔ **`migrate-prod` NO va dentro de `deploy-prod`, y el orden entre los dos depende del release.**
-⚑ **Reescrito el 2026-08-27: hasta hoy esta regla decia "aditiva -> deploy primero", y eso induce al
-error contrario en un caso real que acaba de aparecer.** El eje NO es aditiva/no aditiva. Son DOS
-compatibilidades independientes, y hay que preguntarse las dos:
+⛔ **`migrate-prod` does NOT go inside `deploy-prod`, and the order between the two depends on the release.**
+⚑ **Rewritten on 2026-08-27: until today this rule said "additive -> deploy first", and that leads to the
+opposite mistake in a real case that just came up.** The axis is NOT additive/non-additive. There are TWO
+independent compatibilities, and both need to be asked:
 
-| | Si la respuesta es NO |
+| | If the answer is NO |
 |---|---|
-| ¿Aguanta el **codigo VIEJO** el **esquema NUEVO**? | migrar **despues** de desplegar |
-| ¿Aguanta el **codigo NUEVO** el **esquema VIEJO**? | migrar **antes** de desplegar |
+| Does the **OLD code** tolerate the **NEW schema**? | migrate **after** deploying |
+| Does the **NEW code** tolerate the **OLD schema**? | migrate **before** deploying |
 
-- **Aditiva y el codigo nuevo no la necesita** (el caso comun hasta 2026-07): las dos respuestas son si,
-  `deploy-prod` -> `migrate-prod`, sin ventana.
-- **NO aditiva** (`RENAME`, `DROP COLUMN`, `SET NOT NULL`, `ALTER COLUMN ... TYPE`): el codigo viejo NO
-  aguanta el esquema nuevo -> migrar antes, y la ventana entre ambos es un corte duro.
-- ⛔ **Aditiva pero el codigo nuevo EXIGE la columna**: la trampa. Es aditiva, asi que la regla vieja
-  mandaba desplegar primero — y el codigo nuevo arrancaria contra una tabla sin la columna. Hay que
-  **migrar antes**. Caso real que destapo esto: el `epoch_floor_position` que el backend anade a
-  `platform.event_checkpoint` para que el relay sobreviva a un dump/restore (ver README seccion
-  PostgreSQL, la nota del contador de transacciones).
+- **Additive and the new code doesn't need it** (the common case through 2026-07): both answers are yes,
+  `deploy-prod` -> `migrate-prod`, no window.
+- **NOT additive** (`RENAME`, `DROP COLUMN`, `SET NOT NULL`, `ALTER COLUMN ... TYPE`): the old code does NOT
+  tolerate the new schema -> migrate first, and the window between the two is a hard cutover.
+- ⛔ **Additive but the new code REQUIRES the column**: the trap. It's additive, so the old rule said
+  to deploy first — and the new code would start up against a table missing the column. You have to
+  **migrate first**. Real case that exposed this: the `epoch_floor_position` the backend adds to
+  `platform.event_checkpoint` so the relay survives a dump/restore (see README PostgreSQL section,
+  the note on the transaction counter).
 
-Quien prepara el release es quien tiene que contestar las dos preguntas. La secuencia completa, con la
-ventana de corte, esta en `README.md` §5; no la dupliques aqui.
+Whoever prepares the release is the one who has to answer both questions. The complete sequence, with the
+cutover window, is in `README.md` §5; don't duplicate it here.
 
-⚑ **Anadido 2026-08-26, y con esto se cae una frase que hasta hoy era la recomendada.** `migrate-prod` corre
-la consola en un contenedor **efimero de la imagen NUEVA** (`docker compose run --rm --no-deps -u www-data`),
-sin tocar el que sirve trafico — que es lo que hace posible migrar ANTES de desplegar. Hasta el 2026-08-26 era
-un `exec` sobre el contenedor **en marcha**, y eso no solo impedia ese orden: lo hacia **invisible**. Las
-migraciones viajan dentro de la imagen, asi que `exec` antes de desplegar solo veia el juego VIEJO y respondia
-*"Already at latest version"* con exit 0. Un no-op que se lee como verde, y despues el deploy dejaba la API en
-500 hasta que alguien volvia a migrar. **Si lees un runbook que diga "migrate-prod va siempre despues de
-deploy-prod", es anterior a esta fecha.**
+⚑ **Added on 2026-08-26, and this drops a line that until today was the recommended one.** `migrate-prod` runs
+the console in an **ephemeral container of the NEW image** (`docker compose run --rm --no-deps -u www-data`),
+without touching the one serving traffic — which is what makes it possible to migrate BEFORE deploying. Until
+2026-08-26 it was an `exec` on the **running** container, and that not only blocked that order: it made it
+**invisible**. Migrations travel inside the image, so `exec` before deploying only saw the OLD set and replied
+*"Already at latest version"* with exit 0. A no-op that reads as green, and afterward the deploy would leave the
+API returning 500 until someone migrated again. **If you read a runbook that says "migrate-prod always goes after
+deploy-prod", it predates this date.**
 
-⚑ **Corregido 2026-08-26, y con esto se cae la afirmacion central de este bloque.** Decia que `backup-prod` era *"el UNICO rollback que existe"* y que *"no hay `restore-prod` ni ningun target de rollback"*. Era cierto: la receta de `pg_restore` se imprimia en un `echo` que nadie habia ejecutado nunca. Ahora hay **archivado continuo de WAL con pgBackRest** (PITR) y un **`make restore-prod`** de verdad, con confirmacion explicita. Puesta en marcha, cron y el orden —que no se adivina: la stanza se crea con el archivado APAGADO— en `README.md` § *Copias de seguridad y recuperacion*.
+⚑ **Corrected on 2026-08-26, and this drops the central claim of this block.** It said `backup-prod` was *"the ONLY rollback that exists"* and that *"there's no `restore-prod` or any rollback target"*. That was true: the `pg_restore` recipe was printed in an `echo` nobody had ever run. Now there's **continuous WAL archiving with pgBackRest** (PITR) and a real **`make restore-prod`**, with explicit confirmation. Setup, cron and the order — which isn't obvious: the stanza is created with archiving TURNED OFF — in `README.md` § *Copias de seguridad y recuperacion*.
 
-⛔ **El watchdog no es `failed_count`.** Ese contador de `pg_stat_archiver` es acumulativo y no se resetea: un cluster sano arrastra para siempre los fallos previos a la stanza (medido: 7 con el archivado perfecto). Lo que decide es si `last_failed_time` es POSTERIOR a `last_archived_time`. Y si el archivado se rompe, Postgres RETIENE el WAL y `pg_wal` llena el disco hasta parar las escrituras. Las dos cosas las mira `make pgbackrest-status-prod`.
+⛔ **The watchdog isn't `failed_count`.** That `pg_stat_archiver` counter is cumulative and never resets: a healthy cluster carries the pre-stanza failures forever (measured: 7 with archiving working perfectly). What decides it is whether `last_failed_time` is LATER than `last_archived_time`. And if archiving breaks, Postgres RETAINS the WAL and `pg_wal` fills the disk until writes stop. `make pgbackrest-status-prod` checks both.
 
-⛔ **Y antes de migrar en prod, `make backup-prod` igual.** Sigue siendo el suelo de la ventana:
-`migrate-prev` y `migrate-to` siguen siendo **dev-only** (van contra el stack de desarrollo), y el `down()` de una
-migracion no aditiva es destructivo por definicion — el de un `DROP COLUMN` no devuelve los datos. El target
-verifica lo que produce y **borra el fichero si no pasa**, para que no quede nada con pinta de copia. En una
-ventana de corte van **dos** copias con `LABEL=` distinto y solo la de despues del corte es la que se
-restaura; el porque esta en `README.md` §5.
+⛔ **And before migrating in prod, `make backup-prod` all the same.** It's still the floor of the window:
+`migrate-prev` and `migrate-to` are still **dev-only** (they run against the development stack), and the `down()` of a
+non-additive migration is destructive by definition — a `DROP COLUMN`'s doesn't give the data back. The target
+verifies what it produces and **deletes the file if it fails**, so nothing that looks like a backup is left behind. In a
+cutover window there are **two** backups with different `LABEL=` values and only the one taken after the cutover gets
+restored; the reasoning is in `README.md` §5.
 
-> **Los tests SIEMPRE corren en Docker, nunca en local** (no contaminar la
-> maquina con dependencias). Ver "Tests frontend en Docker" abajo.
+> **Tests ALWAYS run in Docker, never locally** (don't pollute the
+> machine with dependencies). See "Frontend tests in Docker" below.
 
-### Modelo de 3 ficheros Compose (dev vs prod)
+### 3-file Compose model (dev vs prod)
 
-- **`docker-compose.yml`** — base **prod-safe**: backend + backing services, sin
-  bind-mounts de codigo, sin xdebug, sin MinIO, sin puertos de debug.
-- **`docker-compose.override.yml`** — **dev**, se auto-carga con `docker compose up`
-  (`make up`). Aqui viven los servicios dev-only (caddy dev, dashboard, signer,
-  minio/minio-init, **mailpit**), los bind-mounts del codigo, xdebug y los puertos
-  publicados. Enumeralos en el propio fichero, que es donde no se quedan atras.
+- **`docker-compose.yml`** — **prod-safe** base: backend + backing services, no
+  code bind-mounts, no xdebug, no MinIO, no debug ports.
+- **`docker-compose.override.yml`** — **dev**, auto-loads with `docker compose up`
+  (`make up`). This is where the dev-only services live (dev caddy, dashboard, signer,
+  minio/minio-init, **mailpit**), the code bind-mounts, xdebug and the published
+  ports. List them in the file itself, which is where they won't go stale.
 
-  ⚑ **Mailpit es el sumidero SMTP de dev, y hasta 2026-08-26 este documento solo lo nombraba como
-  dependencia del lane de worktree** — o sea que un agente que quisiera comprobar un email de
-  notificacion no tenia donde mirar. `MAILER_DSN` apunta ahi en dev; en prod **no hay Mailpit** y esa
-  variable es un `:?` que tiene que llevar un transporte real.
-- **`docker-compose.prod.yml`** — **prod**, explicito (`-f docker-compose.yml -f
-  docker-compose.prod.yml`, no carga el override). Imagenes propias desde GHCR
-  (`image:` + `pull_policy: always`), `APP_ENV=prod`, object storage en AWS/Linode
-  (S3_* de `.env.prod`), `restart: always`, worker activo.
+  ⚑ **Mailpit is the dev SMTP sink, and until 2026-08-26 this document only named it as a
+  dependency of the worktree lane** — meaning an agent wanting to check a notification email had
+  nowhere to look. `MAILER_DSN` points there in dev; in prod **there's no Mailpit** and that
+  variable is a `:?` that has to carry a real transport.
+- **`docker-compose.prod.yml`** — **prod**, explicit (`-f docker-compose.yml -f
+  docker-compose.prod.yml`, does not load the override). Own images from GHCR
+  (`image:` + `pull_policy: always`), `APP_ENV=prod`, object storage on AWS/Linode
+  (S3_* from `.env.prod`), `restart: always`, worker active.
 
-Servicios en prod (`docker-compose.prod.yml`): `caddy`, `php-fpm`, `worker`, `relay`,
-`signer`, `postgresql`, `rabbitmq`, `redis`, `eu-dss`. **NO hay contenedor
-`dashboard` ni MinIO** (el object storage es S3 externo). Flujo de release:
-`make build-prod` (build local con buildx named contexts) -> `make push-prod` (GHCR)
--> en el host: `make deploy-prod`. Plantilla de entorno: `.env.prod.example`.
+Services in prod (`docker-compose.prod.yml`): `caddy`, `php-fpm`, `worker`, `relay`,
+`signer`, `postgresql`, `rabbitmq`, `redis`, `eu-dss`. **There's NO `dashboard`
+container nor MinIO** (object storage is external S3). Release flow:
+`make build-prod` (local build with buildx named contexts) -> `make push-prod` (GHCR)
+-> on the host: `make deploy-prod`. Environment template: `.env.prod.example`.
 
-**Que se construye aqui y que no.** `make build-prod` = `build-backend` +
-`build-rabbitmq-prod` + `build-eu-dss-prod`: **tres** imagenes propias. El resto no
-se construye en este repo — `caddy` es la imagen oficial `caddy:2-alpine` (sirve
-`docker/caddy/Caddyfile`), y **el signer se consume como imagen ya publicada por el
-CI de su propio repo**, fijada con `SIGNER_TAG`, que es fail-closed (`:?`) para que
-un `.env.prod` incompleto falle al renderizar en vez de arrancar algo inesperado.
+**What gets built here and what doesn't.** `make build-prod` = `build-backend` +
+`build-rabbitmq-prod` + `build-eu-dss-prod`: **three** own images. Everything else isn't
+built in this repo — `caddy` is the official `caddy:2-alpine` image (it serves
+`docker/caddy/Caddyfile`), and **the signer is consumed as an image already published by its
+own repo's CI**, pinned with `SIGNER_TAG`, which is fail-closed (`:?`) so that
+an incomplete `.env.prod` fails to render instead of starting up something unexpected.
 
-**Tags independientes**: `BACKEND_TAG` (php-fpm + worker + relay) y `SIGNER_TAG`,
-ambos fijados en `.env.prod`. Asi se puede deployar solo backend
-(`deploy-backend`) o solo signer (`deploy-signer`) sin tocar el otro. `rabbitmq` y
-`eu-dss` van pineadas (`4.0` / `6.4`).
+**Independent tags**: `BACKEND_TAG` (php-fpm + worker + relay) and `SIGNER_TAG`,
+both set in `.env.prod`. That way you can deploy backend only
+(`deploy-backend`) or signer only (`deploy-signer`) without touching the other. `rabbitmq` and
+`eu-dss` are pinned (`4.0` / `6.4`).
 
-⚠ **`BACKEND_TAG` gobierna TRES imagenes pero `deploy-backend` redespliega DOS: el `relay` se queda
-con la vieja.** Las dos frases de arriba son ciertas por separado y juntas son una trampa — el target
-hace `pull php-fpm worker` + `up -d php-fpm worker`, y su nombre lo dice ("SOLO backend (php-fpm +
-worker)"), pero quien lea "BACKEND_TAG = php-fpm + worker + relay" dara por hecho que bumpear el tag y
-correr `deploy-backend` mueve los tres. **Si el release cambia el esquema, usa `deploy-prod`**: un
-relay con codigo viejo contra un esquema migrado no falla ruidosamente — drena el event-log y publica
-mal. (Anotado 2026-08-26 preparando el despliegue de 28 migraciones; el desajuste llevaba ahi desde
-que existe el target.)
+⚠ **`BACKEND_TAG` governs THREE images but `deploy-backend` redeploys TWO: the `relay` is left
+on the old one.** The two sentences above are each true on their own and together are a trap — the target
+runs `pull php-fpm worker` + `up -d php-fpm worker`, and its name says so ("backend ONLY (php-fpm +
+worker)"), but whoever reads "BACKEND_TAG = php-fpm + worker + relay" will assume bumping the tag and
+running `deploy-backend` moves all three. **If the release changes the schema, use `deploy-prod`**: a
+relay running old code against a migrated schema doesn't fail loudly — it drains the event log and publishes
+incorrectly. (Noted on 2026-08-26 while preparing the deployment of 28 migrations; the mismatch had been
+there since the target existed.)
 
-## Puertos publicados (host → contenedor)
+## Published ports (host → container)
 
-| Servicio | Host | Contenedor | Notas |
+| Service | Host | Container | Notes |
 |----------|------|------------|-------|
-| Caddy (API backend) | `http://localhost:8000` | `80` | Entrada a la API Symfony (`/api`) |
-| Dashboard (Nuxt dev) | `http://localhost:3000` | `3000` | `pnpm install` tarda en 1er arranque — usa `make frontends-wait` |
-| Signer (Nuxt dev) | `http://localhost:3001` | `3001` | Ver arriba |
+| Caddy (backend API) | `http://localhost:8000` | `80` | Entry point to the Symfony API (`/api`) |
+| Dashboard (Nuxt dev) | `http://localhost:3000` | `3000` | `pnpm install` takes a while on 1st startup — use `make frontends-wait` |
+| Signer (Nuxt dev) | `http://localhost:3001` | `3001` | See above |
 | PostgreSQL (dev) | `localhost:5432` | `5432` | `f5sign` / `f5sign` |
 | PostgreSQL (test) | `127.0.0.1:5433` | `5432` | `f5sign` / `f5sign_test_pw`, tmpfs, profile `test` |
-| RabbitMQ AMQP | `localhost:5672` | `5672` | `f5sign` / `f5sign` (declarado en `definitions.json`) |
-| RabbitMQ Management | `http://localhost:15672` | `15672` | UI web, mismas credenciales |
-| RabbitMQ Prometheus | `localhost:15692` | `15692` | Metricas |
-| Redis | _(interno)_ | `6379` | NO publicado a host (chocaba con otros redis del host); usa `make redis-cli`. Sin password (DBs: cache=0, locks=1, idempotency=2, rate-limiter=3) |
+| RabbitMQ AMQP | `localhost:5672` | `5672` | `f5sign` / `f5sign` (declared in `definitions.json`) |
+| RabbitMQ Management | `http://localhost:15672` | `15672` | Web UI, same credentials |
+| RabbitMQ Prometheus | `localhost:15692` | `15692` | Metrics |
+| Redis | _(internal)_ | `6379` | NOT published to host (clashed with other redis instances on the host); use `make redis-cli`. No password (DBs: cache=0, locks=1, idempotency=2, rate-limiter=3) |
 | MinIO API (S3) | `127.0.0.1:9100` | `9000` | `minioadmin` / `minioadmin` |
-| MinIO Console | `http://127.0.0.1:9101` | `9001` | UI web |
-| EU DSS | `127.0.0.1:8080` | `8080` | Expuesto solo en dev (override); healthy != TL cargadas |
-| Mailpit (UI + SMTP sink) | `http://127.0.0.1:8025` | `8025` | **Donde aterrizan los emails en dev.** Sin credenciales |
+| MinIO Console | `http://127.0.0.1:9101` | `9001` | Web UI |
+| EU DSS | `127.0.0.1:8080` | `8080` | Exposed only in dev (override); healthy != TLs loaded |
+| Mailpit (UI + SMTP sink) | `http://127.0.0.1:8025` | `8025` | **Where emails land in dev.** No credentials |
 
-Atajos: `make psql`, `make redis-cli`, `make rabbit-console`, `make minio-console`, `make mc cmd="ls local/"`, `make agent-smoke`.
+Shortcuts: `make psql`, `make redis-cli`, `make rabbit-console`, `make minio-console`, `make mc cmd="ls local/"`, `make agent-smoke`.
 
-## Tests frontend en Docker
+## Frontend tests in Docker
 
-**Regla dura: los tests (backend y frontend) SIEMPRE se ejecutan dentro del stack Docker, NUNCA en local.** El objetivo es no contaminar la maquina del dev/agente con dependencias (`node_modules`, navegadores de Playwright, stores de pnpm). Todo eso vive en volumes de Docker aislados.
+**Hard rule: tests (backend and frontend) ALWAYS run inside the Docker stack, NEVER locally.** The goal is to avoid polluting the dev/agent machine with dependencies (`node_modules`, Playwright browsers, pnpm stores). All of that lives in isolated Docker volumes.
 
-Prerrequisito: el stack arriba (`make up`) — los targets de tests usan `--no-deps` y NO recrean servicios; asumen el stack ya corriendo.
+Prerequisite: the stack up (`make up`) — the test targets use `--no-deps` and do NOT recreate services; they assume the stack is already running.
 
-| Target | Que hace | Donde corre |
+| Target | What it does | Where it runs |
 |--------|----------|-------------|
-| `make test-signer` | lint + typecheck + unit (Vitest) | contenedor `signer` (Alpine) |
-| `make test-signer-unit` | solo unit (Vitest) | contenedor `signer` |
-| `make test-signer-e2e` | E2E Playwright (4 perfiles) | contenedor dedicado `signer-e2e` |
-| `make test-signer-e2e-mobile` | E2E smoke (mobile-iphone-se) | contenedor dedicado `signer-e2e` |
+| `make test-signer` | lint + typecheck + unit (Vitest) | `signer` container (Alpine) |
+| `make test-signer-unit` | unit only (Vitest) | `signer` container |
+| `make test-signer-e2e` | E2E Playwright (4 profiles) | dedicated `signer-e2e` container |
+| `make test-signer-e2e-mobile` | E2E smoke (mobile-iphone-se) | dedicated `signer-e2e` container |
 
-**Por que un contenedor E2E aparte (`signer-e2e`)**: el contenedor `signer` es `node:20-alpine` y **Playwright no soporta Alpine**. Los E2E corren en la imagen oficial `mcr.microsoft.com/playwright` (glibc + navegadores precargados), definida en `docker-compose.test.yml` (profile `test`). Apunta al dev server del servicio `signer` por la red interna (`PLAYWRIGHT_BASE_URL=http://signer:3001`); por eso `signer` debe estar arriba.
+**Why a separate E2E container (`signer-e2e`)**: the `signer` container is Alpine (`node:24-alpine`) and **Playwright doesn't support Alpine**. E2E tests run on the official `mcr.microsoft.com/playwright` image (glibc + preloaded browsers), defined in `docker-compose.test.yml` (profile `test`). It points at the `signer` service's dev server over the internal network (`PLAYWRIGHT_BASE_URL=http://signer:3001`); that's why `signer` has to be up.
 
-**Aislamiento del host**: tanto los servicios de dev (`signer`/`dashboard`) como `signer-e2e` guardan `node_modules`, `.nuxt`, la store de pnpm y los artefactos de Playwright en **volumes nombrados**. El bind-mount del repo es de solo-lectura en la practica; lo unico que aparece en el repo del host son directorios-punto-de-montaje vacios (`.nuxt`, `tests/e2e/.playwright`), gitignored.
+**Host isolation**: both the dev services (`signer`/`dashboard`) and `signer-e2e` keep `node_modules`, `.nuxt`, the pnpm store and the Playwright artifacts in **named volumes**. The repo's bind-mount is effectively read-only; the only things that show up in the host repo are empty mount-point directories (`.nuxt`, `tests/e2e/.playwright`), gitignored.
 
-> El **dashboard** aun no tiene suite de tests; cuando la tenga, replicar estos targets/servicios (`test-dashboard`, `dashboard-e2e`).
+> The **dashboard** doesn't have a test suite yet; once it does, replicate these targets/services (`test-dashboard`, `dashboard-e2e`).
 
-## Validacion efimera por worktree (para agentes en paralelo)
+## Ephemeral per-worktree validation (for parallel agents)
 
-**Audiencia: uso AUTOMATIZADO por agentes.** Pensado para correr varios `/task-runner` a la vez, uno
-por `git worktree`. Los targets de test normales (`make test`, `make test-signer*`) validan el **arbol
-principal** (puertos host fijos, servicios `signer`/`postgres-test` compartidos) → dos worktrees
-colisionarian y un worktree secundario ni siquiera esta bind-mounteado. Para validar un worktree usa los
-targets `wt-*`, que levantan un **lane efimero y aislado al vuelo** y lo limpian al terminar.
+**Audience: AUTOMATED use by agents.** Meant for running several `/task-runner` instances at once, one
+per `git worktree`. The normal test targets (`make test`, `make test-signer*`) validate the **main
+tree** (fixed host ports, shared `signer`/`postgres-test` services) → two worktrees would
+collide and a secondary worktree isn't even bind-mounted. To validate a worktree, use the
+`wt-*` targets, which spin up an **ephemeral, isolated lane on the fly** and clean it up when done.
 
-| Target | Que hace |
+| Target | What it does |
 |--------|----------|
-| `make wt-signer src=<path>` | Lane signer: 1 contenedor Playwright que auto-hostea su dev server; lint+typecheck+unit+e2e |
-| `make wt-backend src=<path>` | Lane backend: `postgres-test` (tmpfs) + php efimero; `composer install` + migrate (admin) + `composer test` (RLS real) |
-| `make wt-ls` | Lista lanes activos (proyectos compose `wt-*`) |
-| `make wt-down name=<lane>` | Tira un lane y sus volumenes |
-| `make wt-gc` | Limpia volumenes/redes de worktrees borrados (preserva las cachas CAS `f5sign-*`) |
+| `make wt-signer src=<path>` | Signer lane: 1 Playwright container that self-hosts its dev server; lint+typecheck+unit+e2e |
+| `make wt-backend src=<path>` | Backend lane: `postgres-test` (tmpfs) + ephemeral php; `composer install` + migrate (admin) + `composer test` (real RLS) |
+| `make wt-ls` | Lists active lanes (`wt-*` compose projects) |
+| `make wt-down name=<lane>` | Tears down a lane and its volumes |
+| `make wt-gc` | Cleans up volumes/networks of deleted worktrees (preserves the `f5sign-*` CAS caches) |
 
-`src` es el path del worktree; si se omite, el wrapper usa el toplevel git del `cwd`.
+`src` is the worktree's path; if omitted, the wrapper uses the git toplevel of the `cwd`.
 
-Como funciona (`scripts/wt-validate.sh` + `docker-compose.wt.{signer,backend}.yml`):
+How it works (`scripts/wt-validate.sh` + `docker-compose.wt.{signer,backend}.yml`):
 
-- **Aislamiento por `STACK_NS=wt-<lane>`** (`<lane>` = basename del worktree). Re-namespacea red,
-  volumenes y nombres porque todos interpolan `${STACK_NS}`. (Ojo: `-p`/`COMPOSE_PROJECT_NAME` por si
-  solo NO basta — los recursos llevan `name:` atado a `STACK_NS`.)
-- **Lanes SIN puertos al host** → cero colision; todo va por la red interna del lane. Los agentes no
-  hacen browsing manual, asi que no se publica nada.
-- **Backend con paridad de dependencias (6 contenedores)**: `backend/.env.test` resuelve **cinco**
-  hosts por DNS (`postgres-test`, `minio`, `rabbitmq`, `mailpit`, `eu-dss`) y la suite **no tiene ni un
-  `markTestSkipped`** → lo que no resuelve **no se salta, falla**. El lane levanta cuatro de los cinco
-  **por lane**, porque los cuatro guardan estado que los tests mutan y compartirlos reproduce BL-138 en
-  otro sustrato: postgres (xmin es de **cluster**), minio (los 5 `S3_BUCKET_*` son nombres fijos → dos
-  lanes se pisan las claves), mailpit (buzon unico acumulativo) y rabbitmq (colas compartidas). Redis
-  sigue fuera: cache=filesystem y lock=flock, los tests no lo tocan. BD = `postgres-test` tmpfs por lane
-  (reusa `docker/postgres/init-*.{sql,sh}`); migra como `f5sign` (superuser), testea como `f5sign_app`
-  (non-superuser, RLS real). `var/` y `vendor/` van a volumenes por-lane (no contaminan el worktree).
-- **`eu-dss` es el unico COMPARTIDO**, y por lo que **es**, no por lo que cuesta: peticion/respuesta pura,
-  su unico estado es la cache de Trusted Lists (solo lectura, identica para todos). Se alcanza con
-  `eu-dss-proxy` (socat), el **unico** contenedor del lane en las dos redes: si el contenedor de php
-  estuviera en ambas, `minio`/`rabbitmq`/`mailpit` resolverian **ambiguamente** y un lane acabaria
-  escribiendo en el MinIO del stack principal. `wt-validate.sh` **aborta con mensaje explicito** si el
-  stack compartido no esta arriba (`SHARED_NS`, por defecto `f5sign`); `WT_REQUIRE_DSS=0` corre igual, a
-  sabiendas de que los tests de sellado iran en rojo.
-- **`mem_limit` y `cpus` explicitos en TODOS los servicios del lane** (`WT_*_MEM` / `WT_*_CPUS`). Techo
-  con los defaults: **~3.0 GiB y ~9.25 CPUs** por lane backend; uso real medido en reposo, ~280 MiB. El
-  tope importa sobre todo en minio: sin el se queda ~950 MiB de holgura del runtime de Go (medido en el
-  stack principal) frente a **84 MiB** bajo un cap de 512m.
-- **Los cinco gates en el lane, seleccionables con `WT_GATES`** (default `lint arch phpstan test`;
-  `infection` es **opt-in** porque tarda ordenes de magnitud mas). Dos cosas que no eran cableado:
-  **PHPStan** falla en el lane por el motivo CONTRARIO al del arbol principal — alli el dump del
-  contenedor esta rancio, aqui **no existe**, porque `var/` es un volumen por lane que nace vacio y el
-  `composer install` limpia cache en `env=test`, no en dev. El gate lo genera y **comprueba que esta**
-  antes de analizar. **Infection** necesita el limite de memoria en un `.ini` montado
-  (`docker/php/wt-infection.ini`), no en un `php -d`: relanza phpunit como hijo y la bandera no se
-  hereda. Su valor es un punto de partida, no una medicion.
-- **Pasos separados, no un `sh -lc` encadenado**: install / migraciones / cada gate son `run`
-  distintos, para que un fallo diga **cual** murio. Ademas se fija
-  `COMPOSER_PROCESS_TIMEOUT` (`WT_COMPOSER_TIMEOUT`, default 1800): `composer test` es un *script* de
-  Composer y Composer mata sus scripts a los **300 s** por defecto — el backend no fija
-  `config.process-timeout`, asi que sin esto la suite muere por reloj sin que falle nada.
-- **Cachas CAS compartidas** entre lanes (volumenes external `f5sign-pnpm-store`, `f5sign-composer-cache`)
-  → installs rapidos; `wt-down`/`wt-gc`/teardown NUNCA las borran.
-- **Cap de concurrencia** (flock): signer=2, backend=1 (`WT_CAP_SIGNER`/`WT_CAP_BACKEND`). **En WSL no
-  abuses** (riesgo OOM; ya colgo la maquina con 2 backend). Hay `mem_limit` como backstop.
-- **Teardown automatico** con `trap` (`down -v --remove-orphans`). `make wt-gc` es la red de seguridad.
+- **Isolation via `STACK_NS=wt-<lane>`** (`<lane>` = worktree basename). Re-namespaces network,
+  volumes and names because they all interpolate `${STACK_NS}`. (Note: `-p`/`COMPOSE_PROJECT_NAME` alone
+  is NOT enough — resources have a `name:` tied to `STACK_NS`.)
+- **Lanes with NO host ports** → zero collision; everything goes over the lane's internal network. Agents
+  don't do manual browsing, so nothing gets published.
+- **Backend with dependency parity (6 containers)**: `backend/.env.test` resolves **five**
+  hosts via DNS (`postgres-test`, `minio`, `rabbitmq`, `mailpit`, `eu-dss`) and the suite **doesn't have a
+  single `markTestSkipped`** → whatever doesn't resolve **doesn't get skipped, it fails**. The lane brings up four of the five
+  **per lane**, because those four hold state the tests mutate, and sharing them reproduces BL-138 on
+  another substrate: postgres (xmin is **cluster**-scoped), minio (the 5 `S3_BUCKET_*` are fixed names → two
+  lanes step on each other's keys), mailpit (single accumulating mailbox) and rabbitmq (shared queues). Redis
+  stays out: cache=filesystem and lock=flock, the tests don't touch it. DB = `postgres-test` tmpfs per lane
+  (reuses `docker/postgres/init-*.{sql,sh}`); migrates as `f5sign` (superuser), tests as `f5sign_app`
+  (non-superuser, real RLS). `var/` and `vendor/` go to per-lane volumes (they don't pollute the worktree).
+- **`eu-dss` is the only SHARED one**, and because of what it **is**, not what it costs: pure
+  request/response, its only state is the Trusted Lists cache (read-only, identical for everyone). It's reached via
+  `eu-dss-proxy` (socat), the **only** container in the lane on both networks: if the php container
+  were on both, `minio`/`rabbitmq`/`mailpit` would resolve **ambiguously** and a lane would end up
+  writing to the main stack's MinIO. `wt-validate.sh` **aborts with an explicit message** if the
+  shared stack isn't up (`SHARED_NS`, default `f5sign`); `WT_REQUIRE_DSS=0` runs anyway, knowing
+  full well the sealing tests will go red.
+- **Explicit `mem_limit` and `cpus` on ALL services in the lane** (`WT_*_MEM` / `WT_*_CPUS`). Ceiling
+  with the defaults: **~3.0 GiB and ~9.25 CPUs** per backend lane; actual measured idle usage, ~280 MiB. The
+  cap matters most on minio: without it, it holds on to ~950 MiB of Go runtime slack (measured on the
+  main stack) versus **84 MiB** under a 512m cap.
+- **The five gates in the lane, selectable with `WT_GATES`** (default `lint arch phpstan test`;
+  `infection` is **opt-in** because it takes orders of magnitude longer). Two things that weren't just wiring:
+  **PHPStan** fails in the lane for the OPPOSITE reason it fails in the main tree — there, the container's
+  dump is stale; here, it **doesn't exist**, because `var/` is a per-lane volume that starts empty and
+  `composer install` clears cache under `env=test`, not dev. The gate generates it and **checks it's there**
+  before analyzing. **Infection** needs the memory limit in a mounted `.ini`
+  (`docker/php/wt-infection.ini`), not a `php -d`: it relaunches phpunit as a child process and the flag doesn't
+  get inherited. Its value is a starting point, not a measurement.
+- **Separate steps, not a chained `sh -lc`**: install / migrations / each gate are separate `run`
+  calls, so a failure says **which one** died. It also sets
+  `COMPOSER_PROCESS_TIMEOUT` (`WT_COMPOSER_TIMEOUT`, default 1800): `composer test` is a Composer
+  *script*, and Composer kills its scripts at **300s** by default — the backend doesn't set
+  `config.process-timeout`, so without this the suite dies on the clock without anything actually failing.
+- **Shared CAS caches** across lanes (external volumes `f5sign-pnpm-store`, `f5sign-composer-cache`)
+  → fast installs; `wt-down`/`wt-gc`/teardown NEVER delete them.
+- **Concurrency cap** (flock): signer=2, backend=1 (`WT_CAP_SIGNER`/`WT_CAP_BACKEND`). **Don't push it
+  on WSL** (OOM risk; it already froze the machine with 2 backend lanes). `mem_limit` is there as a backstop.
+- **Automatic teardown** via `trap` (`down -v --remove-orphans`). `make wt-gc` is the safety net.
 
-⛔ **No te fabriques un `docker run` ad-hoc en lugar del lane.** Es la alternativa que la gente
-improvisa cuando el lane le parece de mas, y cuesta horas por tres motivos ya medidos (sesion de
-backend, 2026-08-18), los tres invisibles mientras pasan:
+⛔ **Don't cobble together an ad-hoc `docker run` instead of the lane.** It's the alternative people
+improvise when the lane feels like overkill, and it costs hours for three reasons already measured (backend
+session, 2026-08-18), all three invisible while they're happening:
 
-- **Se bloquea en `var/cache`.** Un `docker run` a mano monta `var/` desde el arbol de trabajo, asi
-  que **dos corridas concurrentes se quedan esperando el lock**: 40+ minutos sin una sola linea de
-  salida, y se lee como *"los tests son lentos"*. El lane no lo sufre porque `var/` es el volumen
-  `wt-backend-var`, propio de cada lane. Si aun asi necesitas el `docker run`, anadele
-  `--tmpfs /var/www/html/var/cache`.
-- **Un `timeout` del HOST sobre `docker run` no mata el contenedor**, solo al cliente: el contenedor
-  sigue vivo sosteniendo locks, y se acumulan zombis (nueve, en el caso medido). El `timeout` tiene
-  que ir DENTRO: `sh -c "timeout 420 php ..."`. `wt-validate.sh` no tiene este problema — su `trap`
-  hace el `down -v` tambien con TERM, verificado cortando una corrida con `timeout`.
-- **Limpiarlos luego es peor que el problema.** `docker ps --filter ancestor=f5sign/backend:dev`
-  empareja **tambien el `php-fpm` del stack compartido**, que corre esa misma imagen: un `xargs
-  docker kill` sobre ese filtro tumba el stack de todo el mundo (paso, ~40 s).
+- **It locks up on `var/cache`.** A hand-rolled `docker run` mounts `var/` from the working tree, so
+  **two concurrent runs end up waiting on the lock**: 40+ minutes with not a single line of
+  output, and it reads as *"the tests are slow"*. The lane doesn't suffer from this because `var/` is the
+  `wt-backend-var` volume, private to each lane. If you still need the `docker run`, add
+  `--tmpfs /var/www/html/var/cache` to it.
+- **A `timeout` on the HOST wrapping `docker run` doesn't kill the container**, only the client: the container
+  stays alive holding locks, and zombies pile up (nine, in the measured case). The `timeout` has
+  to go INSIDE: `sh -c "timeout 420 php ..."`. `wt-validate.sh` doesn't have this problem — its `trap`
+  runs `down -v` on TERM too, verified by cutting a run short with `timeout`.
+- **Cleaning them up afterward is worse than the problem.** `docker ps --filter ancestor=f5sign/backend:dev`
+  also matches **the shared stack's `php-fpm`**, which runs that same image: an `xargs
+  docker kill` over that filter takes down everyone's stack (happened, ~40s).
 
-Y el argumento definitivo, medido sobre el mismo arbol y el mismo commit: contenedor ad-hoc con BD
-aislada pero **cluster compartido** -> 1681 tests, **5 fallos** (todos del relay); `make wt-backend`
-con **cluster propio** -> 1681 tests, **OK**. Aislar la base no basta; hay que aislar el cluster
-(BL-138). Es el contrafactual que las corridas verdes del lane, por si solas, no demuestran.
+And the definitive argument, measured on the same tree and the same commit: ad-hoc container with an isolated
+DB but a **shared cluster** -> 1681 tests, **5 failures** (all from the relay); `make wt-backend`
+with its **own cluster** -> 1681 tests, **OK**. Isolating the database isn't enough; you have to isolate the cluster
+(BL-138). It's the counterfactual that the lane's green runs, by themselves, don't demonstrate.
 
-Para integrarlo con `/task-runner`: cuando un agente valida un worktree, en vez de `make test-signer`
-usa `make wt-signer src=<worktree>` (idem backend). El stack compartido para los tests PAdES **ya
-existe**: es el propio stack de dev (`make up` + `make dss-wait-tl`), del que el lane consume solo
-`eu-dss` por proxy — ver los dos puntos de arriba.
+To integrate this with `/task-runner`: when an agent validates a worktree, instead of `make test-signer`
+use `make wt-signer src=<worktree>` (same for backend). The shared stack for the PAdES tests **already
+exists**: it's the dev stack itself (`make up` + `make dss-wait-tl`), from which the lane only consumes
+`eu-dss` via proxy — see the two bullets above.
 
 ## Workers (Symfony Messenger)
 
-El servicio `worker` consume el transport `async_events` (eventos de dominio cross-BC, drenados
-por el `relay` — ADR-0031). Esta **bajo profile `workers` y NO arranca con `make up`** por defecto;
-en prod `docker-compose.prod.yml` lo activa con `profiles: !reset []`.
+The `worker` service consumes the `async_events` transport (cross-BC domain events, drained
+by the `relay` — ADR-0031). It's **under the `workers` profile and does NOT start with `make up`** by default;
+in prod, `docker-compose.prod.yml` enables it with `profiles: !reset []`.
 
-**Motivo (actualizado):** el default-off ya **no** es un workaround. El transport existe y el worker
-arranca limpio — es una eleccion deliberada para no tener la pipeline async corriendo en dev salvo
-que se pida. *(Este parrafo decia que el worker "crashea en bucle" porque el backend no habia
-definido el transport `async` (task T03.1.2); el backend lo definio como `async_events` y esa razon
-quedo obsoleta.)*
+**Reason (updated):** the default-off is **no longer** a workaround. The transport exists and the worker
+starts up clean — it's a deliberate choice not to have the async pipeline running in dev unless it's
+requested. *(This paragraph used to say the worker "crash-loops" because the backend hadn't
+defined the `async` transport (task T03.1.2); the backend defined it as `async_events` and that reason
+became obsolete.)*
 
-⛔ **La trampa operativa sigue viva, y es la importante:** con el worker abajo, cualquier
-`MessageBusInterface::dispatch()` asincrono se **encola pero no se consume**, y el dev o agente
-puede creer que el mensaje se perdio. Peor: un evento cuya routing key no case con ningun binding
-cae al alternate exchange y aterriza en `queue.events.unroutable`, que **nadie lee fuera de
-`when@test`** — falla en silencio y con la pila entera en verde. Inspeccionar con
-`make worker-status` (mensajes pendientes por cola) **antes** de concluir que algo no se emitio.
+⛔ **The operational trap is still alive, and it's the important one:** with the worker down, any
+async `MessageBusInterface::dispatch()` gets **queued but not consumed**, and the dev or agent
+might think the message was lost. Worse: an event whose routing key doesn't match any binding
+falls through to the alternate exchange and lands in `queue.events.unroutable`, which **nobody reads
+outside `when@test`** — it fails silently with the whole stack green. Check
+`make worker-status` (pending messages per queue) **before** concluding something wasn't emitted.
 
-Ciclo de vida:
+Lifecycle:
 
-| Accion | Comando |
+| Action | Command |
 |--------|---------|
-| Arrancar la pipeline async (worker + relay) | `make worker-up` |
-| Parar worker | `make worker-down` |
-| Reiniciar tras cambios en handlers | `make worker-restart` |
-| Logs en tiempo real | `make worker-logs` |
-| Estado + colas pendientes | `make worker-status` |
+| Start the async pipeline (worker + relay) | `make worker-up` |
+| Stop worker | `make worker-down` |
+| Restart after handler changes | `make worker-restart` |
+| Real-time logs | `make worker-logs` |
+| Status + pending queues | `make worker-status` |
 
-## RabbitMQ — como llega (y como NO llega) la topologia
+## RabbitMQ — how the topology gets applied (and how it doesn't)
 
-La declara `docker/rabbitmq/definitions.json`, que es la fuente de verdad: el backend corre con
-`auto_setup: false` y no declara nada. Llega al contenedor por **bind-mount**, y de ahi salen las dos
-trampas, las dos silenciosas:
+It's declared by `docker/rabbitmq/definitions.json`, which is the source of truth: the backend runs with
+`auto_setup: false` and declares nothing. It reaches the container via **bind-mount**, and from that come the two
+traps, both silent:
 
-1. ⛔ **Un `up -d` NO recarga `definitions.json`.** Su contenido no entra en el hash de configuracion
-   del contenedor, asi que `make deploy-prod` no se entera de que cambio. Hace falta
-   `make reload-rabbitmq`, que ademas lo pasa **por STDIN desde el host**: un bind-mount de fichero
-   UNICO se ata al inode y git reemplaza por rename, asi que tras un `git pull` el contenedor en marcha
-   sigue viendo el fichero VIEJO — para siempre. Sin esto una cola nueva no existe y el worker muere en
-   bucle con `NOT_FOUND - no queue '...' in vhost '/'`.
-2. ⛔ **Los argumentos de una cola son INMUTABLES, y el import no falla: se queda con los viejos y
-   reporta exito.** Redeclarar una cola existente con otro `x-dead-letter-exchange` no cambia nada y no
-   avisa. Por eso `reload-rabbitmq` no termina en el import: verifica con
-   `docker/scripts/check-event-dlx.sh` y se pone rojo si el desvio no esta. Arreglarlo exige **borrar y
-   recrear** las colas — `make rabbit-check-dlx-prod` para mirar, `make rabbit-recreate-event-queues-prod`
-   para arreglar (exige profundidad 0 y cero consumidores; `FORCE=1` asume la perdida).
+1. ⛔ **An `up -d` does NOT reload `definitions.json`.** Its content isn't part of the container's
+   configuration hash, so `make deploy-prod` doesn't notice it changed. You need
+   `make reload-rabbitmq`, which also passes it **over STDIN from the host**: a SINGLE-file bind-mount
+   is tied to the inode, and git replaces files via rename, so after a `git pull` the running container
+   keeps seeing the OLD file — forever. Without this, a new queue doesn't exist and the worker dies in
+   a loop with `NOT_FOUND - no queue '...' in vhost '/'`.
+2. ⛔ **A queue's arguments are IMMUTABLE, and the import doesn't fail: it keeps the old ones and
+   reports success.** Redeclaring an existing queue with a different `x-dead-letter-exchange` changes nothing and doesn't
+   warn you. That's why `reload-rabbitmq` doesn't stop at the import: it verifies with
+   `docker/scripts/check-event-dlx.sh` and goes red if the redirect isn't there. Fixing it requires **deleting and
+   recreating** the queues — `make rabbit-check-dlx-prod` to check, `make rabbit-recreate-event-queues-prod`
+   to fix it (requires depth 0 and zero consumers; `FORCE=1` accepts the loss).
 
-⚠ Por que importa: sin desvio, un mensaje indescifrable se rechaza contra ningun destino, y rechazar
-sin desvio es **descartar**. Con la pila entera en verde.
+⚠ Why it matters: without a redirect, an undecipherable message gets rejected with nowhere to go, and rejecting
+with no redirect is **discarding**. With the whole stack green.
 
 ## EU DSS (Trusted Lists)
 
-`eu-dss` puede estar **"healthy" sin ser utilizable**. El healthcheck de Compose valida que Tomcat responde (endpoint `/server-signing/keys`, ~20-30s tras arrancar), pero validar firmas eIDAS requiere ademas tener cargadas:
+`eu-dss` can be **"healthy" without being usable**. Compose's healthcheck validates that Tomcat responds (endpoint `/server-signing/keys`, ~20-30s after startup), but validating eIDAS signatures also requires having loaded:
 
-- **LOTL** (List of Trusted Lists): XML maestro en `https://ec.europa.eu/tools/lotl/eu-lotl.xml`.
-- **Trusted Lists** de los estados miembros (~27 XMLs).
+- **LOTL** (List of Trusted Lists): master XML at `https://ec.europa.eu/tools/lotl/eu-lotl.xml`.
+- **Trusted Lists** from the member states (~27 XMLs).
 
-Primera vez (cache frio) tarda 30-90s adicionales tras el "healthy". En arranques posteriores sale de `dss-tl-cache` (volumen persistente) en segundos.
+The first time (cold cache) it takes an extra 30-90s after "healthy". On later startups it comes from `dss-tl-cache` (persistent volume) in seconds.
 
-Comandos:
+Commands:
 
-| Accion | Comando |
+| Action | Command |
 |--------|---------|
-| Health basico (Tomcat) | `make dss-health` |
-| Esperar a TL cargadas (default timeout 180s) | `make dss-wait-tl` |
-| Con timeout custom | `make dss-wait-tl t=300` |
-| **Con QUE identidad firma** | **`make seal-check-prod`** — la tercera forma de "healthy sin servir", ver abajo |
+| Basic health (Tomcat) | `make dss-health` |
+| Wait for TLs to load (default timeout 180s) | `make dss-wait-tl` |
+| With a custom timeout | `make dss-wait-tl t=300` |
+| **WHICH identity is signing** | **`make seal-check-prod`** — the third form of "healthy without serving", see below |
 
-Tests de firma PAdES B-LT y validacion eIDAS **deben** depender de `dss-wait-tl`. `make smoke` muestra ambos estados por separado.
+PAdES B-LT signing tests and eIDAS validation **must** depend on `dss-wait-tl`. `make smoke` shows both states separately.
 
-### El sello: la trampa que no se ve desde el healthcheck
+### The seal: the trap the healthcheck doesn't show
 
-⛔ **Healthy y con las TL cargadas, `eu-dss` puede seguir firmando con una identidad que no es la vuestra.** La webapp de `dss-demonstrations` lleva un keystore de DEMO **dentro del WAR**, y cuando no encuentra el configurado no falla: sirve el suyo. Los PDF salen firmados, el healthcheck verde y los tests de estructura en verde tambien — porque la criptografia es real; lo que no es vuestro es el certificado.
+⛔ **Healthy and with the TLs loaded, `eu-dss` can still be signing with an identity that isn't yours.** The `dss-demonstrations` webapp ships a DEMO keystore **inside the WAR**, and when it can't find the configured one it doesn't fail: it serves its own. The PDFs come out signed, the healthcheck green, and the structure tests green too — because the cryptography is real; what isn't yours is the certificate.
 
-⚑ **Anadido el 2026-09-01, el dia en que se midio.** Este documento describia dos maneras de que `eu-dss` estuviera "healthy sin ser utilizable" (Tomcat arriba, TL sin cargar) y no la tercera, que es la unica con consecuencias legales. Estado ese dia: dev y preprod llevaban desde el principio sellando con `CN=self-signed, O=European Commission, OU=PKI-TEST`, serial 01 — cuya **clave privada esta publicada** en el repo `dss-demonstrations` junto con su password. Cualquiera podia producir un sello equivalente. Ya esta cableado, y **desde el 2026-09-03 esta en `master` de `f5sign-infra`** (merge `fc660f6`) — hasta hoy esta linea decia *"rama `fix/dss-seal-keystore-wiring`"*, que era cierto el 09-01 y ya no: esa rama estaba **solo en local, sin pushear**, y hoy se mergeo y se borro. Pero el mecanismo sigue vivo y hay que conocerlo:
+⚑ **Added on 2026-09-01, the day it was measured.** This document described two ways `eu-dss` could be "healthy without being usable" (Tomcat up, TLs not loaded) and not the third one, which is the only one with legal consequences. State that day: dev and preprod had been sealing since the beginning with `CN=self-signed, O=European Commission, OU=PKI-TEST`, serial 01 — whose **private key is published** in the `dss-demonstrations` repo along with its password. Anyone could produce an equivalent seal. It's already wired up, and **as of 2026-09-03 it's in `f5sign-infra`'s `master`** (merge `fc660f6`) — until today this line said *"branch `fix/dss-seal-keystore-wiring`"*, which was true on 09-01 and no longer is: that branch was **local only, never pushed**, and today it was merged and deleted. But the mechanism is still alive and needs to be understood:
 
-- DSS carga el keystore con `ClassPathResource`, o sea **por classpath, no por sistema de ficheros**: un `.p12` en un volumen es invisible salvo que su directorio este en el `common.loader` de Tomcat. Por eso el Dockerfile mete `/keystore` ahi.
-- Las properties son `dss.server.signing.keystore.{type,filename,password}`, y `filename` es **relativo al classpath**, no una ruta absoluta. Las que empiezan por `dss.keystore.` no existen: se ignoran en silencio.
-- ⛔ **No deduzcas que el sello es bueno porque un test de sellado este verde.** Un test que asierta estructura (hay `ByteRange`, el PDF crece) pasa igual con identidad de demo. Lo unico que lo distingue es mirar subject/issuer: `make seal-check-prod`, o a mano `GET /services/rest/server-signing/key/{alias}`.
-- En dev el sello es autofirmado a proposito (`CN=F5Sign Dev Seal`) y la validacion da `INDETERMINATE`: es lo declarado en ADR-0023 del backend y no es un fallo. Lo que se arreglo no fue eso, sino de quien era la clave.
+- DSS loads the keystore with `ClassPathResource`, meaning **via classpath, not the filesystem**: a `.p12` in a volume is invisible unless its directory is in Tomcat's `common.loader`. That's why the Dockerfile puts `/keystore` there.
+- The properties are `dss.server.signing.keystore.{type,filename,password}`, and `filename` is **relative to the classpath**, not an absolute path. The ones starting with `dss.keystore.` don't exist: they're silently ignored.
+- ⛔ **Don't assume the seal is good because a sealing test is green.** A test that asserts structure (there's a `ByteRange`, the PDF grows) passes the same way with a demo identity. The only thing that tells them apart is checking subject/issuer: `make seal-check-prod`, or by hand `GET /services/rest/server-signing/key/{alias}`.
+- In dev the seal is deliberately self-signed (`CN=F5Sign Dev Seal`) and validation returns `INDETERMINATE`: that's what's stated in the backend's ADR-0023 and isn't a failure. What got fixed wasn't that, but whose key it was.
 
-**Pasar una maquina del keystore de demo a un sello propio NO es un `deploy-prod` normal** — el material del host va antes que la imagen (si falta el fichero de la password no arranca NADA, no solo `eu-dss`) y el primer despliegue se bloquea a si mismo con su propio gate. El procedimiento, con el escape que hace falta exactamente una vez, en `README.md` § *Despliegue en preprod / produccion* → *Migracion del sello*; no lo dupliques aqui.
+**Moving a machine from the demo keystore to your own seal is NOT a normal `deploy-prod`** — the host material goes before the image (if the password file is missing NOTHING starts, not just `eu-dss`) and the first deployment blocks itself with its own gate. The procedure, with the escape hatch you need exactly once, is in `README.md` § *Despliegue en preprod / produccion* → *Migracion del sello*; don't duplicate it here.
 
-## Convenciones
+## Conventions
 
-- **Versiones pineadas** en `docker-compose.yml`. Nada de `latest` en imagenes (excepcion: `minio/mc` como init efimero).
-- **Healthchecks** obligatorios en servicios de los que otros dependen (PostgreSQL, RabbitMQ, EU DSS).
-- **Red unica** `f5sign-net` (bridge). Servicios se comunican por nombre DNS interno.
-- **Volumenes nombrados** para datos persistentes **en dev**. Los declara el bloque `volumes:` de cada
-  fichero compose (base, override y prod declaran los suyos): enumeralos ahi, no aqui.
-  ⛔ **En PROD los datos de Postgres NO son un volumen nombrado: son un bind mount del host**
-  (`PGDATA_HOST_DIR`, por defecto `/srv/f5sign/pgdata`), y esa es justo la propiedad que se compro —
-  Docker no gestiona la ruta, asi que ni `docker compose down -v`, ni `docker volume prune`, ni
-  `docker system prune --volumes` pueden llevarse la BD por descuido; solo un `rm` explicito.
-  ⚑ **Corregido 2026-08-26**: esta linea decia "Volumenes nombrados para datos persistentes
-  (`pg-data`, ...)" sin distinguir dev de prod, o sea que afirmaba lo contrario de la propiedad de
-  seguridad que introdujo `09ec6e2` — y lo afirmaba justo donde alguien va a mirar si es seguro correr
-  un `prune`. ⚠ Migrar un prod anterior a ese commit no es automatico: `make deploy-prod` corre antes
-  `preflight-prod`, que se pone rojo si el bind mount esta vacio y el volumen viejo sigue existiendo, e
-  imprime la receta de copia.
-- **Puertos externos documentados** en README o directamente en comentarios del compose (mapa completo en `../f5sign-docs/Planning/F0-Infraestructura/EP01-Docker-y-Entorno/S01.1-Docker-Compose-para-Desarrollo/README.md`).
-- **Variables de entorno**: `.env` nunca se commitea; `.env.example` si, con valores validos para desarrollo local.
-- **Modos de despliegue**: `DEPLOYMENT_MODE=saas|dedicated` controla que bundles y servicios extras se activan. Detalle en `../f5sign-docs/Arquitectura/Modos de Despliegue - SaaS vs Dedicated.md`.
-- **Commits**: convenciones en `../f5sign-docs/Planning/AGENT-RUNBOOK.md` § 5.
+- **Pinned versions** in `docker-compose.yml`. No `latest` on images, no exceptions since 2026-09-17 (until that day `minio/mc` was one, as an ephemeral init).
+- **Healthchecks** mandatory on services other services depend on (PostgreSQL, RabbitMQ, EU DSS).
+- **Single network** `f5sign-net` (bridge). Services communicate by internal DNS name.
+- **Named volumes** for persistent data **in dev**. Declared by the `volumes:` block of each
+  compose file (base, override and prod each declare their own): list them there, not here.
+  ⛔ **In PROD, Postgres data is NOT a named volume: it's a host bind mount**
+  (`PGDATA_HOST_DIR`, default `/srv/f5sign/pgdata`), and that's exactly the property it bought —
+  Docker doesn't manage the path, so neither `docker compose down -v`, nor `docker volume prune`, nor
+  `docker system prune --volumes` can take the DB out by accident; only an explicit `rm` can.
+  ⚑ **Corrected 2026-08-26**: this line said "Named volumes for persistent data
+  (`pg-data`, ...)" without distinguishing dev from prod, meaning it stated the opposite of the safety
+  property `09ec6e2` introduced — and stated it right where someone would look to check whether it's safe to run
+  a `prune`. ⚠ Migrating a prod predating that commit isn't automatic: `make deploy-prod` runs
+  `preflight-prod` beforehand, which goes red if the bind mount is empty and the old volume still exists, and
+  prints the copy recipe.
+- **External ports documented** in the README or directly in compose comments (full map in `../f5sign-docs/Planning/F0-Infraestructura/EP01-Docker-y-Entorno/S01.1-Docker-Compose-para-Desarrollo/README.md`).
+- **Environment variables**: `.env` is never committed; `.env.example` is, with values valid for local development.
+- **Deployment modes**: `DEPLOYMENT_MODE=saas|dedicated` controls which bundles and extra services get activated. Details in `../f5sign-docs/Arquitectura/Modos de Despliegue - SaaS vs Dedicated.md`.
+- **Commits**: convention in the workspace root `CLAUDE.md` § *Commits*.
 
-## Ubicacion de specs relevantes
+## Where the relevant specs live
 
-- **Modos de despliegue**: `../f5sign-docs/Arquitectura/Modos de Despliegue - SaaS vs Dedicated.md`.
-- **Infraestructura y compliance**: `../f5sign-docs/Arquitectura/Pilares/7. Infraestructura y Compliance.md`.
+- **Deployment modes**: `../f5sign-docs/Arquitectura/Modos de Despliegue - SaaS vs Dedicated.md`.
+- **Infrastructure and compliance**: `../f5sign-docs/Arquitectura/Pilares/7. Infraestructura y Compliance.md`.
 - **EU DSS**: `../f5sign-docs/Arquitectura/EU DSS - Guía de Integración.md`.
-- **Contexto de desarrollo**: `../f5sign-docs/Implementación/Contexto de Desarrollo MVP.md`.
-- **Planning por task**: `../f5sign-docs/Planning/F*/EP*/S*/T*.md`.
+- **Development context**: `../f5sign-docs/Implementación/Contexto de Desarrollo MVP.md`.
+- **Planning per task**: `../f5sign-docs/Planning/F*/EP*/S*/T*.md`.
 
-`f5sign-docs` es solo lectura desde aqui. Solo se escribe en `Planning/` para cerrar `Seguimiento` (ver AGENT-RUNBOOK).
+`f5sign-docs` is read-only from here. The only writes are to `Planning/` to close out `Seguimiento` (see AGENT-RUNBOOK).
 
-## Reglas especificas del repo
+## Repo-specific rules
 
-1. **Pre-flight de los repos hermanos**: antes de `docker compose up`, los tres repos (`f5sign-backend`, `f5sign-dashboard`, `f5sign-signer`) deben existir al lado. Si no, los bind mounts montan directorios vacios y los contenedores fallan al arrancar.
-2. **No commitees `.env`**. Solo `.env.example`.
-3. **No hardcodees credenciales** en `docker-compose.yml`; siempre via `${VAR}` desde `.env`.
-4. **Prod vs Dev**: el base `docker-compose.yml` es **prod-safe** (sin bind-mounts ni puertos de debug). El "dev shaping" vive en `docker-compose.override.yml` (auto-carga en `make up`); los overrides de produccion en `docker-compose.prod.yml` (explicito: `-f docker-compose.yml -f docker-compose.prod.yml`, NO carga el override). Ver "Modelo de 3 ficheros Compose" arriba.
-5. **No modifiques migraciones de BD desde aqui**. Esquemas son responsabilidad de `f5sign-backend` (`doctrine:migrations:*`).
-6. **Logs y health**: todos los servicios deben exponer endpoints o comandos de health; los healthchecks del compose dependen de ello.
-7. **Imagenes custom**: los `Dockerfile` en `docker/` son la fuente de las imagenes propias de INFRA (rabbitmq, eu-dss). No builds ad-hoc fuera de compose. **Excepcion — la imagen PHP no se define aqui**: dev y prod salen del mismo `f5sign-backend/Dockerfile` (`target: dev` para el contenedor local, el target por defecto para la de produccion que publica su CI). Antes habia un segundo Dockerfile en `docker/php/`, con la misma base y las mismas extensiones, que habia que sincronizar a mano; se retiro para que la version de PHP y el juego de extensiones no puedan divergir entre dev y prod. En `docker/php/` solo queda configuracion (`php.ini`, `xdebug.ini`), que se bind-montea.
-8. **Tests SIEMPRE en Docker, NUNCA en local**: ni backend ni frontend se testean/lintean/buildean en la maquina host. Usa los targets `make test*` (ver "Tests frontend en Docker"). No ejecutes `pnpm`/`npm`/`composer` install ni tests directamente en el host: contamina la maquina y diverge del entorno reproducible del stack.
+1. **Pre-flight for the sibling repos**: before `docker compose up`, the three repos (`f5sign-backend`, `f5sign-dashboard`, `f5sign-signer`) must exist alongside this one. Otherwise, the bind mounts mount empty directories and the containers fail to start.
+2. **Don't commit `.env`**. Only `.env.example`.
+3. **Don't hardcode credentials** in `docker-compose.yml`; always via `${VAR}` from `.env`.
+4. **Prod vs Dev**: the base `docker-compose.yml` is **prod-safe** (no bind-mounts or debug ports). The "dev shaping" lives in `docker-compose.override.yml` (auto-loads on `make up`); the production overrides in `docker-compose.prod.yml` (explicit: `-f docker-compose.yml -f docker-compose.prod.yml`, does NOT load the override). See "3-file Compose model" above.
+5. **Don't modify DB migrations from here**. Schemas are `f5sign-backend`'s responsibility (`doctrine:migrations:*`).
+6. **Logs and health**: all services must expose health endpoints or commands; the compose healthchecks depend on it.
+7. **Custom images**: the `Dockerfile`s in `docker/` are the source for INFRA's own images (rabbitmq, eu-dss). No ad-hoc builds outside compose. **Exception — the PHP image isn't defined here**: dev and prod both come from the same `f5sign-backend/Dockerfile` (`target: dev` for the local container, the default target for the production one published by its CI). There used to be a second Dockerfile in `docker/php/`, with the same base and the same extensions, that had to be synced by hand; it was removed so the PHP version and extension set can't diverge between dev and prod. `docker/php/` now only holds configuration (`php.ini`, `xdebug.ini`), which gets bind-mounted.
+8. **Tests ALWAYS in Docker, NEVER locally**: neither backend nor frontend gets tested/linted/built on the host machine. Use the `make test*` targets (see "Frontend tests in Docker"). Don't run `pnpm`/`npm`/`composer` install or tests directly on the host: it pollutes the machine and diverges from the stack's reproducible environment.

@@ -1,70 +1,70 @@
-# f5sign-dashboard — Guia operativa para Claude Code
+# f5sign-dashboard — Operational guide for Claude Code
 
-Frontend de administracion del producto F5Sign. Panel que usan los remitentes para gestionar envelopes, usuarios, billing, webhooks, API keys. Dominio en produccion: `app.f5sign.com`.
+Admin frontend for the F5Sign product. Panel used by senders to manage envelopes, users, billing, webhooks, API keys. Production domain: `app.f5sign.com`.
 
 ## Stack
 
-- **Nuxt** 3.x con **Vue** 3.x (Composition API + `<script setup>`)
-- **TypeScript** 5.x en modo estricto (`strict: true`, `noUncheckedIndexedAccess: true`)
-- **Pinia** (via `@pinia/nuxt`) para state management
+- **Nuxt** 3.x with **Vue** 3.x (Composition API + `<script setup>`)
+- **TypeScript** 5.x in strict mode (`strict: true`, `noUncheckedIndexedAccess: true`)
+- **Pinia** (via `@pinia/nuxt`) for state management
 - **Tailwind CSS** 3.x (via `@nuxtjs/tailwindcss`)
-- **vue-i18n** (via `@nuxtjs/i18n`) — locales `es` y `en` en MVP
-- **@vueuse/core** para composables utility
-- **@headlessui/vue** para componentes accesibles (modales, dropdowns)
-- **zod** para validacion de schemas
-- **chart.js** + **vue-chartjs** para graficas de analytics
-- **ofetch** (built-in via `$fetch`) como cliente HTTP contra el backend
-- **pnpm** 9.x como gestor de paquetes, **Node** 20 LTS
+- **vue-i18n** (via `@nuxtjs/i18n`) — locales `es` and `en` in MVP
+- **@vueuse/core** for utility composables
+- **@headlessui/vue** for accessible components (modals, dropdowns)
+- **zod** for schema validation
+- **chart.js** + **vue-chartjs** for analytics charts
+- **ofetch** (built-in via `$fetch`) as the HTTP client against the backend
+- **pnpm** 9.x as package manager, **Node** 20 LTS
 
-## Comandos
+## Commands
 
-| Accion | Comando |
+| Action | Command |
 |--------|---------|
 | Install deps | `pnpm install` |
-| Dev server (puerto 3000) | `pnpm dev` |
-| Build produccion | `pnpm build` |
-| Preview del build | `pnpm preview` |
+| Dev server (port 3000) | `pnpm dev` |
+| Production build | `pnpm build` |
+| Build preview | `pnpm preview` |
 | Lint | `pnpm lint` |
 | Lint + fix | `pnpm lint:fix` |
 | Typecheck | `pnpm typecheck` |
 | Format check | `pnpm format:check` |
-| Format (aplicar) | `pnpm format` |
-| Tests unitarios | `pnpm test` (Vitest; se introduce en EP26) |
-| E2E | `pnpm test:e2e` (Playwright; se introduce en EP26) |
+| Format (apply) | `pnpm format` |
+| Unit tests | `pnpm test` (Vitest; introduced in EP26) |
+| E2E | `pnpm test:e2e` (Playwright; introduced in EP26) |
 | Clean | `pnpm clean` |
 
-> **CRITICO — los tests SIEMPRE corren en Docker, NUNCA en local.** No ejecutes
-> `pnpm install` ni tests/lint/typecheck/build directamente en tu maquina: contaminan
-> el host con dependencias y divergen del entorno reproducible. Los comandos `pnpm *`
-> de arriba son los que se ejecutan **dentro** del contenedor `dashboard`. El dashboard
-> aun no tiene suite de tests; cuando se anada (EP26), se ejecutara via targets `make
-> test-dashboard*` desde `../f5sign-infra/` (con el stack arriba, `make up`), igual que
-> el signer (ver `../f5sign-infra/CLAUDE.md` § "Tests frontend en Docker"). Los E2E
-> correran en un contenedor dedicado con la imagen oficial de Playwright (el contenedor
-> `dashboard` es Alpine y Playwright no lo soporta).
+> **CRITICAL — tests ALWAYS run in Docker, NEVER locally.** Don't run
+> `pnpm install` or tests/lint/typecheck/build directly on your machine: they contaminate
+> the host with dependencies and diverge from the reproducible environment. The `pnpm *`
+> commands above are the ones run **inside** the `dashboard` container. The dashboard
+> doesn't have a test suite yet; when it's added (EP26), it will run via `make
+> test-dashboard*` targets from `../f5sign-infra/` (with the stack up, `make up`), same as
+> the signer (see `../f5sign-infra/CLAUDE.md` § "Frontend tests in Docker"). The E2E tests
+> will run in a dedicated container with the official Playwright image (the `dashboard`
+> container is Alpine and Playwright doesn't support it).
 
-### Worktrees: hoy no hay ruta de validacion aislada
+### Worktrees: today there's no isolated validation path
 
-⛔ **El dashboard no tiene lane efimero.** El signer y el backend si
-(`make -C ../f5sign-infra wt-signer` / `wt-backend`): levantan un stack propio que monta *tu* arbol y lo
-destruyen al terminar. **`wt-dashboard` no existe**, y `docker-compose.override.yml` bind-montea
-`../f5sign-dashboard`, el checkout **principal**, escrito a mano — asi que un worktree no se monta nunca.
+⛔ **The dashboard has no ephemeral lane.** The signer and the backend do
+(`make -C ../f5sign-infra wt-signer` / `wt-backend`): they spin up their own stack that mounts *your*
+tree and destroy it when done. **`wt-dashboard` doesn't exist**, and `docker-compose.override.yml`
+bind-mounts `../f5sign-dashboard`, the **main** checkout, hardcoded — so a worktree never gets mounted.
 
-- **Comprobar donde estas:** `git rev-parse --git-dir` — si el path contiene `/worktrees/`, estas en uno.
-- **Desde un worktree del dashboard**, cualquier cosa que corra en el contenedor `dashboard` valida el
-  arbol del checkout principal. Hoy eso importa poco porque no hay suite; **importara en cuanto EP26 la
-  traiga**, y entonces esto se convierte en la misma trampa que el backend documenta en cinco sitios: la
-  corrida pasa, los numeros son plausibles y la respuesta es sobre otra rama.
-- **Mientras tanto: declararlo.** Si trabajas en un worktree del dashboard, el report dice *"sin validar
-  en contenedor"*, no un verde prestado del checkout principal.
+- **Check where you are:** `git rev-parse --git-dir` — if the path contains `/worktrees/`, you're in one.
+- **From a dashboard worktree**, anything that runs in the `dashboard` container validates the main
+  checkout's tree. Today that matters little because there's no suite; **it will matter as soon as EP26
+  brings it**, and then this becomes the same trap the backend documents in five places: the run passes,
+  the numbers are plausible, and the answer is about a different branch.
+- **In the meantime: state it.** If you work in a dashboard worktree, the report says *"not validated in
+  container"*, not a green borrowed from the main checkout.
 
-▶ **Lo que haria falta:** un `docker-compose.wt.dashboard.yml` + entrada en `scripts/wt-validate.sh`,
-calcados del signer, que ya resuelve el caso frontend entero. Va con EP26, no antes: sin suite no hay
-nada que aislar. Anotado aqui el 2026-08-25 para que EP26 no se cierre sin ello.
+▶ **What it would take:** a `docker-compose.wt.dashboard.yml` + entry in `scripts/wt-validate.sh`,
+copied from the signer, which already solves the whole frontend case. It comes with EP26, not before:
+without a suite there's nothing to isolate. Noted here on 2026-08-25 so EP26 doesn't close without it.
 
-## Estructura del codigo
+## Code structure
 
-Convenciones Nuxt estandar en la raiz del repo (sin monorepo):
+Standard Nuxt conventions at the repo root (no monorepo):
 
 ```
 f5sign-dashboard/
@@ -73,49 +73,49 @@ f5sign-dashboard/
 ├── tailwind.config.ts
 ├── tsconfig.json
 ├── assets/css/tailwind.css
-├── components/                  ← componentes reutilizables
+├── components/                  ← reusable components
 ├── composables/                 ← composables (useXxx)
 ├── layouts/                     ← layouts (default, auth, etc.)
 ├── middleware/                  ← global / per-route
-├── pages/                       ← routing por fichero
+├── pages/                       ← file-based routing
 ├── plugins/
 ├── public/
 ├── stores/                      ← Pinia stores
-├── types/                       ← declaraciones de tipos (incl. runtime-config.d.ts)
+├── types/                       ← type declarations (incl. runtime-config.d.ts)
 └── locales/
     ├── es.json
     └── en.json
 ```
 
-## Convenciones de codigo
+## Code conventions
 
-- **`<script setup lang="ts">`** por defecto en todos los componentes.
-- **Componentes** en PascalCase multi-palabra (`UserTable.vue`, no `Table.vue`).
-- **Composables** con prefijo `use*` (`useEnvelopes`, `useAuth`).
-- **Stores Pinia** en `stores/<dominio>.ts` usando setup-style (`defineStore('envelopes', () => { ... })`).
-- **Sin `any`** salvo justificacion explicita con comentario (prefiere `unknown` + narrowing).
-- **Llamadas a API** via composables tipados (`useEnvelopes().list()`), no `$fetch` directo en componentes.
-- **i18n**: todas las cadenas visibles al usuario van por `t('key')`, nunca hardcoded. Paridad de claves entre `es.json` y `en.json`.
-- **Formularios**: validacion con `zod` schema + feedback visible.
-- **Accesibilidad**: WCAG AA minimo (contraste, focus visible, navegacion por teclado, ARIA cuando aplique).
-- **Commits**: convenciones en `../f5sign-docs/Planning/AGENT-RUNBOOK.md` § 5.
+- **`<script setup lang="ts">`** by default in all components.
+- **Components** in multi-word PascalCase (`UserTable.vue`, not `Table.vue`).
+- **Composables** with `use*` prefix (`useEnvelopes`, `useAuth`).
+- **Pinia stores** in `stores/<domain>.ts` using setup-style (`defineStore('envelopes', () => { ... })`).
+- **No `any`** except with explicit justification via comment (prefer `unknown` + narrowing).
+- **API calls** via typed composables (`useEnvelopes().list()`), not direct `$fetch` in components.
+- **i18n**: all user-visible strings go through `t('key')`, never hardcoded. Key parity between `es.json` and `en.json`.
+- **Forms**: validation with `zod` schema + visible feedback.
+- **Accessibility**: WCAG AA minimum (contrast, visible focus, keyboard navigation, ARIA where applicable).
+- **Commits**: convention in the workspace root `CLAUDE.md` § *Commits*.
 
-## Ubicacion de specs relevantes
+## Location of relevant specs
 
-- **Arquitectura Frontend**: `../f5sign-docs/Arquitectura/Arquitectura Frontend.md` § 2 (estructura), § 4 (Dashboard: paginas, componentes, stores), § 8 (i18n), § 9 (entornos).
-- **API contracts**: en la spec de cada task (`Detalle tecnico > Contratos externos`). Tipos TS propios derivados manualmente de los Response DTOs del backend (ver `../f5sign-docs/.claude/skills/planning-detail/references/dev-conventions.md` § tipos TS).
-- **Casos de uso**: `../f5sign-docs/Casos de Uso/` (flujos de Dashboard).
-- **Modos de despliegue**: `../f5sign-docs/Arquitectura/Modos de Despliegue - SaaS vs Dedicated.md`.
-- **Planning por task**: `../f5sign-docs/Planning/F*/EP*/S*/T*.md`.
+- **Frontend Architecture**: `../f5sign-docs/Arquitectura/Arquitectura Frontend.md` § 2 (structure), § 4 (Dashboard: pages, components, stores), § 8 (i18n), § 9 (environments).
+- **API contracts**: in each task's spec (`Detalle tecnico > Contratos externos`). Own TS types manually derived from the backend's Response DTOs (see `../f5sign-docs/.claude/skills/planning-detail/references/dev-conventions.md` § tipos TS).
+- **Use cases**: `../f5sign-docs/Casos de Uso/` (Dashboard flows).
+- **Deployment modes**: `../f5sign-docs/Arquitectura/Modos de Despliegue - SaaS vs Dedicated.md`.
+- **Planning by task**: `../f5sign-docs/Planning/F*/EP*/S*/T*.md`.
 
-`f5sign-docs` es solo lectura desde aqui. Solo se escribe en `Planning/` para cerrar `Seguimiento` (ver AGENT-RUNBOOK).
+`f5sign-docs` is read-only from here. The only writes to `Planning/` are to close `Seguimiento` (see AGENT-RUNBOOK).
 
-## Reglas especificas del repo
+## Repo-specific rules
 
-1. **No regenerar `pnpm-lock.yaml`** sin peticion explicita.
-2. **No anadir dependencias UI pesadas** sin justificacion (headless-ui ya cubre la mayoria de patrones).
-3. **Runtime config**: toda variable configurable en runtime vive en `runtimeConfig.public` y se sobrescribe con `NUXT_PUBLIC_*`. **Ningun secreto en `public`** (es visible en el bundle cliente).
-4. **i18n planificado desde el principio**: nuevas cadenas entran en los dos locales a la vez. Nunca shipear una clave solo en `es`.
-5. **SaaS vs Dedicated**: usar `useRuntimeConfig().public.deploymentMode` para condicionales. No crear capas de abstraccion anticipadas; check directo en el punto de uso.
-6. **No commitees `.env`.** Solo `.env.example`.
-7. **SPA sin SSR** (`ssr: false` global). En prod el dashboard se sirve como estatico (`nuxt generate` → `.output/public`) horneado en la imagen nginx `f5sign-web` de `../f5sign-infra`; es panel admin tras login (sin SEO), por lo que SSR no aporta. No introducir codigo SSR-only (`useRequestEvent`, `import.meta.server`, etc.); todo es client-side.
+1. **Don't regenerate `pnpm-lock.yaml`** without explicit request.
+2. **Don't add heavy UI dependencies** without justification (headless-ui already covers most patterns).
+3. **Runtime config**: every runtime-configurable variable lives in `runtimeConfig.public` and is overridden with `NUXT_PUBLIC_*`. **No secrets in `public`** (it's visible in the client bundle).
+4. **i18n planned from the start**: new strings go into both locales at once. Never ship a key only in `es`.
+5. **SaaS vs Dedicated**: use `useRuntimeConfig().public.deploymentMode` for conditionals. Don't create premature abstraction layers; check directly at the point of use.
+6. **Don't commit `.env`.** Only `.env.example`.
+7. **SPA with no SSR** (global `ssr: false`). In prod the dashboard is served as static (`nuxt generate` → `.output/public`) baked into the `f5sign-web` nginx image from `../f5sign-infra`; it's an admin panel behind login (no SEO), so SSR adds nothing. Don't introduce SSR-only code (`useRequestEvent`, `import.meta.server`, etc.); everything is client-side.
