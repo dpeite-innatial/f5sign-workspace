@@ -32,6 +32,10 @@ because Playwright doesn't support Alpine and the browsers come bundled in its i
 | Full E2E (Playwright, 4 profiles) | `make test-signer-e2e` |
 | E2E smoke (mobile-iphone-se) | `make test-signer-e2e-mobile` |
 
+- ⛔ **E2E is manual only** (owner, 2026-09-23). Never launched while developing code or a task, nor by any
+  gate: a full run is ~15 min and every browser on the machine. `make wt-signer` stops after the unit suite;
+  `make wt-signer-e2e` / `make test-signer-e2e*` run only when the user asks. Writing or changing E2E specs is
+  fine; say they weren't run.
 - **`pnpm test` measures coverage with an 80% threshold**: a failure due to coverage alone is a failure, not a false positive.
 
 ## Code structure

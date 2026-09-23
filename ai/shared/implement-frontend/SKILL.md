@@ -64,7 +64,8 @@ For each entry in the `## Tests` table:
    - Composables: isolated tests passing store mocks
    - Pinia stores: tests with `createTestingPinia()`
 2. Run the test → it must fail for the right reason
-   - `npm run test:unit -- {path}` or `npm run test:e2e -- {path}`
+   - `npm run test:unit -- {path}`. ⛔ E2E specs may be WRITTEN, but never run here: E2E is manual only,
+     at the user's explicit request (owner, 2026-09-23). Say which E2E specs were written/changed.
 3. Write minimal production code
 4. Run the test → green
 5. Run module/feature tests to avoid introducing regressions

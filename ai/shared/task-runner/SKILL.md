@@ -51,7 +51,7 @@ Before starting, verify (and stop with a clear message if it fails):
      validate.
    - **From a worktree, the ephemeral lane, which DOES mount *your* tree:**
      `make -C ../f5sign-infra wt-signer src=$(pwd)`. It spins up a lane isolated by `STACK_NS=wt-<lane>`,
-     with no ports to the host, runs lint + typecheck + unit + e2e, and tears itself down when done.
+     with no ports to the host, runs lint + typecheck + unit (**no E2E**), and tears itself down when done.
      `flock` caps it at **2 signer lanes** at a time (`WT_CAP_SIGNER`). The backend equivalent is
      `wt-backend`, with cap 1 and `WT_GATES` to pick gates; its own `/task-runner` documents it in detail.
    - ⛔ **`wt-dashboard` does not exist.** The dashboard has no lane or suite yet (it arrives with EP26),
@@ -78,7 +78,8 @@ Before starting, verify (and stop with a clear message if it fails):
 >    commands. `security-audit`, on the other hand, is static analysis of the diff and DOES run in
 >    parallel with `task-validate`.
 > 3. **`implement` gives fast feedback.** During its TDD it runs only unit + lint + typecheck (fast); not
->    the e2e + full build at the end — that authoritative run is done once by `task-validate`.
+>    the full build at the end — that authoritative run is done once by `task-validate`. E2E is not run
+>    by ANY phase: ⛔ **E2E is manual only** (owner, 2026-09-23): never launched while developing or validating a task — a full run is ~15 min and every browser on the machine. It runs only when the user explicitly asks for it.
 > 4. **Tight gate prompts.** Each child skill receives the path to `changes.diff` and the exact list of
 >    touched files; it's instructed not to re-explore the whole repo nor re-run build/test if the
 >    workspace's shared artifacts already exist.
@@ -137,7 +138,7 @@ Invoke the Agent with the corresponding model and prompt:
 "Execute the implement skill defined at .claude/skills/implement-{stack}/SKILL.md on task {mdPath}   (implement-backend or implement-frontend depending on the repo).
 Workspace: var/task-runner/T{id}/.
 Model assigned: {haiku|sonnet|opus according to Complejidad}.
-During TDD, run only unit + lint + typecheck in the container (fast feedback); do NOT run the e2e + full build at the end — that authoritative run is done once by task-validate (see Phase 3.0).
+During TDD, run only unit + lint + typecheck in the container (fast feedback); do NOT run the full build at the end — that authoritative run is done once by task-validate (see Phase 3.0). Never run E2E: it is manual only, at the user's explicit request.
 Commit changes as a single commit at the end. Produce context-digest.md, plan.md, and ensure changes.diff is generable.
 Return the JSON summary."
 ```
@@ -194,7 +195,7 @@ covered nor re-explore the whole repo:
 
 - `task-validate` [Haiku] — **always**, GATE (stack-specific skill: `task-validate-backend` /
   `task-validate-frontend`). Consumes `docker-validate.log` + `.output/` from Phase 3.0 and only adds
-  what's missing (e.g. mobile `e2e` + reading coverage/AC). Does not repeat lint/typecheck/unit/build.
+  what's missing (reading coverage/AC). Does not repeat lint/typecheck/unit/build, and does not run E2E.
 - `security-audit` [Sonnet] — **always**, GATE. Static analysis of the diff → runs in parallel with
   `task-validate` (it barely touches Docker; no longer sequential).
   - If tags include `signing`, `crypto`, or `eidas`: `eidas-compliance` [Opus] will be invoked inside

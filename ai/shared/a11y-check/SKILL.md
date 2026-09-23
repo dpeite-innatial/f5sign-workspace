@@ -86,7 +86,10 @@ If the project has the plugin installed:
 
 ### Step 4 — axe-core / pa11y (if tooling available)
 
-If the project has `@axe-core/playwright` or `pa11y`:
+⛔ Browser-driven checks are E2E, and E2E is manual only (owner, 2026-09-23): skip this step with a warn
+("axe/pa11y not run — manual only") unless the user explicitly asked for it. The static checks above still run.
+
+If asked, and the project has `@axe-core/playwright` or `pa11y`:
 - Run against the affected routes (extracted from context-digest)
 - Requires Playwright/the environment to be ready; if not, skip with warn
 - Parse output, each violation → issue

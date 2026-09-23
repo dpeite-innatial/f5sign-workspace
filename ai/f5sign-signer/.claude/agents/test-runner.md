@@ -12,7 +12,10 @@ Playwright output.
 
 ⛔ **Everything runs in Docker, never on the host.** No loose `pnpm`/`npx`/`vitest`/`playwright` on the machine.
 
-You're told what to run. By default, lint + typecheck + unit. E2E only if asked, because it takes much longer.
+You're told what to run. By default, lint + typecheck + unit. ⛔ **E2E never runs on its own**: not after a
+change, not as part of a task gate, not "to be thorough". It runs only when the prompt explicitly asks for
+E2E/Playwright (owner, 2026-09-23: manual, in counted cases — a full run is ~15 min and every browser on the
+machine). If you weren't asked for it, don't run it and don't suggest it.
 
 ## 1. Harness: decided this way, not by eye
 
@@ -22,11 +25,14 @@ targets validate ANOTHER tree: the main checkout, which is the one that mounts t
 - **Main checkout**, Makefile targets from `../f5sign-infra`:
   - default: `make -C ../f5sign-infra test-signer` (lint + typecheck + unit)
   - unit only: `make -C ../f5sign-infra test-signer-unit`
-  - e2e: `make -C ../f5sign-infra test-signer-e2e` (4 profiles) or `test-signer-e2e-mobile` (smoke)
+  - e2e, ONLY if explicitly asked: `make -C ../f5sign-infra test-signer-e2e` (4 profiles) or
+    `test-signer-e2e-mobile` (smoke)
   - a single unit file: `docker exec f5sign-signer corepack pnpm exec vitest run <ruta>` (the container is
     named `${STACK_NS}-signer`, `f5sign` by default; `docker ps` confirms it)
-- **Worktree**: `make -C ../f5sign-infra wt-signer src=$(pwd)`. Runs lint + typecheck + unit + e2e in an
-  isolated lane. Doesn't support a filter: if you're asked for one from a worktree, say so in the summary.
+- **Worktree**: `make -C ../f5sign-infra wt-signer src=$(pwd)`. Runs lint + typecheck + unit in an isolated
+  lane, **no E2E**. Doesn't support a filter: if you're asked for one from a worktree, say so in the summary.
+  E2E from a worktree, ONLY if explicitly asked: `make -C ../f5sign-infra wt-signer-e2e src=$(pwd)`
+  (`args="--project=mobile-iphone-se"` for the smoke).
 
 If the `signer` container doesn't respond, or the first `pnpm install` hasn't finished, **don't bring
 anything up**: return `result: ENV` with the literal message (`make -C ../f5sign-infra frontends-wait` is
@@ -35,17 +41,18 @@ what waits for it to be ready, and that's decided by whoever launched you).
 ⚠ `pnpm test` measures coverage, and the 80% threshold breaks the run. A red caused only by coverage is
 reported as such, separate from failing tests.
 
-## Waiting for a run longer than one shell call
+## Waiting: ONE blocking wait, never a polling loop
 
-A foreground shell call stops at 10 minutes, and a worktree lane or an e2e run takes longer. Then:
+⛔ Don't check "is it still running?" over and over — no `sleep` loops, no `until grep …`, no repeated
+`docker ps`/`tail`. Every check is a paid turn; the owner stopped a run over exactly that (2026-09-23).
 
-- Launch it **in the background** with your own end marker: `<command> > "$LOG" 2>&1; echo "exit=$?" >> "$LOG"`.
-  The harness notifies you when the background command exits; waiting for that notification is enough.
-- If you poll instead, poll **only for that `exit=` line**, and with a deadline:
-  `timeout 2400 sh -c "until grep -q '^exit=' $LOG; do sleep 15; done"`. ⛔ Never wait for a text you
-  expect the tool to print (*"cleanup complete"*, *"Teardown"*): if the script never prints it, the loop
-  waits forever after the run has ended, and you never report.
-- If the deadline passes, return `result: TIMEOUT` with the last lines of the log. Don't relaunch.
+- The default gates (main or worktree lane, no E2E) fit in one foreground call: run it in the foreground
+  with the tool's maximum timeout (600000 ms).
+- Only if it can exceed 10 minutes (an explicitly requested E2E): launch it **in the background** with
+  `<command> > "$LOG" 2>&1; echo "exit=$?" >> "$LOG"` and then do NOTHING until the harness notifies you
+  that it exited. Then read the log once.
+- If the notification never comes, that's for whoever launched you: return `result: TIMEOUT` with the last
+  lines of the log. Don't relaunch.
 
 ## 2. Summary (your last message, and nothing else)
 

@@ -32,3 +32,4 @@
 .claude/settings.local.json
 /backups/
 /.playwright-cli/
+/f5sign-signer-decline/

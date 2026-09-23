@@ -1,6 +1,6 @@
 ---
 name: task-validate-frontend
-description: 'Hard functional-quality gate on frontend (Nuxt 3 + Vue 3 + TypeScript): runs npm run lint, type-check (vue-tsc), unit/component tests (Vitest) and e2e (Playwright if applicable), build (vite), validates minimum 80% coverage, and verifies that the story ACs are covered by tests. Frontend repositories only. Use with /task-validate-frontend T{id}. Trigger with "validate frontend task", "run vitest", "check Vue/TS tests".'
+description: 'Hard functional-quality gate on frontend (Nuxt 3 + Vue 3 + TypeScript): runs npm run lint, type-check (vue-tsc), unit/component tests (Vitest), build (vite), validates minimum 80% coverage, and verifies that the story ACs are covered by tests. Frontend repositories only. Use with /task-validate-frontend T{id}. Trigger with "validate frontend task", "run vitest", "check Vue/TS tests".'
 ---
 
 # Task Validate Frontend
@@ -27,7 +27,7 @@ Hard functional-quality gate on frontend. Always invoked in a frontend repo.
 
 ## Precondition
 
-Dependent services up: mock or real backend API accessible if E2E tests require it. If not, emit `fail, summary: "backend not accessible for E2E"`.
+Nothing beyond the repo's own test harness: this gate does not run E2E (Step 5).
 
 ## Execution
 
@@ -77,20 +77,14 @@ Parse the JSON output, extract:
   - 78-80% → WARN
   - ≥ 80% → pass
 
-### Step 5 — E2E tests (if applicable)
+### Step 5 — E2E tests: NOT run by this gate
 
-Conditions to run E2E:
-- Task has tag `critical-path`, OR
-- The `.md`'s `## Tests` table declares E2E tests, OR
-- Story ACs involve a full flow (login + action + result)
+⛔ **E2E is manual only** (owner, 2026-09-23): never launched while developing or validating a task — a full run is ~15 min and every browser on the machine. It runs only when the user explicitly asks for it.
 
-```bash
-npm run test:e2e -- --reporter=json
-```
-
-- [ ] Exit 0
-- [ ] Declared tests run
-- [ ] Critical ACs covered by E2E
+- Do not run Playwright, not even for `critical-path` or when the `.md` declares E2E tests.
+- If the task wrote or changed E2E specs, list them in the report as **"written, not run"** so the user
+  can decide to run them by hand (`make test-signer-e2e` / `make wt-signer-e2e src=<path>`).
+- An AC covered only by an E2E spec is reported as covered-by-spec-not-run, never as a failure.
 
 ### Step 6 — Build
 
@@ -125,7 +119,7 @@ List `acCovered` / `acFailed` / `acUncovered`.
 **Lint:** PASS (0 errors, 2 warnings)
 **Type check:** PASS
 **Unit/component tests:** {total} total, {passed} passed, {failed} failed
-**E2E tests:** {total} total, {passed} passed (if run)
+**E2E tests:** not run (manual only) — specs written/changed: {list or none}
 **Coverage:** {%} (threshold 80%)
 **Build:** PASS
 **ACs covered:** {N}/{total}
