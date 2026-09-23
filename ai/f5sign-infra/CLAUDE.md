@@ -295,13 +295,64 @@ collide and a secondary worktree isn't even bind-mounted. To validate a worktree
 
 | Target | What it does |
 |--------|----------|
-| `make wt-signer src=<path>` | Signer lane: 1 Playwright container that self-hosts its dev server; lint+typecheck+unit+e2e |
-| `make wt-backend src=<path>` | Backend lane: `postgres-test` (tmpfs) + ephemeral php; `composer install` + migrate (admin) + `composer test` (real RLS) |
+| `make wt-signer src=<path>` | Signer lane: 1 Playwright container that self-hosts its dev server; lint+typecheck+unit+e2e. Always ephemeral. |
+| `make wt-backend src=<path>` | Backend lane: `postgres-test` (tmpfs) + ephemeral php; `composer install` + migrate (admin) + `composer test` (real RLS). Reuses and keeps a lane that's already up; with none up, ephemeral as before |
+| `make wt-backend-up src=<path>` | Brings up a backend lane and KEEPS it: install + migrate, no gates |
+| `make wt-backend-test src=<path> [only=<regex>] [changed=1] [fast=1] [args="..."]` | PHPUnit only, on the kept lane |
+| `make wt-backend-down src=<path>` | Tears down a worktree's backend lane and its volumes |
 | `make wt-ls` | Lists active lanes (`wt-*` compose projects) |
 | `make wt-down name=<lane>` | Tears down a lane and its volumes |
 | `make wt-gc` | Cleans up volumes/networks of deleted worktrees (preserves the `f5sign-*` CAS caches) |
 
 `src` is the worktree's path; if omitted, the wrapper uses the git toplevel of the `cwd`.
+
+### Persistent backend lane
+
+The backend lane, alone, can now be kept alive across runs instead of torn down on exit — a TDD loop
+pays the ~67s startup once instead of on every `wt-backend`. `make wt-backend-up` brings it up and keeps
+it (`WT_KEEP=1 WT_GATES=none`: install + migrate, no gates). `make wt-backend-test` then runs PHPUnit
+only against that kept lane (`WT_GATES=test`): `only=<regex>` → `WT_FILTER` → PHPUnit `--filter`;
+`changed=1` → `WT_TESTS=changed`; `fast=1` → `WT_TIERS=fast`; `args="..."` → `WT_TEST_ARGS`, appended
+raw. `make wt-backend-down` tears the lane down explicitly. Plain `make wt-backend` also reuses and
+keeps a lane that's already up (a validation run never destroys someone's live lane, `WT_KEEP` or not);
+with no lane up it behaves exactly as before — ephemeral, torn down on exit via the `trap`. **The signer
+lane has no such mode and stays ephemeral always.**
+
+What reusing a lane skips or changes, versus a cold `wt-backend`:
+
+- **`composer install` is skipped** when `composer.json` + `composer.lock` are unchanged since the last
+  install on that lane — a sha1 of both is stamped at `vendor/.wt-lock.sha1` inside the lane's `vendor/`
+  volume and compared before reinstalling.
+- **MinIO buckets are not recreated** (`minio-init` only runs on a fresh lane).
+- **Migrations still run, but incrementally** (`doctrine:migrations:migrate` is itself idempotent). ⚠ If
+  the reused DB holds a migration the branch no longer carries (`doctrine:migrations:status` reports
+  `Executed Unavailable` > 0 — the backend allows a local, unpushed migration set to be rewritten or
+  condensed, repo-specific rule 2) migrating on top would leave a schema that isn't the branch's, so
+  `postgres-test` is recreated instead (tmpfs: recreating it IS emptying it; `init-*.sql` reruns).
+- **Waits for the cluster to go idle before the `test` gate.** A reused lane can carry an open
+  transaction from an earlier interrupted run (Ctrl+C, a timeout), and `pg_snapshot_xmin` is
+  cluster-wide (BL-138, see below) — an open transaction would stall the relay and read as a defect in
+  the branch under test rather than as leftover lane state.
+
+**Test selection** (`wt-backend-test` only): `changed=1` selects a changed `*Test.php` file as-is, and
+maps a changed class under `src/` or `phpstan/src/` to the tests that reference its fully-qualified
+class name — measured against `WT_BASE` (default `develop`), including uncommitted and untracked files;
+changes under `config/`, `migrations/` or `templates/` can't be mapped this way and print as a warning
+instead of silently running nothing for them. `fast=1` keeps only `Unit/`, `Application/` and
+`phpstan/tests` — no DB, no HTTP, no DSS. `WT_VERBOSE=1` lists the selected files instead of just the
+count.
+
+**Measured 2026-09-23** (backend main checkout, kept lane): first `wt-backend-up` ~67s; `only=` on one
+class (`EnvelopeStatusTest`) ~8s; `fast=1` ~23s (2,594 tests); `changed=1 fast=1` over a 12-commit branch,
+9-11s; the full suite on a kept lane, ~4-6 min, of which ~95% is `Integration/` + `Acceptance/`
+(`Acceptance/` runs ≈0.5-1.7s per test — a fixed per-test HTTP setup cost, not individually slow tests).
+
+The flock cap (`WT_CAP_BACKEND`, default 1) still limits concurrent **runs**, not lanes held open: an
+idle kept lane holds no slot and costs the same ~280 MiB idle footprint measured for the ephemeral lane.
+Intended use: `wt-backend-test` for the TDD loop (a direct `make` call, no subagent needed for it), a
+`WT_GATES="lint arch phpstan test" WT_TIERS=fast make wt-backend src=…` before each commit (static gates
++ hermetic tiers), one full `wt-backend` (every tier) when the task is complete, `wt-backend-down` when it
+closes. The backend skill `implement-backend` owns that cadence.
 
 How it works (`scripts/wt-validate.sh` + `docker-compose.wt.{signer,backend}.yml`):
 
