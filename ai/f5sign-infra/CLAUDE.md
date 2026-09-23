@@ -378,6 +378,12 @@ What reusing a lane skips or changes, versus a cold `wt-backend`:
   `docker restart` of `postgres-test` empties the schema and keeps any file inside the container), so it
   would report green over an empty database. A migration edited **keeping its version** is not detected —
   `migrate` did not re-run it either. If the query can't be trusted, it falls back to the old path.
+- **Nothing the gates cache lands in the worktree.** `var/`, `vendor/`, `.phpstan-ide`, PHPStan's
+  result cache and PHPUnit's are per-lane volumes, and the lint and arch gates pass `--cache-file` into
+  `var/` — by default php-cs-fixer and deptrac write `.php-cs-fixer.cache` and `.deptrac.cache` at the
+  repo root, owned by root, and `git worktree remove` then fails with *Permission denied* (measured
+  2026-09-23). ⚠ Those two are FILES, so the fix is a flag, not the volume `.phpunit.cache` got: a volume
+  mounted on a file path creates a directory where the tool wants to write a file.
 - **Each step is a `docker compose exec`, not a container of its own.** On a kept lane the php service is
   left running and every gate, install check and console call execs into it. Measured 2026-09-23 on WSL:
   `run --rm` costs 1.21 s before the command starts, `exec` 0.13 s, and a run makes four to six of them.
