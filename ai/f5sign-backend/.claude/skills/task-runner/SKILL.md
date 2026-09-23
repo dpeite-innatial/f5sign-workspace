@@ -104,10 +104,16 @@ model; this skill doesn't repeat the list.
    up and **keeps** it, so every later run (baseline, TDD, gates) reuses it instead of paying the startup
    again. Tear it down after Phase 6: `make -C ../f5sign-infra wt-backend-down src=$(pwd)`; once the branch
    is merged, remove the worktree (`git worktree remove`) and its root `.gitignore` line.
-8. **Baseline before touching a single line**: full suite with `Agent({ subagent_type: "test-runner", … })`,
-   without `model:`. Note the **exact number of tests and asserts** in `run.log` and in the summary: without
-   it, you can't separate your own reds from environment ones. **A red baseline doesn't abort: it's
-   declared.** `{"phase":"baseline","status":"pass","tests":N,"assertions":M,"harness":"…"}`.
+8. **Baseline before touching a single line**, on the hermetic tiers:
+   `make -C ../f5sign-infra wt-backend-test src=$(pwd) fast=1` (Unit/, Application/ and the PHPStan rule
+   tests). Note the **exact number of tests and asserts** in `run.log` and in the summary: without it, you
+   can't separate your own reds from environment ones. **A red baseline doesn't abort: it's declared.**
+   `{"phase":"baseline","status":"pass","tests":N,"assertions":M,"harness":"…"}`.
+   ⚑ **Until 2026-09-23 this was the FULL suite through `test-runner`, and that is ~5 minutes per task
+   spent up front.** `Integration/` and `Acceptance/` are 95 % of the suite's time and they run again at
+   the end of the task regardless, so the full baseline was answering in advance a question that only
+   matters if something ends up red. If a slow-tier test IS red at the end, attribute it then: a checkout
+   of the merge-base and one filtered run of that class give the same answer the baseline would have.
 
 ### Phase 1 — `spec-lint` + claims check [GATE]
 
