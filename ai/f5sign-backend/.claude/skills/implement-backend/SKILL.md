@@ -45,7 +45,9 @@ session's model; escalate only after a repeated failure with a diagnosis that ju
 
 - Code + tests committed on the task's branch.
 - `var/task-runner/TASK-NNN/plan.md` and `context-digest.md`.
-- Final JSON: `{"status":"pass|fail","summary":"...","filesChanged":N,"testsAdded":N,"attempts":N,"diagnosis":"..."}`
+- Final JSON: `{"status":"pass|fail","summary":"...","filesChanged":N,"testsAdded":N,"attempts":N,"diagnosis":"...","last_green_run":{"sha":"…","tests":N,"assertions":M,"harness":"…"}}`
+  — `last_green_run` is the full run of every tier at the end (*Validation cadence*); `task-validate-backend`
+  reuses it instead of running the suite again when its `sha` is still the tip.
 
 ## Execution
 

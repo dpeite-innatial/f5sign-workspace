@@ -38,11 +38,16 @@ The services the suite needs (Postgres, RabbitMQ, MinIO, Mailpit) are brought up
 linked worktree, `make test` validates the other tree and its green says nothing about your code. Choose
 a route and **write it in the JSON's `harness` field**:
 
-| Route | Good for | Known limitation |
+| Route | Good for | Notes |
 |---|---|---|
-| `make -C ../f5sign-infra test` | The main checkout | Validates `../f5sign-backend`, not a worktree |
-| `make -C ../f5sign-infra wt-backend src=$(pwd)` | A worktree | Postgres only: storage **fails** (`host: minio`) and the broker is skipped. It also dies at Composer's 300 s timeout, but **not because of the suite's duration** (~74 s measured separately): it packs install + migrations + suite into one process |
-| `docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html f5sign/backend:dev sh -c 'php -d memory_limit=-1 bin/phpunit --no-progress'` | A worktree, full suite | Requires the stack up; migrate first against `postgres-test` |
+| `make -C ../f5sign-infra test` (+ `phpstan` / `lint` / `composer cmd=…`) | The main checkout | Validates `../f5sign-backend`, never a worktree |
+| `make -C ../f5sign-infra wt-backend src=$(pwd)` | A worktree | Its own Postgres, MinIO, RabbitMQ and Mailpit, plus the shared `eu-dss`: the full suite runs there. Reuses the worktree's lane if `wt-backend-up` left it up (`make -C ../f5sign-infra wt-ls`). Gates via `WT_GATES="lint arch phpstan test infection"` |
+| `make -C ../f5sign-infra wt-backend-test src=$(pwd) only=<regex>` | A worktree, named tests | PHPUnit only, on the kept lane; seconds |
+
+⛔ **Never a hand-rolled `docker run` on `f5sign-net`** for the suite or Infection, whatever an older
+version of this skill said: it shares the stack's Postgres cluster, and `pg_snapshot_xmin` is cluster-wide,
+so the relay tests go red for reasons that are not the code (BL-138). An hour of diagnosing a regression
+that does not exist is the usual cost.
 
 If a service is down during the run → `status: fail`, `summary: "infrastructure unavailable: X"`.
 **Don't retry automatically, and don't mistake it for a code failure:** the classic symptom is
@@ -53,8 +58,16 @@ If a service is down during the run → `status: fail`, `summary: "infrastructur
 
 ### Step 1 — Suite
 
+⚑ **Reuse the implementation's full run when it covers the tip.** The orchestrator passes
+`last_green_run` (`sha`, counts, harness) from `implement-backend`, whose last act is a full run of every
+tier. If `git rev-parse --short HEAD` equals that `sha`, the working tree is clean, and the harness was a
+full run of **your** tree (the worktree lane, or `make test` in the main checkout), cite it and **do not
+run the suite again**: a second full run on the same commit proves nothing new and costs ~5 minutes. Any
+commit after it, or a dirty tree, and you run it:
+
 ```bash
-composer test        # single tier; test:unit / test:integration / test:e2e do NOT exist
+make -C ../f5sign-infra wt-backend src=$(pwd)     # worktree (WT_GATES default: lint arch phpstan test)
+make -C ../f5sign-infra test                     # main checkout
 ```
 
 This repo's tiers are **directories**, not scripts (ADR-0035): `Unit/`, `Application/` (hermetic),
@@ -64,13 +77,16 @@ not `--testsuite`**: `phpunit.dist.xml` declares exactly two suites, `default` (
 suites as *"(target)"*, i.e. not yet built: `--testsuite Unit` errors out.
 
 - [ ] Exit code 0.
-- [ ] The tests the verification section names **exist and have been run** (look them up by name in the
-      JUnit). A test named in the task and absent from the run is `fail` category `property-unproven`.
+- [ ] The tests the verification section names **exist and have been run**. Cheapest check: run them by
+      name, `make -C ../f5sign-infra wt-backend-test src=$(pwd) only='<Name1|Name2|…>'`, and confirm each
+      is counted (a filter matching nothing prints *No tests executed*). A test named in the task and absent
+      from the run is `fail` category `property-unproven`.
 
 ### Step 2 — Structural strength: covered-MSI, not line percentage
 
 ```bash
-composer infection
+WT_GATES="infection" make -C ../f5sign-infra wt-backend src=$(pwd)   # worktree (reuses the kept lane)
+make -C ../f5sign-infra composer cmd="infection"                    # main checkout
 ```
 
 **This repo has no line-coverage threshold and one must not be invented.** The gate is Infection's
@@ -94,6 +110,10 @@ composer phpstan     # level 9
 composer arch        # Deptrac: visibility contract between layers and BCs
 composer lint        # PHP-CS-Fixer in check mode
 ```
+
+In a worktree these three are the lane's `lint arch phpstan` gates, already part of Step 1's
+`wt-backend` run (or `WT_GATES="lint arch phpstan"` alone if Step 1 was reused). In the main checkout:
+`make -C ../f5sign-infra phpstan` / `lint` / `composer cmd="arch"`.
 
 - [ ] PHPStan with no new errors. **Don't extend `phpstan-baseline.neon` to pass the gate**: every entry
       in the baseline is a design finding with its *why* written down. Adding one is a decision, not a fix.

@@ -1,6 +1,6 @@
 ---
 name: security-audit-runner
-description: Runs security-audit-core on a backend task and returns the summary JSON. Only reports, never edits. Launched by /task-runner (Phase 3, always, after the parallel gates).
+description: Runs security-audit-core on a backend task and returns the summary JSON. Only reports, never edits. Launched by /task-runner (Phase 3, always, in parallel with the other gates).
 model: sonnet
 skills: [security-audit-core]
 disallowedTools: Edit, NotebookEdit

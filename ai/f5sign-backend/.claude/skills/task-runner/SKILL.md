@@ -134,19 +134,30 @@ on it):
 | `doctrine-guard` | `doctrine-guard-runner` | `migrations/`, `src/**/Infrastructure/Persistence/`, or SQL/RLS in any file |
 | `contract-check-backend` | `contract-check-runner` | `src/**/UI/Http/`, `config/routes/`, any `#[OA\`, or a `Contract/Event/` |
 | `task-validate-backend` | `task-validate-runner` | **always** |
+| `security-audit-core` | `security-audit-runner` | **always** (delegates to `security-audit-backend`, and to `eidas-compliance` if the diff touches signing or crypto: `src/F5Sign/SignatureExecution/`, `Foundation/Crypto/`, DSS, PAdES) |
 
 Prerequisite for `contract-check-backend` if there are endpoints:
 `make -C ../f5sign-infra sf cmd="nelmio:apidoc:dump --format=json"` → save it in the workspace.
 
-One block per gate, **all in the same message**:
+One block per gate, **all in the same message**, `security-audit-runner` included: every one of them only
+reads the tree and `changes.diff`, so none waits on another. (Until 2026-09-23 the security audit ran after
+the others, sequentially, for no dependency anyone could name.)
 
 ```
 Agent({
   subagent_type: "task-validate-runner",      // or "doctrine-guard-runner" / "contract-check-runner"
   description: "task-validate on TASK-NNN",
-  prompt: "Task: {mdPath}. Workspace: var/task-runner/TASK-NNN/ (changes.diff is there). Harness: {the one from precondition 5}. Paths you may touch: {list}. Report anything outside them, do not edit it. Return the JSON summary as the last line of your response."
+  prompt: "Task: {mdPath}. Workspace: var/task-runner/TASK-NNN/ (changes.diff is there). Harness: {the one from precondition 5}. last_green_run: {sha, tests, assertions, harness from Phase 2's JSON}. Paths you may touch: {list}. Report anything outside them, do not edit it. Return the JSON summary as the last line of your response."
+})
+Agent({
+  subagent_type: "security-audit-runner",
+  description: "security-audit on TASK-NNN",
+  prompt: "Task: {mdPath}. Workspace: var/task-runner/TASK-NNN/ (changes.diff is there). The diff {does|does not} touch signing/crypto. Return the JSON summary as the last line of your response."
 })
 ```
+
+`last_green_run` lets `task-validate-backend` skip a second full suite on the commit Phase 2 already ran
+it on (its Step 1). Pass it verbatim; the gate checks that the `sha` is still the tip.
 
 Rules for the split (parallel agents on the same tree):
 
@@ -166,18 +177,6 @@ Rules for the split (parallel agents on the same tree):
   `make -C ../f5sign-infra sf cmd="debug:event-dispatcher <event>"`, `debug:container --tag=<tag>`,
   `debug:messenger`. One that's not wired up is a silent no-op that the suite doesn't see, and no gate
   covers it.
-
-After that, sequential and **always**: `security-audit-core`. It delegates to `security-audit-backend`, and
-to `eidas-compliance` if the diff touches signing or crypto (`src/F5Sign/SignatureExecution/`,
-`Foundation/Crypto/`, DSS, PAdES).
-
-```
-Agent({
-  subagent_type: "security-audit-runner",
-  description: "security-audit on TASK-NNN",
-  prompt: "Task: {mdPath}. Workspace: var/task-runner/TASK-NNN/ (changes.diff is there). The diff {does|does not} touch signing/crypto. Return the JSON summary as the last line of your response."
-})
-```
 
 If a hard gate fails → supervised: show the report and ask (retry Phase 2 with the report as context, max 2
 iterations, or abort); auto: abort.
