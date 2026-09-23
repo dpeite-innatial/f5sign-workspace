@@ -295,7 +295,9 @@ collide and a secondary worktree isn't even bind-mounted. To validate a worktree
 
 | Target | What it does |
 |--------|----------|
-| `make wt-signer src=<path>` | Signer lane: 1 Playwright container that self-hosts its dev server; lint+typecheck+unit, **no E2E**. Always ephemeral. |
+| `make wt-signer src=<path>` | Signer lane: 1 Playwright container that self-hosts its dev server; lint+typecheck+unit, **no E2E**. Reuses and keeps a lane whose state is already there; with none, ephemeral as before |
+| `make wt-signer-up src=<path>` | Brings up a signer lane and KEEPS it: `pnpm install` + `nuxt prepare`, no gates |
+| `make wt-signer-down src=<path>` | Tears down a worktree's signer lane and its volumes |
 | `make wt-signer-e2e src=<path> [args=…]` | The same + Playwright E2E (~15 min). **Manual only**, at the user's explicit request — never from a task or a gate. |
 | `make wt-backend src=<path>` | Backend lane: `postgres-test` (tmpfs) + ephemeral php; `composer install` + migrate (admin) + `composer test` (real RLS). Reuses and keeps a lane that's already up; with none up, ephemeral as before |
 | `make wt-backend-up src=<path>` | Brings up a backend lane and KEEPS it: install + migrate, no gates |
@@ -304,33 +306,57 @@ collide and a secondary worktree isn't even bind-mounted. To validate a worktree
 | `make wt-backend-down src=<path>` | Tears down a worktree's backend lane and its volumes |
 | `make wt-ls` | Lists active lanes (`wt-*` compose projects) |
 | `make wt-down name=<lane>` | Tears down a lane and its volumes, and fails if any container of it survives (until 2026-09-23 a backend lane was never actually removed: compose refused without `BACKEND_SRC`, silently) |
-| `make wt-gc` | Cleans up volumes/networks of deleted worktrees (preserves the `f5sign-*` CAS caches) |
+| `make wt-gc` | Removes every `wt-*` volume, network and `wt-*/backend` image Docker does not consider **in use** (preserves the `f5sign-*` CAS caches). ⚠ Not "of deleted worktrees", which is what its help said until 2026-09-23: a KEPT lane is safe only while its containers are alive — after a Docker or WSL restart they are stopped and this takes its `vendor/` and caches too |
 
 `src` is the worktree's path; if omitted, the wrapper uses the git toplevel of the `cwd`.
 
-### Persistent backend lane
+### Persistent lanes
 
-The backend lane, alone, can now be kept alive across runs instead of torn down on exit — a TDD loop
+Both lanes can now be kept alive across runs instead of torn down on exit — a TDD loop
 pays the ~67s startup once instead of on every `wt-backend`. `make wt-backend-up` brings it up and keeps
 it (`WT_KEEP=1 WT_GATES=none`: install + migrate, no gates). `make wt-backend-test` then runs PHPUnit
 only against that kept lane (`WT_GATES=test`): `only=<regex>` → `WT_FILTER` → PHPUnit `--filter`;
 `changed=1` → `WT_TESTS=changed`; `fast=1` → `WT_TIERS=fast`; `args="..."` → `WT_TEST_ARGS`, appended
 raw. `make wt-backend-down` tears the lane down explicitly. Plain `make wt-backend` also reuses and
 keeps a lane that's already up (a validation run never destroys someone's live lane, `WT_KEEP` or not);
-with no lane up it behaves exactly as before — ephemeral, torn down on exit via the `trap`. **The signer
-lane has no such mode and stays ephemeral always.**
+with no lane up it behaves exactly as before — ephemeral, torn down on exit via the `trap`.
+
+**The signer lane got the same treatment on 2026-09-23** (`make wt-signer-up` / `wt-signer-down`), and it
+is the bigger win of the two: it was ephemeral *always*, so every validation threw `node_modules` and
+`.nuxt` away and paid `pnpm install` + `nuxt prepare` before the first line of lint. What says a signer
+lane exists is its state, not a container — it has no long-lived one — so the wrapper looks for its
+`node_modules` volume. ⚠ Two consequences of it being volumes: `make wt-gc` will take a kept signer lane
+whose containers are not running, and until 2026-09-23 `wt-down` never removed those volumes at all (the
+signer overlay interpolates `SIGNER_SRC` with `:?`, compose refused, and the refusal went to `/dev/null`
+— the same bug that hid the backend teardown; ~550 MB of orphan `node_modules` per lane).
 
 What reusing a lane skips or changes, versus a cold `wt-backend`:
 
 - **`composer install` is skipped** when `composer.json` + `composer.lock` are unchanged since the last
   install on that lane — a sha1 of both is stamped at `vendor/.wt-lock.sha1` inside the lane's `vendor/`
   volume and compared before reinstalling.
-- **MinIO buckets are not recreated** (`minio-init` only runs on a fresh lane).
-- **Migrations still run, but incrementally** (`doctrine:migrations:migrate` is itself idempotent). ⚠ If
-  the reused DB holds a migration the branch no longer carries (`doctrine:migrations:status` reports
-  `Executed Unavailable` > 0 — the backend allows a local, unpushed migration set to be rewritten or
-  condensed, repo-specific rule 2) migrating on top would leave a schema that isn't the branch's, so
-  `postgres-test` is recreated instead (tmpfs: recreating it IS emptying it; `init-*.sql` reruns).
+- ⛔ **The lane's MinIO IS recreated before the `test` gate** (volume dropped, buckets remade), and this
+  is the one piece of lane state that must NOT be reused. The database is safe because
+  `dama/doctrine-test-bundle` wraps every test in a transaction and rolls it back; **nothing does that for
+  the object store**, so a run's objects outlive it, and `f5sign-retained` is created with Object Lock — a
+  COMPLIANCE-locked key cannot be deleted or overwritten, so a second run writing the same deterministic
+  key fails with *"Storage write failed in container: f5sign-retained"*. Reported 2026-09-23: three storage
+  tests green on a lane's first full suite and red on the second, over commits touching no storage code.
+  Skipped for `fast=1` (hermetic tiers touch no S3) and with `WT_S3_RESET=0`.
+- **Migrations are compared, not re-run.** One `psql` reads `doctrine_migration_versions` and diffs it
+  against the files in `migrations/`: versions missing there are migrated, and a version applied here that
+  the branch no longer carries (a local set rewritten or condensed, repo-specific rule 2) recreates
+  `postgres-test` (tmpfs: recreating it IS emptying it; `init-*.sql` reruns). It replaces two PHP
+  containers — `doctrine:migrations:status` plus a `migrate` that on a reused lane was a no-op — with a
+  0.2 s query. ⛔ It is deliberately NOT a stamp of `migrations/`: a stamp answers *"did the branch
+  change?"*, which is not the question, and it outlives the tmpfs database it describes (a plain
+  `docker restart` of `postgres-test` empties the schema and keeps any file inside the container), so it
+  would report green over an empty database. A migration edited **keeping its version** is not detected —
+  `migrate` did not re-run it either. If the query can't be trusted, it falls back to the old path.
+- **Each step is a `docker compose exec`, not a container of its own.** On a kept lane the php service is
+  left running and every gate, install check and console call execs into it. Measured 2026-09-23 on WSL:
+  `run --rm` costs 1.21 s before the command starts, `exec` 0.13 s, and a run makes four to six of them.
+  If the container can't be kept up the run says so and falls back to one container per step.
 - **PHPStan keeps its result cache** in a per-lane volume at `/tmp/phpstan` (the backend sets no `tmpDir`,
   and a `run --rm` container's `/tmp` dies with it): a kept lane's phpstan gate re-analyses only what
   changed. Measured 2026-09-23: 140 s cold, 17 s warm, the lane's fixed ~14 s included.
