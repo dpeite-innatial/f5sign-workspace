@@ -361,9 +361,13 @@ What reusing a lane skips or changes, versus a cold `wt-backend`:
   `/data/*/` globs the bucket dirs and skips the hidden `.minio.sys`, where the buckets and their Object
   Lock config live — 0.23 s, after which the store still reports `ObjectLockEnabled` and accepts a PUT of
   the key that was protected a moment earlier. ⛔ Do NOT go back to dropping the volume and re-running
-  `minio-init`: that target takes **43 s on an idle machine and 70-74 s on a busy one, even over an
-  already-initialised store** (~40 aws-cli calls, each one a process start — `--debug`, which every call
-  carries, is 0.43 s of the 1.38 s).
+  `minio-init`: that target takes **19 s**, and took 43 s until the same day (~30 aws-cli calls, each one
+  a process start at 0.95 s, 1.38 s with `--debug`). What brought it down: `--debug` is now opt-in on the
+  admin identity (`S3_DEBUG=1`; the probe identities keep it, because the denial-without-a-body case that
+  needs the wire log is a denied PUT), and `INIT_PROFILE=lane` — which the lane overlay sets — skips the
+  anonymous-exposure battery, four probes per bucket that verify a property of a *deployment*: a lane has
+  no host ports, no public network and a MinIO that dies with it. Object Lock is still verified, which is
+  what the storage tests depend on.
 - **Migrations are compared, not re-run.** One `psql` reads `doctrine_migration_versions` and diffs it
   against the files in `migrations/`: versions missing there are migrated, and a version applied here that
   the branch no longer carries (a local set rewritten or condensed, repo-specific rule 2) recreates
@@ -395,8 +399,10 @@ instead of silently running nothing for them. `fast=1` keeps only `Unit/`, `Appl
 count.
 
 ⚑ **Re-measured 2026-09-23 after the reuse work** (worktree `f5sign-backend-develop`, end to end): cold
-`wt-backend-up` **77 s**, of which `minio-init` alone is **43 s** — more than half of a cold lane, and the
-next thing worth attacking; a filtered `wt-backend-test` **4.4 s**, against ~22 s before; `fast=1` **11.9 s**
+`wt-backend-up` **77 s**, of which `minio-init` was **43 s** — since brought to 19 s, so a cold lane is now
+dominated by `composer install`, which varied between ~40 s and ~5 min across runs on the same worktree:
+the shared CAS cache (`f5sign-composer-cache`) holds only 65 MB for a 153 MB vendor, so it is partly cold.
+That is the next lead, and it is unmeasured; a filtered `wt-backend-test` **4.4 s**, against ~22 s before; `fast=1` **11.9 s**
 for 1 979 tests, of which 8.3 s is PHPUnit itself, so the fixed overhead per run went from ~14 s to ~3.5 s.
 The figures below predate that work and are kept for the tier proportions, which still hold.
 
