@@ -22,6 +22,7 @@
 /f5sign-backend-docs/
 /f5sign-backend-census/
 /f5sign-backend-claimable/
+/f5sign-backend-sentry/
 /f5sign-signer-sentry/
 /f5sign-backend-delegated/
 /f5sign-backend-task-044/
@@ -32,4 +33,6 @@
 .claude/settings.local.json
 /backups/
 /.playwright-cli/
+/f5sign-infra-sentry/
+f5sign-signer-deps/
 /f5sign-signer-decline/
