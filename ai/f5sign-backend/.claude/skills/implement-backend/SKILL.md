@@ -145,18 +145,36 @@ For each property in the verification section, in order:
    - `#[CoversClass]` or `#[CoversNothing]` — `phpunit.dist.xml` has `requireCoverageMetadata="true"`
    - `#[UsesClass]` for collaborators, **including the exceptions the test asserts**
    - The `P-§` citation in the docblock if the property is catalogued (`tests/README.md`)
-2. **Run it and watch it fail for the right reason** (not a syntax error, not a missing class):
-   ```
-   docker run --rm --network f5sign-net -v $(pwd):/var/www/html -w /var/www/html \
-     f5sign/backend:dev sh -c 'vendor/bin/phpunit --filter=<Clase>::<metodo>'
-   ```
-   (or `make -C ../f5sign-infra test` if you're working in the checkout that mounts the stack — see
-   `task-validate-backend`, precondition.)
+2. **Run it and watch it fail for the right reason** (not a syntax error, not a missing class), directly
+   with `make`, not through `test-runner` (see *Validation cadence* below):
+   `make -C ../f5sign-infra wt-backend-test src=$(pwd) only='<Class>::<method>' | tail -30`.
+   ⛔ Never a hand-rolled `docker run` on `f5sign-net`: it shares the Postgres cluster and gives false
+   reds in the relay (BL-138).
 3. **Write the minimal production code.**
 4. **Green.**
 5. ⚑ **Sabotage the guard and watch the test fail for the right reason; restore it.** This is the step
    that catches tests that can't fail, and without it the property isn't proven — it's just asserted.
-6. Module suite, for regressions.
+6. Regressions around what you touched: `… wt-backend-test src=$(pwd) changed=1 fast=1 | tail -30`.
+
+#### Validation cadence
+
+Measured 2026-09-23: the hermetic tiers (Unit/, Application/, PHPStan rule tests) are 2594 of 3293 tests
+and run in ~23 s; Integration/ and Acceptance/ are 95 % of the suite's time (~4-5 min on their own). So the
+slow tiers run **once, when the task is complete**, not per commit.
+
+| When | What | How |
+|---|---|---|
+| Once, at the start (worktree) | bring the lane up and keep it | `make -C ../f5sign-infra wt-backend-up src=$(pwd)` |
+| Every red/green step | the test you are writing — **whatever its tier**, Acceptance included | `wt-backend-test src=$(pwd) only=<regex>` (~8 s), directly |
+| Before each commit | static gates + hermetic tiers | `WT_GATES="lint arch phpstan test" WT_TIERS=fast make -C ../f5sign-infra wt-backend src=$(pwd) \| tail -40`, directly |
+| Task complete, before handing back | full suite + gates, every tier | the `test-runner` agent (no `model:`), which runs `wt-backend` on the kept lane |
+
+- A commit validated this way is green on the **fast tier only**. Say so in its body; the branch's green is
+  the final full run, and that is the one you cite (`last_green_run`).
+- From the main checkout instead of a worktree, the same split with the shared stack:
+  `make -C ../f5sign-infra test-db-setup` once, then `make -C ../f5sign-infra composer cmd="test -- --filter <X>"`.
+- ⛔ Never Infection and never `qa` here: Infection runs once, in `task-validate-backend`.
+- Leave the lane up when you finish; the orchestrator tears it down (`wt-backend-down`).
 
 **Retry policy:** 3 edit-test iterations per test. After that, diagnosis:
 `"poorly written test"` → fail; `"spec contradictorio"` / `"contexto insuficiente"` → fail **without

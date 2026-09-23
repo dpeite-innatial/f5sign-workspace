@@ -24,8 +24,11 @@ wouldn't say anything about this code.
   - filtering: `make -C ../f5sign-infra test-db-setup` and then
     `make -C ../f5sign-infra composer cmd="test -- --filter <X>"`
 - **Worktree**: `make -C ../f5sign-infra wt-backend src=$(pwd)`. Gates are chosen with `WT_GATES="…"`, and
-  their valid values are defined by `../f5sign-infra/scripts/wt-validate.sh`. The lane doesn't support a
-  filter: if you're asked for one from a worktree, don't improvise it; say so in the summary.
+  their valid values are defined by `../f5sign-infra/scripts/wt-validate.sh` (its header lists every
+  `WT_*`). If the worktree's lane is already up (`make -C ../f5sign-infra wt-ls`), the run reuses it and
+  leaves it up: that is expected, don't tear it down. A filter goes through
+  `make -C ../f5sign-infra wt-backend-test src=$(pwd) only=<regex>` (also `changed=1`, `fast=1`).
+  ⛔ Never add `infection` to `WT_GATES` unless you were asked for Infection by name.
 
 If `make` fails because the stack isn't up (`ensure-stack`), or the lane aborts because `eu-dss` is missing,
 **don't bring anything up**: return `result: ENV` with the literal message.

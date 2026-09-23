@@ -34,7 +34,8 @@ Verify, and **stop with a clear message** if it fails:
 4. **The stack is up**, checked from `../f5sign-infra` and never with `docker compose` from this repo
    (repo rule 5): `make -C ../f5sign-infra worker-status` responds, or `docker ps` shows
    `f5sign-php-fpm`. If not → stop with *"environment not available: `make -C ../f5sign-infra up`"*.
-5. **Validation harness.** All test and gate runs go through the `test-runner` agent, which chooses only
+5. **Validation harness.** All test and gate runs go through the `test-runner` agent — except the TDD loop
+   inside `implement-backend`, which runs filtered tests directly (its *Validation cadence*) — which chooses only
    between the main checkout and the `wt-backend` lane (rules in `CLAUDE.md` § *Running tests*). Note in the
    `run.log` and in the summary **which harness it used**: a validation whose target wasn't your tree reads
    as green. ⛔ No manual containers for the suite: they share the Postgres cluster and give false reds in
@@ -79,7 +80,10 @@ model; this skill doesn't repeat the list.
    from `develop` (precondition 3). **Without the task id in the name**: it goes in the PR body and in the
    `Status`.
 6. **`run.log`** (JSON lines): `{phase: "prepare", status: "pass", at: ISO8601}`.
-7. **Baseline before touching a single line**: full suite with `Agent({ subagent_type: "test-runner", … })`,
+7. **Worktree lane**: from a worktree, `make -C ../f5sign-infra wt-backend-up src=$(pwd)` brings its lane
+   up and **keeps** it, so every later run (baseline, TDD, gates) reuses it instead of paying the startup
+   again. Tear it down after Phase 6: `make -C ../f5sign-infra wt-backend-down src=$(pwd)`.
+8. **Baseline before touching a single line**: full suite with `Agent({ subagent_type: "test-runner", … })`,
    without `model:`. Note the **exact number of tests and asserts** in `run.log` and in the summary: without
    it, you can't separate your own reds from environment ones. **A red baseline doesn't abort: it's
    declared.** `{"phase":"baseline","status":"pass","tests":N,"assertions":M,"harness":"…"}`.
