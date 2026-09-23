@@ -310,6 +310,16 @@ collide and a secondary worktree isn't even bind-mounted. To validate a worktree
 
 `src` is the worktree's path; if omitted, the wrapper uses the git toplevel of the `cwd`.
 
+⛔ **`scripts/wt-validate.sh` runs from a private copy of itself, and that is not cosmetic.** bash reads a
+script **incrementally** from its file descriptor, so editing the file while a run is in flight — a commit,
+a merge, a branch switch in the main checkout — makes the running shell pick up the new bytes at the offset
+it had reached. Measured 2026-09-23: a commit to this script during a lane's Infection run made bash execute
+comment text (`ls: cannot access 'WT_CONSOLE_ADMIN=1'`) and the run died with Error 2 **after** Infection had
+printed passing results. The script now copies itself to `/tmp`, re-execs the copy and unlinks it at once
+(the inode lives while bash holds it open), so nothing is left behind and an edit mid-run is harmless.
+⚠ Anything that resolves paths from `BASH_SOURCE` inside that script is wrong for the same reason: the copy
+lives in `/tmp`. `INFRA_DIR` comes from the original invocation path.
+
 ### Persistent lanes
 
 Both lanes can now be kept alive across runs instead of torn down on exit — a TDD loop
@@ -335,22 +345,25 @@ What reusing a lane skips or changes, versus a cold `wt-backend`:
 - **`composer install` is skipped** when `composer.json` + `composer.lock` are unchanged since the last
   install on that lane — a sha1 of both is stamped at `vendor/.wt-lock.sha1` inside the lane's `vendor/`
   volume and compared before reinstalling.
-- ⛔ **The lane's MinIO IS emptied before the `test` gate**, and this is the one piece of lane state that
-  must NOT be reused. The database is safe because
-  `dama/doctrine-test-bundle` wraps every test in a transaction and rolls it back; **nothing does that for
-  the object store**, so a run's objects outlive it, and `f5sign-retained` is created with Object Lock — a
-  version under a COMPLIANCE retention cannot be deleted at all. Reported 2026-09-23: three storage tests
-  green on a lane's first full suite and red on the second, over commits touching no storage code.
-  ⚑ **Measured the same day, and it qualifies that report**: deleting or overwriting a locked *key* DOES
-  work (it writes another version); what fails is deleting a *version* — *"Object is WORM protected and
-  cannot be overwritten"*. So the reset is a precaution against reusing mutable state, **not** a fix for a
-  confirmed diagnosis. **How it empties matters**: the objects are removed at the filesystem level from
-  inside the container (`/data/*/` globs the bucket dirs, skipping the hidden `.minio.sys`, where the
-  buckets and their Object Lock config live) — 0.23 s, after which the store still reports
-  `ObjectLockEnabled` and accepts a PUT of the key that was protected a moment earlier. ⛔ Do NOT go back
-  to dropping the volume and re-running `minio-init`: that target takes **70-74 s even over an
-  already-initialised store** (~40 aws-cli calls, each a process start) — it is also what a cold lane pays.
-  Skipped for `fast=1` (hermetic tiers touch no S3) and with `WT_S3_RESET=0`.
+- ⛔ **A full run on a reused lane empties the database AND the object store**, together, before
+  migrating; a selective run (`only=`, `changed=`, `fast=`) empties neither, because that is a TDD loop
+  whose speed is the point. `WT_RESET=0` disables it. **Neither store is self-cleaning, and the database
+  was the surprise**: `dama/doctrine-test-bundle` rolls back the tests that let it, but
+  `#[SkipDatabaseRollback]` cases COMMIT — measured 2026-09-23, a kept lane holding 59 committed VOIDED
+  envelopes, one of which every later promotion sweep picked up; deleting that one row turned two classes
+  green with no code change. ⚠ Emptying only one of the two is **worse than emptying neither**: committed
+  rows then point at objects that no longer exist. The real fix belongs in the backend (a test that opts
+  out of the rollback cleaning up after itself); this is the lane refusing to hand anyone a red it caused.
+  **How the object store is emptied matters.** Over S3 it cannot be done: deleting a *version* under a
+  COMPLIANCE retention answers *"Object is WORM protected and cannot be overwritten"* (measured; deleting
+  or overwriting the *key* does work — it writes another version, which is why "a second run rewrites the
+  same key" was never the whole story). So the bytes go at the filesystem level from inside the container:
+  `/data/*/` globs the bucket dirs and skips the hidden `.minio.sys`, where the buckets and their Object
+  Lock config live — 0.23 s, after which the store still reports `ObjectLockEnabled` and accepts a PUT of
+  the key that was protected a moment earlier. ⛔ Do NOT go back to dropping the volume and re-running
+  `minio-init`: that target takes **43 s on an idle machine and 70-74 s on a busy one, even over an
+  already-initialised store** (~40 aws-cli calls, each one a process start — `--debug`, which every call
+  carries, is 0.43 s of the 1.38 s).
 - **Migrations are compared, not re-run.** One `psql` reads `doctrine_migration_versions` and diffs it
   against the files in `migrations/`: versions missing there are migrated, and a version applied here that
   the branch no longer carries (a local set rewritten or condensed, repo-specific rule 2) recreates
@@ -380,6 +393,12 @@ changes under `config/`, `migrations/` or `templates/` can't be mapped this way 
 instead of silently running nothing for them. `fast=1` keeps only `Unit/`, `Application/` and
 `phpstan/tests` — no DB, no HTTP, no DSS. `WT_VERBOSE=1` lists the selected files instead of just the
 count.
+
+⚑ **Re-measured 2026-09-23 after the reuse work** (worktree `f5sign-backend-develop`, end to end): cold
+`wt-backend-up` **77 s**, of which `minio-init` alone is **43 s** — more than half of a cold lane, and the
+next thing worth attacking; a filtered `wt-backend-test` **4.4 s**, against ~22 s before; `fast=1` **11.9 s**
+for 1 979 tests, of which 8.3 s is PHPUnit itself, so the fixed overhead per run went from ~14 s to ~3.5 s.
+The figures below predate that work and are kept for the tier proportions, which still hold.
 
 **Measured 2026-09-23** (backend main checkout, kept lane): first `wt-backend-up` ~67s; `only=` on one
 class (`EnvelopeStatusTest`) ~8s; `fast=1` ~23s (2,594 tests); `changed=1 fast=1` over a 12-commit branch,
