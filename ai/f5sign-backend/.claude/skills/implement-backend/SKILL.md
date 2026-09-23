@@ -177,6 +177,12 @@ slow tiers run **once, when the task is complete**, not per commit.
   `make -C ../f5sign-infra test-db-setup` once, then `make -C ../f5sign-infra composer cmd="test -- --filter <X>"`.
 - ⛔ Never Infection and never `qa` here: Infection runs once, in `task-validate-backend`.
 - Leave the lane up when you finish; the orchestrator tears it down (`wt-backend-down`).
+- ⛔ **Wait for a subagent (`test-runner` or any other) by its completion notification, never by polling
+  its output file.** That file stays empty — the result arrives as a notification — so a loop such as
+  `until grep -q reported <task>.output; do sleep 10; done` never matches and holds the whole task until the
+  shell times out. On TASK-046 it held the finished implementation for 10 minutes after the run it waited on
+  had already gone green. Launch the agent and keep working, or end the turn; you are re-invoked when it
+  reports. A long **shell** command is the same: `run_in_background`, and wait for its notification.
 
 **Retry policy:** 3 edit-test iterations per test. After that, diagnosis:
 `"poorly written test"` → fail; `"spec contradictorio"` / `"contexto insuficiente"` → fail **without

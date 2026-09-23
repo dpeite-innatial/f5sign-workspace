@@ -55,6 +55,11 @@ model; this skill doesn't repeat the list.
   gate fails, its `*.report.md`. Nothing else.
 - No runner, on purpose: `implement-backend` (inherits the session's model, Phase 2) and `pr-ready`
   (Phase 8). `eidas-compliance` is launched by `security-audit-core` with its model fixed.
+- ⛔ **A subagent's result is waited for by its completion notification, never by polling its output
+  file.** The file stays empty and the result arrives as a notification, so a `grep` loop on it never
+  matches: on TASK-046 the implementation agent spent 10 minutes in `until grep -q reported <task>.output`
+  after the run it waited on had gone green. The same holds for your own waits: launch, keep working or end
+  the turn, and act on the notification. Long shell commands go with `run_in_background`.
 
 ## Execution flow
 
