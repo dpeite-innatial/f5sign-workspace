@@ -299,10 +299,10 @@ collide and a secondary worktree isn't even bind-mounted. To validate a worktree
 | `make wt-backend src=<path>` | Backend lane: `postgres-test` (tmpfs) + ephemeral php; `composer install` + migrate (admin) + `composer test` (real RLS). Reuses and keeps a lane that's already up; with none up, ephemeral as before |
 | `make wt-backend-up src=<path>` | Brings up a backend lane and KEEPS it: install + migrate, no gates |
 | `make wt-backend-test src=<path> [only=<regex>] [changed=1] [fast=1] [args="..."]` | PHPUnit only, on the kept lane |
-| `make wt-backend-sf src=<path> cmd="<console command>" [env=test]` | Symfony console over the **worktree's** code (default `env=dev`). `make sf` runs in the shared `php-fpm`, which mounts the main checkout, so from a worktree its `debug:*` output describes another branch's wiring. Reuses a kept lane; otherwise ephemeral |
+| `make wt-backend-sf src=<path> cmd="<console command>" [env=test]` | Symfony console over the **worktree's** code (default `env=dev`). `make sf` runs in the shared `php-fpm`, which mounts the main checkout, so from a worktree its `debug:*` output describes another branch's wiring. Reuses a kept lane; otherwise ephemeral. `admin=1` runs it as the lane's **superuser** (the DSN the lane migrates with), to exercise a migration's `down()`/`up()` from a worktree (`cmd="doctrine:migrations:execute --down '<Version>'"`, then `migrate`). ⛔ It bypasses RLS: migration operations only, never tests — it is reachable from `wt-backend-sf` alone, never from `wt-backend-test` or the test gate. A console run never migrates first, so a `--down` stays down until you `migrate` |
 | `make wt-backend-down src=<path>` | Tears down a worktree's backend lane and its volumes |
 | `make wt-ls` | Lists active lanes (`wt-*` compose projects) |
-| `make wt-down name=<lane>` | Tears down a lane and its volumes |
+| `make wt-down name=<lane>` | Tears down a lane and its volumes, and fails if any container of it survives (until 2026-09-23 a backend lane was never actually removed: compose refused without `BACKEND_SRC`, silently) |
 | `make wt-gc` | Cleans up volumes/networks of deleted worktrees (preserves the `f5sign-*` CAS caches) |
 
 `src` is the worktree's path; if omitted, the wrapper uses the git toplevel of the `cwd`.
