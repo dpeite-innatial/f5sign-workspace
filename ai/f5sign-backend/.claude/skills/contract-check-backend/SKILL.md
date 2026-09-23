@@ -121,12 +121,15 @@ The log is permanent and **evolution happens only by upcast**: rewriting a store
       SignatureExecution, Envelope). Required field added → `fail`, category `payload-required-field`.
 - [ ] ⛔ **Never rename an `event_type` in place.** Add the new one, write both, retire the old one.
       Renamed in place → `fail`: the bytes already written stop decoding.
-- [ ] ⚠ **And warn that none of this has a safety net today.** The canonical bytes fixture per
-      `event_type` is recorded in ADR-0031 as *"Not enforced — queued, not built"*, and the round-trip
-      that exists serializes and deserializes **with the same code**, so it can never detect an
-      incompatible `fromPayload()`: both sides move together and drift away together from the bytes
-      already in the log. A payload change without that fixture is `warn` with this note, not a silent
-      pass.
+- [ ] **The safety net is the frozen fixtures: check they were used, not regenerated.**
+      `tests/F5Sign/Foundation/Unit/Serialization/GoldenPayloadBytesTest.php` decodes one frozen payload per
+      `event_type` from `tests/Fixtures/event-payloads/*.json` with today's code, and its census fails on an
+      `event_type` without a fixture. So: a **new** `event_type` adds its fixture; an **existing** one's
+      fixture is **not touched** — a diff that edits an existing fixture turned the alarm into silence
+      (`fail`, category `fixture-regenerated`). The round-trip tests alone serialize and deserialize with the
+      same code and cannot see an incompatible `fromPayload()`. ⛑ This item said *"no safety net today —
+      not built"* until 2026-09-23; the fixtures had landed on `develop` before that, and TASK-046's
+      contract check found the text stale.
 
 ### Step 5 — If the contract changed, there has to be a frontend handoff
 
