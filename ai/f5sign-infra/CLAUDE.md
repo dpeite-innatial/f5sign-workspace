@@ -295,7 +295,8 @@ collide and a secondary worktree isn't even bind-mounted. To validate a worktree
 
 | Target | What it does |
 |--------|----------|
-| `make wt-signer src=<path>` | Signer lane: 1 Playwright container that self-hosts its dev server; lint+typecheck+unit+e2e. Always ephemeral. |
+| `make wt-signer src=<path>` | Signer lane: 1 Playwright container that self-hosts its dev server; lint+typecheck+unit, **no E2E**. Always ephemeral. |
+| `make wt-signer-e2e src=<path> [args=…]` | The same + Playwright E2E (~15 min). **Manual only**, at the user's explicit request — never from a task or a gate. |
 | `make wt-backend src=<path>` | Backend lane: `postgres-test` (tmpfs) + ephemeral php; `composer install` + migrate (admin) + `composer test` (real RLS). Reuses and keeps a lane that's already up; with none up, ephemeral as before |
 | `make wt-backend-up src=<path>` | Brings up a backend lane and KEEPS it: install + migrate, no gates |
 | `make wt-backend-test src=<path> [only=<regex>] [changed=1] [fast=1] [args="..."]` | PHPUnit only, on the kept lane |
@@ -330,6 +331,9 @@ What reusing a lane skips or changes, versus a cold `wt-backend`:
   `Executed Unavailable` > 0 — the backend allows a local, unpushed migration set to be rewritten or
   condensed, repo-specific rule 2) migrating on top would leave a schema that isn't the branch's, so
   `postgres-test` is recreated instead (tmpfs: recreating it IS emptying it; `init-*.sql` reruns).
+- **PHPStan keeps its result cache** in a per-lane volume at `/tmp/phpstan` (the backend sets no `tmpDir`,
+  and a `run --rm` container's `/tmp` dies with it): a kept lane's phpstan gate re-analyses only what
+  changed. Measured 2026-09-23: 140 s cold, 17 s warm, the lane's fixed ~14 s included.
 - **Waits for the cluster to go idle before the `test` gate.** A reused lane can carry an open
   transaction from an earlier interrupted run (Ctrl+C, a timeout), and `pg_snapshot_xmin` is
   cluster-wide (BL-138, see below) — an open transaction would stall the relay and read as a defect in
