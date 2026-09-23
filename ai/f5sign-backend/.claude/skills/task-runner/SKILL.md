@@ -28,9 +28,8 @@ Verify, and **stop with a clear message** if it fails:
 
 1. The task's `.md` exists at `docs/tasks/TASK-NNN-*.md` and is readable.
 2. `git status` clean on the current branch.
-3. The base branch is **`develop`** (`master` is the release one). **Branch from the ref**:
-   `git checkout -b <branch> develop`. In a linked worktree, `git checkout develop` is impossible, because the
-   main checkout already has that branch.
+3. The base branch is **`develop`** (`master` is the release one). **Branch from the ref**, never by
+   checking `develop` out: in a linked worktree that is impossible, because the main checkout has it.
 4. **The stack is up**, checked from `../f5sign-infra` and never with `docker compose` from this repo
    (repo rule 5): `make -C ../f5sign-infra worker-status` responds, or `docker ps` shows
    `f5sign-php-fpm`. If not → stop with *"environment not available: `make -C ../f5sign-infra up`"*.
@@ -76,19 +75,33 @@ model; this skill doesn't repeat the list.
    gives *Permission denied*, create it inside the container
    (`docker run --rm -v $(pwd):/var/www/html -w /var/www/html f5sign/backend:dev mkdir -p var/task-runner/TASK-NNN`)
    or write the reports to the scratchpad and **say in the summary where they ended up**.
-5. **Branch**: `<type>/<slug>` (`feat/notification-email-html`, `docs/task-conventions`), kebab-case, ASCII,
-   from `develop` (precondition 3). **Without the task id in the name**: it goes in the PR body and in the
-   `Status`.
+5. **Branch, in a sibling worktree by default**: `<type>/<slug>` (`feat/notification-email-html`,
+   `docs/task-conventions`), kebab-case, ASCII, from `develop` (precondition 3). **Without the task id in the
+   name**: it goes in the PR body and in the `Status`.
+   ```
+   git worktree add -b <type>/<slug> ../f5sign-backend-<slug> develop
+   echo '/f5sign-backend-<slug>/' >> ../.gitignore        # the workspace root's, per its Worktrees rule 1
+   ../bin/sync-ai.sh                                       # or the worktree serves stale, committable AI files
+   ```
+   Then work from `../f5sign-backend-<slug>`. **Why not branch in the main checkout:** the dev `worker`,
+   `relay` and `custodian` bind the main checkout with `APP_DEBUG=0` and never recompile, so a branch that
+   changes services, constructors or config runs new PHP against old wiring there, and the custodian's
+   hourly sweep runs it against the dev database. A worktree also leaves the main checkout free, so two
+   tasks can run at once. Stay in the main checkout only if the user asks for it, and then `make worker-down`
+   for the task's duration.
 6. **`run.log`** (JSON lines): `{phase: "prepare", status: "pass", at: ISO8601}`.
 7. **Worktree lane**: from a worktree, `make -C ../f5sign-infra wt-backend-up src=$(pwd)` brings its lane
    up and **keeps** it, so every later run (baseline, TDD, gates) reuses it instead of paying the startup
-   again. Tear it down after Phase 6: `make -C ../f5sign-infra wt-backend-down src=$(pwd)`.
+   again. Tear it down after Phase 6: `make -C ../f5sign-infra wt-backend-down src=$(pwd)`; once the branch
+   is merged, remove the worktree (`git worktree remove`) and its root `.gitignore` line.
 8. **Baseline before touching a single line**: full suite with `Agent({ subagent_type: "test-runner", … })`,
    without `model:`. Note the **exact number of tests and asserts** in `run.log` and in the summary: without
    it, you can't separate your own reds from environment ones. **A red baseline doesn't abort: it's
    declared.** `{"phase":"baseline","status":"pass","tests":N,"assertions":M,"harness":"…"}`.
 
-### Phase 1 — `spec-lint` [GATE]
+### Phase 1 — `spec-lint` + claims check [GATE]
+
+Both in the **same message**, alongside the baseline: they only read.
 
 ```
 Agent({
@@ -96,7 +109,18 @@ Agent({
   description: "spec-lint on TASK-NNN",
   prompt: "Task: {mdPath}. Workspace: var/task-runner/TASK-NNN/. Write the report to var/task-runner/TASK-NNN/spec-lint.report.md. Return the JSON summary as the last line of your response."
 })
+Agent({
+  subagent_type: "spec-claims-runner",
+  description: "claims check on TASK-NNN",
+  prompt: "Task: {mdPath}. Decision record: {ADR path from the header, or none}. Workspace: var/task-runner/TASK-NNN/. Return the JSON summary as the last line of your response."
+})
 ```
+
+`spec-lint` checks the record's shape; `spec-claims-runner` checks that what it says about **today's code**
+is true and that its verification bars can go green. The second exists because TASK-046 passed the first
+clean while carrying a false mechanism, a missing race and an unmeetable bar (2026-09-23). A `block` from it
+is the user's to resolve — the record changes, or the decision does — before Phase 2; an `unmeasured-external`
+capability is measured first, as the first step of Phase 2 at the latest.
 
 If `status: "fail"` → supervised: show the report and ask (edit the `.md` and retry, or abort);
 auto: abort.
@@ -111,7 +135,14 @@ Agent({
 })
 ```
 
-No `model:`: it inherits the session's. Escalate only after a repeated failure with a diagnosis that
+No `model:`: it inherits the session's.
+
+⚑ **Everything the agent must follow goes in this brief or in its skill, before it starts.** A message sent
+to a running agent reaches it only at its next tool call; on TASK-046 a cadence change sent mid-phase
+arrived after three more seven-minute validations had already run. If a rule changes mid-phase, change the
+skill too, so the next task starts with it.
+
+Escalate only after a repeated failure with a diagnosis that
 justifies it. If it fails with `"spec contradictorio"` or `"contexto insuficiente"` → **don't escalate**:
 ask the user to expand the `.md` (its section on what already exists, or the scope one).
 
