@@ -172,8 +172,11 @@ on it):
 | `task-validate-backend` | `task-validate-runner` | **always** |
 | `security-audit-core` | `security-audit-runner` | **always** (delegates to `security-audit-backend`, and to `eidas-compliance` if the diff touches signing or crypto: `src/F5Sign/SignatureExecution/`, `Foundation/Crypto/`, DSS, PAdES) |
 
-Prerequisite for `contract-check-backend` if there are endpoints:
-`make -C ../f5sign-infra sf cmd="nelmio:apidoc:dump --format=json"` → save it in the workspace.
+Prerequisite for `contract-check-backend` if there are endpoints, **before** launching the gates: the
+OpenAPI dump of **this** tree into the workspace — from a worktree
+`make -C ../f5sign-infra wt-backend-sf src=$(pwd) cmd="nelmio:apidoc:dump --format=json"` (the output
+carries the lane's `==>` lines around the JSON: keep from the first `{` to the last `}`); from the main
+checkout `make -C ../f5sign-infra sf cmd="nelmio:apidoc:dump --format=json"`.
 
 One block per gate, **all in the same message**, `security-audit-runner` included: every one of them only
 reads the tree and `changes.diff`, so none waits on another. (Until 2026-09-23 the security audit ran after
@@ -183,12 +186,12 @@ the others, sequentially, for no dependency anyone could name.)
 Agent({
   subagent_type: "task-validate-runner",      // or "doctrine-guard-runner" / "contract-check-runner"
   description: "task-validate on TASK-NNN",
-  prompt: "Task: {mdPath}. Workspace: var/task-runner/TASK-NNN/ (changes.diff is there). Harness: {the one from precondition 5}. last_green_run: {sha, tests, assertions, harness from Phase 2's JSON}. Paths you may touch: {list}. Report anything outside them, do not edit it. Return the JSON summary as the last line of your response."
+  prompt: "Task: {mdPath}. Workspace: var/task-runner/TASK-NNN/ (changes.diff is there). Harness: {the one from precondition 5}. last_green_run: {sha, tests, assertions, harness, log from Phase 2's JSON}. Paths you may touch: {list}. Report anything outside them, do not edit it. {For every gate except task-validate:} Do not run tests on the lane: cite last_green_run; if you need a run it does not cover, say so in your report. Return the JSON summary as the last line of your response."
 })
 Agent({
   subagent_type: "security-audit-runner",
   description: "security-audit on TASK-NNN",
-  prompt: "Task: {mdPath}. Workspace: var/task-runner/TASK-NNN/ (changes.diff is there). The diff {does|does not} touch signing/crypto. Return the JSON summary as the last line of your response."
+  prompt: "Task: {mdPath}. Workspace: var/task-runner/TASK-NNN/ (changes.diff is there). The diff {does|does not} touch signing/crypto. last_green_run: {…}. Do not run tests on the lane: cite last_green_run; if you need a run it does not cover, say so in your report. Return the JSON summary as the last line of your response."
 })
 ```
 
@@ -204,6 +207,13 @@ Rules for the split (parallel agents on the same tree):
   doesn't have one is yours.** The lists keep agents from stepping on each other and make invisible whatever
   falls between them: a missing Messenger handler, or prose the task itself said to change. The unit that
   needs an owner is the **claim** that changes, not the file (`CLAUDE.md` authorship rule 1).
+- ⛔ **Only `task-validate` runs tests on the lane in this phase.** A worktree's lane takes one run at a
+  time, and the gates run in parallel: whichever asks for it while Infection holds it waits for Infection.
+  On TASK-046 `contract-check` sat queued for over ten minutes that way. So `doctrine-guard`,
+  `contract-check` and `security-audit` **cite `last_green_run`** (sha, counts, log) when they need a test
+  to have passed, after checking its sha is the tip; a run it does not cover goes in their report, and you
+  launch it **after** `task-validate`, not beside it. What runs no tests (the OpenAPI dump, a
+  `wt-backend-sf` wiring check) is done **before** the phase starts.
 - **With agents still running, never `git add -A`**: it commits someone else's work half-done. Explicit
   paths, or wait until none are left.
 - **The three gates and `security-audit-runner` don't have `Edit`**: they report, they don't fix. If a
