@@ -60,6 +60,11 @@ model; this skill doesn't repeat the list.
   matches: on TASK-046 the implementation agent spent 10 minutes in `until grep -q reported <task>.output`
   after the run it waited on had gone green. The same holds for your own waits: launch, keep working or end
   the turn, and act on the notification. Long shell commands go with `run_in_background`.
+- ⛔ **A phase is over when its agent's background work is too.** Every brief says it: return with nothing
+  still running. If a notification arrives for an agent that already reported, check for leftover
+  processes (`ps -eo pid,lstart,args | grep -E 'until |while '`) rather than waiting on it; and when you
+  wait on a process yourself, match it so the matcher cannot match itself (`pgrep -f '[w]t-validate'`),
+  since a plain `pgrep -f "<pattern>"` inside a loop whose command line contains that pattern never ends.
 
 ## Execution flow
 

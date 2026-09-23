@@ -35,7 +35,9 @@ If `make` fails because the stack isn't up (`ensure-stack`), or the lane aborts 
 
 ## Waiting for a run longer than one shell call
 
-A foreground shell call stops at 10 minutes, and a worktree lane or an e2e run takes longer. Then:
+**Run in the foreground whenever it fits in one call** (timeout up to 600000 ms): on a kept worktree lane
+the full suite plus gates takes ~5 minutes, so it does. Only what cannot fit — Infection (~14 min measured
+2026-09-23), a cold lane, an e2e run — goes to the background. Then:
 
 - Launch it **in the background** with your own end marker: `<command> > "$LOG" 2>&1; echo "exit=$?" >> "$LOG"`.
   The harness notifies you when the background command exits; waiting for that notification is enough.
@@ -44,6 +46,9 @@ A foreground shell call stops at 10 minutes, and a worktree lane or an e2e run t
   expect the tool to print (*"cleanup complete"*, *"Teardown"*): if the script never prints it, the loop
   waits forever after the run has ended, and you never report.
 - If the deadline passes, return `result: TIMEOUT` with the last lines of the log. Don't relaunch.
+- ⛔ **Nothing of yours stays alive after your summary.** Before your last message, every background
+  command you launched has exited or been stopped. A leftover wait loop keeps you "running" for the
+  orchestrator, which then gets repeated notifications for work that finished long ago.
 
 ## 2. Forbidden (every point has already cost hours)
 

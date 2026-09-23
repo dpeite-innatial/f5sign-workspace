@@ -183,6 +183,9 @@ slow tiers run **once, when the task is complete**, not per commit.
   shell times out. On TASK-046 it held the finished implementation for 10 minutes after the run it waited on
   had already gone green. Launch the agent and keep working, or end the turn; you are re-invoked when it
   reports. A long **shell** command is the same: `run_in_background`, and wait for its notification.
+- ⛔ **Return with nothing of yours still running.** Before the final JSON, every background command and
+  agent you launched has finished or been stopped. On TASK-046 two wait loops outlived the agent that
+  started them by over an hour, and kept notifying the orchestrator about work that was already done.
 
 **Retry policy:** 3 edit-test iterations per test. After that, diagnosis:
 `"poorly written test"` → fail; `"spec contradictorio"` / `"contexto insuficiente"` → fail **without
