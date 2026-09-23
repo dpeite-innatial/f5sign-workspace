@@ -335,13 +335,21 @@ What reusing a lane skips or changes, versus a cold `wt-backend`:
 - **`composer install` is skipped** when `composer.json` + `composer.lock` are unchanged since the last
   install on that lane — a sha1 of both is stamped at `vendor/.wt-lock.sha1` inside the lane's `vendor/`
   volume and compared before reinstalling.
-- ⛔ **The lane's MinIO IS recreated before the `test` gate** (volume dropped, buckets remade), and this
-  is the one piece of lane state that must NOT be reused. The database is safe because
+- ⛔ **The lane's MinIO IS emptied before the `test` gate**, and this is the one piece of lane state that
+  must NOT be reused. The database is safe because
   `dama/doctrine-test-bundle` wraps every test in a transaction and rolls it back; **nothing does that for
   the object store**, so a run's objects outlive it, and `f5sign-retained` is created with Object Lock — a
-  COMPLIANCE-locked key cannot be deleted or overwritten, so a second run writing the same deterministic
-  key fails with *"Storage write failed in container: f5sign-retained"*. Reported 2026-09-23: three storage
-  tests green on a lane's first full suite and red on the second, over commits touching no storage code.
+  version under a COMPLIANCE retention cannot be deleted at all. Reported 2026-09-23: three storage tests
+  green on a lane's first full suite and red on the second, over commits touching no storage code.
+  ⚑ **Measured the same day, and it qualifies that report**: deleting or overwriting a locked *key* DOES
+  work (it writes another version); what fails is deleting a *version* — *"Object is WORM protected and
+  cannot be overwritten"*. So the reset is a precaution against reusing mutable state, **not** a fix for a
+  confirmed diagnosis. **How it empties matters**: the objects are removed at the filesystem level from
+  inside the container (`/data/*/` globs the bucket dirs, skipping the hidden `.minio.sys`, where the
+  buckets and their Object Lock config live) — 0.23 s, after which the store still reports
+  `ObjectLockEnabled` and accepts a PUT of the key that was protected a moment earlier. ⛔ Do NOT go back
+  to dropping the volume and re-running `minio-init`: that target takes **70-74 s even over an
+  already-initialised store** (~40 aws-cli calls, each a process start) — it is also what a cold lane pays.
   Skipped for `fast=1` (hermetic tiers touch no S3) and with `WT_S3_RESET=0`.
 - **Migrations are compared, not re-run.** One `psql` reads `doctrine_migration_versions` and diffs it
   against the files in `migrations/`: versions missing there are migrated, and a version applied here that
