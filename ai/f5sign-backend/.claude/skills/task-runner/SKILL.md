@@ -174,8 +174,9 @@ Rules for the split (parallel agents on the same tree):
   brief needs to sabotage a file to see a guard fail, use `general-purpose` for that agent, require it to
   restore and prove it with an empty `git diff`, and note it in the `run.log`.
 - **If the diff adds a listener, a middleware, or a tagged service, check that it's registered**:
-  `make -C ../f5sign-infra sf cmd="debug:event-dispatcher <event>"`, `debug:container --tag=<tag>`,
-  `debug:messenger`. One that's not wired up is a silent no-op that the suite doesn't see, and no gate
+  `debug:event-dispatcher <event>`, `debug:container --tag=<tag>`, `debug:messenger`. From a worktree run
+  them with `make -C ../f5sign-infra wt-backend-sf src=$(pwd) cmd="…"`; `make sf` answers about the main
+  checkout's wiring, so a listener only your branch adds reads as missing there. One that's not wired up is a silent no-op that the suite doesn't see, and no gate
   covers it.
 
 If a hard gate fails → supervised: show the report and ask (retry Phase 2 with the report as context, max 2

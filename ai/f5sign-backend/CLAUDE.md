@@ -90,7 +90,7 @@ Always go through the infra Makefile:
 | Full QA (lint + arch + phpstan + tests + infection) | `make qa` |
 | Migrations | `make migrate` |
 | New migration | `make migration` |
-| Symfony console | `make sf cmd="<command>"` |
+| Symfony console | `make sf cmd="<command>"` (main checkout) · `make wt-backend-sf src=<worktree> cmd="<command>"` (a worktree: `make sf` reads the main checkout's code) |
 | Composer | `make composer cmd="<command>"` |
 | Container shell (⚠ **interactive only** — see below) | `make shell` |
 | Any composer script with no target of its own | `make composer cmd="<script>"` |

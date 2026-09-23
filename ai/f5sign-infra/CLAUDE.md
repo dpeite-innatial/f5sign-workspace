@@ -299,6 +299,7 @@ collide and a secondary worktree isn't even bind-mounted. To validate a worktree
 | `make wt-backend src=<path>` | Backend lane: `postgres-test` (tmpfs) + ephemeral php; `composer install` + migrate (admin) + `composer test` (real RLS). Reuses and keeps a lane that's already up; with none up, ephemeral as before |
 | `make wt-backend-up src=<path>` | Brings up a backend lane and KEEPS it: install + migrate, no gates |
 | `make wt-backend-test src=<path> [only=<regex>] [changed=1] [fast=1] [args="..."]` | PHPUnit only, on the kept lane |
+| `make wt-backend-sf src=<path> cmd="<console command>" [env=test]` | Symfony console over the **worktree's** code (default `env=dev`). `make sf` runs in the shared `php-fpm`, which mounts the main checkout, so from a worktree its `debug:*` output describes another branch's wiring. Reuses a kept lane; otherwise ephemeral |
 | `make wt-backend-down src=<path>` | Tears down a worktree's backend lane and its volumes |
 | `make wt-ls` | Lists active lanes (`wt-*` compose projects) |
 | `make wt-down name=<lane>` | Tears down a lane and its volumes |
