@@ -52,12 +52,19 @@ Keep reasoning, design, diagnosis and code decisions in the main session. Agents
 2. **In repos with a `test-runner` agent (today backend and signer), runs are delegated to it.** It's in
    `.claude/agents/test-runner.md`, runs on a cheap model, picks the harness and returns only numbers and
    literal failures, so diagnosis happens here without loading the output. Call it **without `model:`**: the
-   agent already declares it. Run by hand only if the user asks to see the run in the session.
+   agent already declares it. Run by hand only if the user asks to see the run in the session. **One
+   exception, the TDD loop** (owner, 2026-09-23): filtered runs while implementing go **directly** with
+   `make -C ../f5sign-infra wt-backend-test src=$(pwd) only=<regex>` (or `changed=1 fast=1`), because a run of
+   seconds with a two-line result costs less than launching an agent. The full suite and the gates still go
+   through `test-runner`. Integration/ and Acceptance/ (95 % of the backend suite's time) run as regressions
+   once, when the task is complete, not per commit; the backend skill `implement-backend` has the cadence.
 3. ⛔ **In a worktree, the normal targets validate SOMEONE ELSE's tree and report green for it.**
    `f5sign-infra/docker-compose.override.yml` mounts `../f5sign-backend`, `../f5sign-signer` and
    `../f5sign-dashboard`: the main checkouts. Check it with `git rev-parse --git-dir` (a path with
    `/worktrees/` is a worktree) and use the ephemeral lane, `make -C ../f5sign-infra wt-backend|wt-signer
-   src=$(pwd)`, which mounts *your* tree and destroys itself when done. **`wt-dashboard` doesn't exist**
+   src=$(pwd)`, which mounts *your* tree. The backend lane can be **kept up** for a whole task
+   (`wt-backend-up` … `wt-backend-down src=$(pwd)`) so later runs skip its startup; without that it destroys
+   itself when done. **`wt-dashboard` doesn't exist**
    (no suite until EP26): from a dashboard worktree there's no isolated path, and that's stated as such.
    Detail in `f5sign-infra/CLAUDE.md` § *Ephemeral per-worktree validation*.
 4. **Always state which harness validated.** A validation whose target wasn't your tree reads as green, and
