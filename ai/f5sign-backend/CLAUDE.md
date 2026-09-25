@@ -89,7 +89,7 @@ Always go through the infra Makefile:
 | Format (apply) | `make format` |
 | Full QA (lint + arch + phpstan + tests + infection) | `make qa` |
 | Migrations | `make migrate` |
-| New migration | `make migration` |
+| New migration | `make migration` (main checkout) · `make wt-backend-sf src=<worktree> cmd=doctrine:migrations:generate` (a worktree). ⛔ **Never name one by hand**: the version is the time it was generated (`VersionYmdHis`), because Doctrine records a migration by class name only and two hand-picked `…000001`s on one day made a database skip one without an error. `MigrationVersionTest` refuses a hand-numbered one |
 | Symfony console | `make sf cmd="<command>"` (main checkout) · `make wt-backend-sf src=<worktree> cmd="<command>"` (a worktree: `make sf` reads the main checkout's code) |
 | Composer | `make composer cmd="<command>"` |
 | Container shell (⚠ **interactive only** — see below) | `make shell` |
