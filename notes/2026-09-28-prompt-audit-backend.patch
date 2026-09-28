@@ -1,0 +1,549 @@
+diff -ru a/ai/f5sign-backend/.claude/skills/contract-check-backend/SKILL.md b/ai/f5sign-backend/.claude/skills/contract-check-backend/SKILL.md
+--- a/ai/f5sign-backend/.claude/skills/contract-check-backend/SKILL.md	2026-09-28 10:54:30.996386317 +0200
++++ b/ai/f5sign-backend/.claude/skills/contract-check-backend/SKILL.md	2026-09-28 10:55:35.915616616 +0200
+@@ -63,7 +63,7 @@
+ 
+ What follows is the why, so you know what you're reading when that test fails:
+ 
+-This is the check that actually pays off, and the one the previous version didn't have. The natural
++This is the check that actually pays off. The natural
+ check —*"is everything the AC asks for declared?"*— **only looks in one direction**. This repo's real
+ failure was the opposite: the endpoints had always returned `signing_mode` and
+ `recipients[].document_assignments` and **the spec omitted them**; `Envelope.status` didn't publish
+@@ -98,12 +98,11 @@
+       **can't** end up unregistered, and a malformed one throws `LogicException` **at container compile
+       time**, meaning the whole suite goes red before you even get here. `LOAD-BEARING.md` §2 already
+       says so. What you **do** need to check is below: the **value** of `EVENT_TYPE`.
+-- [ ] ⛔ **Nothing pins the value of `EVENT_TYPE`, and changing it re-types history already written.**
+-      There are 26 declared and **no test asserts a value**: the one that pinned them was retired in
+-      stage 2 of the event log and its replacement is *queued* in ADR-0031. If the diff **changes** an
+-      existing value → `fail`, category `event-type-rewrite`: the log is permanent and append-only, so
+-      the bytes already written stop decoding and there's no fixing it. If it **adds** a new one, `pass`
+-      with a note.
++- [ ] ⛔ **Changing the value of `EVENT_TYPE` re-types history already written.** The frozen fixtures
++      (Step 4) are keyed by `EVENT_TYPE`, so a renamed value leaves an orphan fixture and a type without
++      one, and `GoldenPayloadBytesTest`'s census goes red. If the diff **changes** an existing value →
++      `fail`, category `event-type-rewrite`: the log is permanent and append-only, so the bytes already
++      written stop decoding and there's no fixing it. If it **adds** a new one, `pass` with a note.
+ - [ ] Actually emitted: if the event is new, the diff contains whoever publishes it.
+ - [ ] ⚠ **Don't look for a `routing:` entry for an event: it's deliberately empty.** `messenger.yaml`
+       itself explains it — *"No class is bus-routed to `async_events` directly: cross-BC events reach
+@@ -127,9 +126,7 @@
+       `event_type` without a fixture. So: a **new** `event_type` adds its fixture; an **existing** one's
+       fixture is **not touched** — a diff that edits an existing fixture turned the alarm into silence
+       (`fail`, category `fixture-regenerated`). The round-trip tests alone serialize and deserialize with the
+-      same code and cannot see an incompatible `fromPayload()`. ⛑ This item said *"no safety net today —
+-      not built"* until 2026-09-23; the fixtures had landed on `develop` before that, and TASK-046's
+-      contract check found the text stale.
++      same code and cannot see an incompatible `fromPayload()`.
+ 
+ ### Step 5 — If the contract changed, there has to be a frontend handoff
+ 
+@@ -161,7 +158,7 @@
+ - Enums: {enum} {n} cases in PHP / {m} published
+ 
+ ## Events
+-- {Event}: past tense ✓ · registered in EventTypeRegistry ✓ · additive payload ✓
++- {Event}: past tense ✓ · `EVENT_TYPE` unchanged ✓ · additive payload ✓ · fixture {added | untouched}
+ 
+ ## No safety net
+ - {payload change without a canonical bytes fixture, if applicable}
+diff -ru a/ai/f5sign-backend/.claude/skills/docs-sync/SKILL.md b/ai/f5sign-backend/.claude/skills/docs-sync/SKILL.md
+--- a/ai/f5sign-backend/.claude/skills/docs-sync/SKILL.md	2026-09-28 10:54:30.960142929 +0200
++++ b/ai/f5sign-backend/.claude/skills/docs-sync/SKILL.md	2026-09-28 10:55:35.914993555 +0200
+@@ -7,10 +7,8 @@
+ 
+ Documentation outside the code. Not a hard gate; failures are warnings.
+ 
+-⚑ **Half of the targets this skill used to have do not exist in this repo.** Measured 2026-08-17: there
+-is no `CHANGELOG.md`, no `.env.example`, no `docs/asyncapi/`, no `docs/runbooks/`, and no
+-`src/*/README.md`. **Creating a documentation surface is a decision, not a sync** — if it's missing and
+-needed, report it and file it in BACKLOG; don't invent it mid-task.
++**Creating a documentation surface is a decision, not a sync** — the surfaces this repo does not have are
++listed under *Surfaces that don't exist* below; if one is needed, report it and file it in BACKLOG.
+ 
+ ## Invocation
+ 
+@@ -72,8 +70,8 @@
+ 
+ | Pattern | When | Examples |
+ |---|---|---|
+-| **(A) Absent** — the standard | Always, except (B) | There are **six**, and the `.env` header names them: `DATABASE_URL`, `APP_SECRET`, `MESSENGER_TRANSPORT_DSN`, `SIGNING_TOKEN_SECRET`, `IDENTITY_DATABASE_URL` and `PROVISIONING_DATABASE_URL` (the last two arrived with Identity & Access; `CLAUDE.md` still lists only four). `%env()%` fails building the container instead of falling back to a dev password |
+-| **(B) Present and empty** — narrow exception | Only if an empty value can **never** work *and* its consumer rejects it | `FIELD_ENCRYPTION_SECRET=` only. **Not transferable**: `SIGNING_TOKEN_SECRET` has a dev value in `.env.dev`, so empty wouldn't fail closed |
++| **(A) Absent** — the standard | Always, except (B) | The list is `CLAUDE.md` repo rule 4's, and the `.env` header names them. `%env()%` fails building the container instead of falling back to a dev password |
++| **(B) Present and empty** — narrow exception | Only if an empty value can **never** work *and* its consumer rejects it | `FIELD_ENCRYPTION_SECRET=` only. **Not transferable**: a variable with a dev value in `.env.dev` (`SESSION_CREDENTIAL_SECRET`) would not fail closed if committed empty |
+ 
+ Add the variable to the matching environment file (local-stack values do go in: they match infra's
+ compose and aren't secrets), and **name it in the `.env` header** if it's one of the absent ones.
+@@ -119,11 +117,8 @@
+ **Why it exists.** Workspace rule 4 forbids crossing repos in the same commit: *two projects = two
+ coordinated PRs*. So a backend contract change and its adoption in `f5sign-dashboard` / `f5sign-signer`
+ are different changesets, and without a handoff artifact the second one gets rebuilt by guessing —or
+-never arrives, which is what happened with `signed_copy_url`: the signer frontend has been hiding its
+-download button ever since because it expects a field the backend never sends, and that lived only in an
+-email-channel docblock when this was written — today it's also in
+-`docs/ddd/notification-domain-model.md` and in the handoff README. (Leaving the correction visible
+-because it's authorship rule 2 in action: the *why* was still true and the factual half had rotted.)
++never arrives, which is what happened with `signed_copy_url`: the signer frontend hides its download
++button because it expects a field the backend never sends.
+ 
+ **When it's written** — predicate, not tags. The diff touches `src/**/UI/Http/`, `config/routes/`, any
+ `#[OA\`, a `Contract/` the API emits, an enum whose values go out through the API, a CORS header or
+@@ -133,13 +128,6 @@
+ come from a task). Full convention in
+ [`docs/frontend-handoff/README.md`](../../../docs/frontend-handoff/README.md).
+ 
+-⚠ **And here's an explicit exception to the rule above**, so it doesn't look like a contradiction: the
+-directory and its README were born on branch `docs/task-conventions` and **may not exist on the branch
+-you're working on**. Writing the first handoff there **does** create the surface — and it's authorized,
+-because the decision is already made and its convention written. What the rule forbids is inventing a
+-surface **without a prior decision**; this one has one. If the README isn't on your branch, say so in
+-the report and link to the branch that has it.
+-
+ **What it carries, and the form matters because the reader is an agent in another repo with no access to
+ this one:**
+ 
+diff -ru a/ai/f5sign-backend/.claude/skills/doctrine-guard/SKILL.md b/ai/f5sign-backend/.claude/skills/doctrine-guard/SKILL.md
+--- a/ai/f5sign-backend/.claude/skills/doctrine-guard/SKILL.md	2026-09-28 10:54:31.018500169 +0200
++++ b/ai/f5sign-backend/.claude/skills/doctrine-guard/SKILL.md	2026-09-28 10:55:35.915865735 +0200
+@@ -9,8 +9,7 @@
+ `src/**/Infrastructure/Persistence/`, or SQL/RLS in any file.
+ 
+ ⛔ **This repo has no ORM.** `doctrine/orm` is not a dependency and **there isn't even a single
+-`*.orm.xml`** (ADR-0018, pure DBAL). Everything this skill used to check about mappings and
+-entity↔XML↔table triangulation has no target. If the diff **adds** `doctrine/orm` or a `.orm.xml`,
++`*.orm.xml`** (ADR-0018, pure DBAL), so there are no mappings to check. If the diff **adds** `doctrine/orm` or a `.orm.xml`,
+ that reverts an accepted ADR → `fail`, category `retired-mechanism`, and it's the decision gate of
+ `implement-backend` Step 2b.
+ 
+@@ -82,12 +81,12 @@
+ 
+ ### Step 5 — Rows the domain later reads (authoring rule 6)
+ 
+-The costliest check to skip: in the last review, the one blocking finding came from here.
++The costliest check to skip.
+ 
+ - [ ] **Enumerate the aggregate states the row falls under** — draft, in flight, terminal,
+       superseded — and say what the row means **in each one**, on the **write** side as well as
+-      the read side. Reasoning only about "what a recipient can see right now" is exactly how
+-      that blocker slipped through.
++      the read side. Reasoning only about "what a recipient can see right now" misses the write
++      side.
+ - [ ] **A predicate that states the property, not an enumeration of today's states.**
+       `sent_at IS NOT NULL` asks the real question (*"could anyone have read this already?"*);
+       `status <> 'DRAFT'` reopens the hole the day a pre-send state gets added. Enumeration →
+diff -ru a/ai/f5sign-backend/.claude/skills/eidas-compliance/SKILL.md b/ai/f5sign-backend/.claude/skills/eidas-compliance/SKILL.md
+--- a/ai/f5sign-backend/.claude/skills/eidas-compliance/SKILL.md	2026-09-28 10:54:31.006833934 +0200
++++ b/ai/f5sign-backend/.claude/skills/eidas-compliance/SKILL.md	2026-09-28 10:55:35.915768676 +0200
+@@ -9,13 +9,8 @@
+ `src/F5Sign/SignatureExecution/`, `Foundation/Crypto/`, DSS, PAdES. This task format has no tags: the
+ condition is the diff, and it's evaluated by whoever delegates.
+ 
+-> ⚑ **This skill was trimmed down on 2026-08-17 after an audit.** It used to cover TSA, LTV, LOTL/TSL
+-> trust lists, per-user certificates and the XAdES/CAdES/JAdES formats. **None of them has a target in
+-> this repo**: zero references to LOTL/TSL, zero OCSP/CRL, `requiresTsa()` with not a single caller in
+-> `src/`, no per-user certificate or policy OID, and a single level enum whose four cases are all
+-> `PAdES_BASELINE_*`. Those steps used to return **green by vacuity on every diff**, which is the most
+-> expensive way to fake coverage. What was removed isn't lost: it lives in ADR-0023's *Consequences*
+-> (B-B breadth, the rest deferred) and in `BL-4`.
++TSA, LTV, trust lists, per-user certificates and non-PAdES formats have no target in this repo (Step 6
++says why for each); checking them would return **green by vacuity on every diff**.
+ 
+ ## Invocation
+ 
+diff -ru a/ai/f5sign-backend/.claude/skills/implement-backend/SKILL.md b/ai/f5sign-backend/.claude/skills/implement-backend/SKILL.md
+--- a/ai/f5sign-backend/.claude/skills/implement-backend/SKILL.md	2026-09-28 10:54:30.969784204 +0200
++++ b/ai/f5sign-backend/.claude/skills/implement-backend/SKILL.md	2026-09-28 10:55:35.915155833 +0200
+@@ -26,9 +26,8 @@
+ 
+ - The task's `.md`, in full. Three sections govern the work: **what already exists** (reuse, don't
+   rebuild), **the scope** (what is touched and what isn't) and **the verification** (the bar).
+-  ⚠ **Locate them by intent, not by number.** Measured 2026-08-17 across the 21 records: the scope is
+-  in §3 in 13 of 21 (also in §4 and §6), the verification in §5 in only 7 (also §4, §6, §9), and "what
+-  already exists" appears as *What was built*, *What will be built*, *Design grounding*, *Locked decisions*
++  ⚠ **Locate them by intent, not by number.** Records place the scope and the verification at different
++  section numbers, and "what already exists" appears as *What was built*, *What will be built*, *Design grounding*, *Locked decisions*
+   or *The model*. `docs/tasks/README.md` §2 explicitly says the headings vary with the work, so
+   addressing by `§N` is the closed list that the convention itself forbids.
+ - Whatever its `Builds on` and `Decision record` fields cite.
+@@ -204,8 +203,8 @@
+ 
+ - **The domain doesn't import Symfony or Doctrine.** Deptrac (`composer arch`) and the PHPStan placement
+   rules watch this; if you spot it before they do, redo it.
+-- **Between BCs, only the other's `Contract/` is visible.** `deptrac.yaml` declares **38** layers (37 with
+-  an entry in `ruleset` plus `Vendor`) and says so explicitly: `EnvelopeApplication` can see
++- **Between BCs, only the other's `Contract/` is visible.** `deptrac.yaml` says so explicitly (count its
++  layers there, not here): `EnvelopeApplication` can see
+   `SessionContract`, `SignatureExecutionContract`, `IdentityAccessContract`… and **no other BC's `Domain`
+   or `Infrastructure`**. `Kernel` depends on nothing (`Kernel: []`). If you need data that only lives in
+   another BC's `Domain`, the answer is a read port in its `Contract/` (ADR-0008), not an import — and
+@@ -215,18 +214,16 @@
+   class that depends on a disallowed layer produces `DependsOnDisallowedLayer`. What it **can't** catch
+   going red is **adding the entry to the allowlist**: that doesn't violate anything, it just stops
+   watching. So the question when reviewing isn't *"does deptrac pass?"* but *"does this diff touch
+-  `deptrac.yaml`?"* — and if it does, that's Step 2b, not a decision made while implementing. Corrected
+-  2026-08-17: this bullet used to say the gate was blind to the dependency, which is the dangerous
+-  direction to be wrong in.
++  `deptrac.yaml`?"* — and if it does, that's Step 2b, not a decision made while implementing.
+ - **Only aggregate roots have a repository.** Subordinate entities are modified through their root.
+ - **Commands through the bus; queries via direct call.** ADR-0008: **there is no QueryBus**, and a
+   `QueryHandler` is realized with a direct `handle(Query): R` — its §Counterpoint expressly rejects
+-  putting an adapter in between. So a controller **does** inject a query handler (three do today) and
++  putting an adapter in between. So a controller **does** inject a query handler and
+   that's conformant; what it must not do is inject a *command* handler bypassing the bus, because the bus
+   is where the transaction, the tenant and the issuer live (ADR-0010).
+ - **VOs: the shape depends on the type, and a blanket rule is wrong** (ADR-0005). A **wrapper** (a single
+-  field) is `final readonly`; a **composite** (several fields) is `final` and **not** readonly — 11 of the
+-  22 in the tree are, with a public constructor. The model to imitate is
++  field) is `final readonly`; a **composite** (several fields) is `final` and **not** readonly, with a public
++  constructor. The model to imitate is
+   [`Settings`](../../../src/F5Sign/Envelope/Domain/ValueObject/Settings.php), which says so in its own
+   docblock: *"final (not readonly) per ADR-0005"*. Requiring `final readonly` across the board reintroduces
+   the defect ADR-0005 exists to record. Named constructors yes, in both cases.
+diff -ru a/ai/f5sign-backend/.claude/skills/perf-smoke-backend/SKILL.md b/ai/f5sign-backend/.claude/skills/perf-smoke-backend/SKILL.md
+--- a/ai/f5sign-backend/.claude/skills/perf-smoke-backend/SKILL.md	2026-09-28 10:54:30.987347369 +0200
++++ b/ai/f5sign-backend/.claude/skills/perf-smoke-backend/SKILL.md	2026-09-28 10:55:35.915497130 +0200
+@@ -45,7 +45,7 @@
+ - `var/task-runner/TASK-NNN/changes.diff`
+ - `var/task-runner/TASK-NNN/context-digest.md`
+ - `var/task-runner/TASK-NNN/doctrine-guard.report.md` (if it exists; to correlate indexes)
+-- the task's `.md` (tags + overridden thresholds if declared)
++- the task's `.md` (overridden thresholds if declared)
+ 
+ Default thresholds (overridable in the `.md`):
+ - HTTP endpoint: p95 < 300ms → pass; 300-800ms → warn; > 800ms → warn high
+@@ -69,11 +69,9 @@
+ 
+ ### Step 1 — Detect what to measure
+ 
+-By tags and diff:
+-- If tag `api`: identify new/modified endpoints (search Controllers in the diff, extract paths)
+-- If tag `worker`: identify new/modified handlers
+-- No tags to validate: the entry condition is whatever the diff touches, and it's evaluated by
+-  whoever delegates.
++By what the diff touches (this task format has no tags):
++- Controllers under `src/**/UI/Http/`: identify new/modified endpoints and their paths
++- Messenger handlers or reactors: identify new/modified handlers
+ 
+ If nothing is measurable → `status: pass`, `summary: "nothing measurable in the diff"`. No
+ `tagMismatches`: this format has no tags.
+@@ -90,7 +88,7 @@
+   - Sort without an index → `warn`
+   - Join without an index on the FK → `warn` (doctrine-guard should have caught it, but double check)
+ 
+-### Step 3 — Endpoint benchmark (if tag `api`)
++### Step 3 — Endpoint benchmark (if the diff adds or changes an endpoint)
+ 
+ For each new endpoint:
+ - **Warm-up:** 10 requests ignored
+@@ -99,7 +97,7 @@
+ - Compare against thresholds (defaults or those declared in the `.md`)
+ - Result → metrics JSON
+ 
+-### Step 4 — Worker benchmark (if tag `worker`)
++### Step 4 — Worker benchmark (if the diff adds or changes a handler)
+ 
+ - Enqueue 50 test messages against the new handler
+ - Measure throughput (msg/s) and average time per message
+@@ -147,8 +145,8 @@
+ ## Interaction with the loop
+ 
+ Never triggers an automatic retry. In supervised mode, if there's a high WARN, task-runner asks the
+-user whether to iterate or leave the technical debt documented in `notes.md` (picked up by
+-task-close).
++user whether to iterate or record the debt, which `task-close` homes in `§Open follow-ups` and a
++`docs/BACKLOG.md` row (never a `var/` note).
+ 
+ ## What it does NOT do
+ 
+diff -ru a/ai/f5sign-backend/.claude/skills/security-audit-backend/SKILL.md b/ai/f5sign-backend/.claude/skills/security-audit-backend/SKILL.md
+--- a/ai/f5sign-backend/.claude/skills/security-audit-backend/SKILL.md	2026-09-28 10:54:30.922333430 +0200
++++ b/ai/f5sign-backend/.claude/skills/security-audit-backend/SKILL.md	2026-09-28 10:55:35.914593832 +0200
+@@ -1,6 +1,6 @@
+ ---
+ name: security-audit-backend
+-description: 'Security checks specific to the backend stack (PHP/Symfony). Complements security-audit-core with: SQL injection via DBAL (no ORM), Symfony asserts, the real authentication seam of this repo (Identity & Access with a route that declares its credential, NOT SecurityBundle: it is not registered), real idempotency (ADR-0042: the id is NOT a retry key), CORS via a custom CorsListener, and the cryptography that does exist (issued credential with partial enforcement, signing token). ⚠ And it says out loud that PII at rest is NOT encrypted today — FieldCipher has no callers and ADR-0033 is Proposed — instead of claiming a protection that does not exist. Includes the two holes an audit found here: the client-supplied Content-Type without nosniff, and the credential that outlives its resource. Names what is NOT installed —rate limiter— instead of reporting it endpoint by endpoint. Invoked by security-audit-core. Use it with /security-audit-backend TASK-NNN. Trigger with "security backend", "audit PHP", "check Symfony security".'
++description: 'Security checks specific to the backend stack (PHP/Symfony). Complements security-audit-core with: SQL injection via DBAL (no ORM), Symfony asserts, the real authentication seam of this repo (Identity & Access with a route that declares its credential, NOT SecurityBundle: it is not registered), real idempotency (ADR-0042: the id is NOT a retry key), CORS via a custom CorsListener, and the cryptography that does exist (issued credential with partial enforcement, signing token). ⚠ And it says out loud that PII at rest is NOT encrypted today — FieldCipher has no callers and ADR-0033 is Proposed — instead of claiming a protection that does not exist. Includes the two holes an audit found here: the client-supplied Content-Type without nosniff, and the credential that outlives its resource. Checks the rate limiter that exists (one policy set per medium, failing open) instead of asking for one per endpoint. Invoked by security-audit-core. Use it with /security-audit-backend TASK-NNN. Trigger with "security backend", "audit PHP", "check Symfony security".'
+ ---
+ 
+ # Security Audit Backend
+@@ -70,7 +70,7 @@
+       allowed in the CORS preflight — served here by
+       [`CorsListener`](../../../src/F5Sign/Foundation/Http/CorsListener.php), **not**
+       `nelmio_cors.yaml`, which doesn't exist.
+-- [ ] **The signer token** (`SigningTokenCodec` / `SigningTokenListener`) is not scope-widened: it's per
++- [ ] **The signer token** (issued by `StoreBackedSigningTokenIssuer`, read by `SigningTokenListener`) is not scope-widened: it's per
+       recipient and per envelope. ⚠ The bug that closed out identity-access (BL-38): a recipient with a
+       valid token **replayed their real tenant claim over a channel that verified nothing** and read
+       documents that had been denied to them. Any route that accepts a tenant claim from the client →
+@@ -78,17 +78,16 @@
+ - [ ] Tests that verify 401/403 on the unauthorized attempt, and **a cross-tenant one that expects
+       404/403**.
+ 
+-### Rate limiting — **not installed**, so it isn't a per-endpoint check
++### Rate limiting — configured, consumed by one endpoint
+ 
+-⚠ `symfony/rate-limiter` **is not a dependency of this repo** and `config/packages/rate_limiter.yaml`
+-doesn't exist. Don't flag endpoint by endpoint that "it's missing the limiter": **the whole capability is
+-missing**, and repeating it per route buries the fact in noise.
+-
+-- [ ] If the diff adds a surface that needs it (login, OTP, resend, signing, bulk send): **a single
+-      `warn`** naming the component's absence and what's waiting on it — TASK-022 (in
+-      `docs/two-gate-signer-auth`) declares it as one of its two nonexistent prerequisites.
+-- [ ] Don't propose `#[RateLimit]` or create a `rate_limiter.yaml`: installing a component is a decision,
+-      and it goes through `implement-backend`'s Step 2b gate.
++`symfony/rate-limiter` is configured in `config/packages/rate_limiter.yaml` (policy sets per medium, on a
++Redis-backed pool) and consumed by `POST /api/v1/signing/session/auth/otp/send` through
++`FailOpenOtpSendLimiter`, which picks the set by the medium of the declared method and **fails open**,
++logging at `error` (ADR-0014). Read `CLAUDE.md` § Stack for the current shape.
++
++- [ ] If the diff adds a surface that costs money or touches personal data anonymously (OTP, resend,
++      bulk send): does it consume a policy set? One without → `warn`, naming the surface.
++- [ ] If the diff touches the limiter: the fail-open `error` log stays — that log line is the control.
+ 
+ ### Idempotency — derived identity, not a header
+ 
+@@ -131,12 +130,10 @@
+       the destination, not the current state. And **the signing token is deliberately outside the
+       grammar**, recorded as a *known non-conformance* in its §2.3. `CredentialKind` has only one case
+       today (`API_KEY`). A new secret with its own format is `warn` citing ADR-0045, not `fail`.
+-- [ ] **Signing token** (`SigningTokenCodec`): verification with `hash_equals` ✓. ⚠ **The TTL is
+-      duplicated in two places and neither is "the use case that mints it"**: `MintSigningTokenController`
+-      does `->modify('+7 days')` and `NotifyActivatedStepRecipientsUseCase` declares
+-      `private const string TOKEN_TTL = '+7 days'`. Nothing keeps them in sync, so if the diff touches
+-      one, check the other. ⚑ And a retention promise in the copy about a 7-day token was a real,
+-      already-fixed bug; don't reintroduce it.
++- [ ] **Signing token**: store-backed (`StoreBackedSigningTokenIssuer`), its lifetime the one constant
++      `StoreBackedSigningTokenIssuer::LIFETIME`. A diff that states the lifetime anywhere else (a
++      `modify('+7 days')`, a copy promise) duplicates it → `warn`. ⚑ A retention promise in the copy
++      about a 7-day token was a real, already-fixed bug; don't reintroduce it.
+ - [ ] ⚠ **PII at rest: today NOTHING is encrypted, and claiming otherwise is the worst possible mistake
+       here.** `FieldCipher` exists and is tested, but has **zero callers in `src/`**, and ADR-0033 is
+       `Proposed`, saying it in its own words: *"nothing calls them. No column is enciphered."* There is
+@@ -163,12 +160,11 @@
+       content-derived type, a closed list, and `nosniff` (+ `Content-Disposition: attachment` where
+       applicable). ⚠ The generic bullet *"explicit Content-Type, no autodetect"* **is satisfied by this
+       very broken code**: that's why this check is needed and that one isn't enough.
+-- [ ] ⛔ **A credential has to die with its resource.** The signing token is stateless, with `exp` and no
+-      revocation, 7-day TTL; **no file under `src/F5Sign/Session/` looks at `EnvelopeStatus`**, and
+-      `DownloadSigningDocumentController` only guards against `$content === null`. Result: after an
+-      envelope is voided, whoever holds the token keeps reading documents for the rest of the week
+-      (BL-61, open in the same seam). If the diff adds a route with a token or a new terminal state: ask
+-      **what invalidates the credential**, not just what validates it.
++- [ ] ⛔ **A credential has to die with its resource.** Session reads the envelope's liveness
++      (`RecipientAuthContextReader`, `EnvelopeNoLongerLiveException`; ADR-0056/ADR-0059) and revokes
++      sessions on `EnvelopeVoided`. If the diff adds a route with a token or a new terminal state: ask
++      **what invalidates the credential**, not just what validates it, and check the new route asks the
++      same liveness question.
+ 
+ ### Persistence — DBAL, not ORM
+ 
+@@ -200,7 +196,7 @@
+       a second connection may be passing without exercising anything.
+ - [ ] If it touches a credential or a token: test of the rejection path (bad, expired, or another
+       recipient's credential), not just the happy path.
+-- [ ] No rate-limit tests: the component isn't installed (see above).
++- [ ] If the diff adds a limited surface: a test of the refusal past the limit, on `cache.adapter.array`.
+ 
+ ## Severity
+ 
+@@ -210,7 +206,7 @@
+   - Weak crypto in security contexts (MD5/SHA1 for passwords, hardcoded key)
+   - Object-level authz missing when the AC requires it
+ - **WARN:**
+-  - Rate limit missing on an endpoint that probably needs it
++  - A cost-incurring anonymous surface that consumes no rate-limit policy
+   - Verbose error message
+   - Security header not explicit
+ 
+diff -ru a/ai/f5sign-backend/.claude/skills/security-audit-core/SKILL.md b/ai/f5sign-backend/.claude/skills/security-audit-core/SKILL.md
+--- a/ai/f5sign-backend/.claude/skills/security-audit-core/SKILL.md	2026-09-28 10:54:30.936508091 +0200
++++ b/ai/f5sign-backend/.claude/skills/security-audit-core/SKILL.md	2026-09-28 10:55:35.914747861 +0200
+@@ -149,9 +149,9 @@
+ - **FAIL:** SQL/command injection detected conceptually, endpoint with no auth when it should have one,
+   cross-tenant leak, hardcoded secret, unredacted PII in logs, `security-audit-{stack}` or
+   `eidas-compliance` returning fail
+-- **WARN:** dependency with a LOW/MEDIUM CVE, somewhat verbose error message, and —once only, not per
+-  endpoint— that a new surface would call for rate limiting: **the component isn't installed in the
+-  backend**, so it's a capability gap, not a defect in the route
++- **WARN:** dependency with a LOW/MEDIUM CVE, somewhat verbose error message, and a new cost-incurring
++  anonymous surface that consumes no rate-limit policy (the limiter is configured; `security-audit-backend`
++  checks it)
+ 
+ ## Report
+ 
+diff -ru a/ai/f5sign-backend/.claude/skills/spec-lint/SKILL.md b/ai/f5sign-backend/.claude/skills/spec-lint/SKILL.md
+--- a/ai/f5sign-backend/.claude/skills/spec-lint/SKILL.md	2026-09-28 10:54:30.950729099 +0200
++++ b/ai/f5sign-backend/.claude/skills/spec-lint/SKILL.md	2026-09-28 10:55:35.914877254 +0200
+@@ -56,8 +56,8 @@
+ property, not a list: if `Status` does **not** claim existing code, the record is still an
+ editable plan and both fields are required (`fail`). If it already claims code, they're `warn` — because filling in
+ the *why* of already-closed work is inventing it after the fact, and an invented `Why` is worse than an absent one.
+-**Measured 2026-08-17: `Why` is present in 6 of 21 records and `Decision record` in 12**, so requiring them
+-across the board would fail 15 of 21 and the linter would be stricter than the corpus it claims to derive from.
++Older records predate both fields, so requiring them across the board would make the linter stricter than the
++corpus it claims to derive from.
+ 
+ Optional, and their absence isn't penalized: `Builds on`, `Scope`, `Delivery bar`, `Sibling`.
+ 
+@@ -85,7 +85,7 @@
+    category `decision-record-unfalsifiable`.
+ 
+ ⚑ **And if the task's scope touches any of these surfaces, form 2 doesn't count.** ⚠ *Scope*
+-here is **the section**, not the header's `Scope` field: that field exists in 2 of 21 records and Step 2
++here is **the section**, not the header's `Scope` field: few records carry that field and Step 2
+ declares it optional, so gating on it would leave the check empty in almost all of them. If there's neither
+ field nor scope section, say so as `warn` (`scope-unstated`) instead of assuming it touches nothing. Surfaces:
+ the ruleset or layers of [`deptrac.yaml`](../../../deptrac.yaml), `phpstan.dist.neon`, `phpstan-baseline.neon`,
+@@ -120,9 +120,8 @@
+ 
+ - [ ] At least one section whose heading talks about **scope** and another about
+       **verification/acceptance/definition of done**. ⚑ Check by *intent*, not against a closed
+-      list of headings: the 21 records on this branch use legitimate variants —scope appears in §3, §4 and §6;
+-      verification in §4, §5, §6 and §9— and an enumeration exempts "anything not yet on the list"
+-      (authoring rule 5).
++      list of headings: records use legitimate variants for both, at different section numbers, and an
++      enumeration exempts "anything not yet on the list" (authoring rule 5).
+ - [ ] Numbering with no gaps or repeats, and **starting at 1**.
+ - [ ] No empty sections (heading followed immediately by another heading).
+ 
+@@ -148,14 +147,11 @@
+ ⚠ **`':(top)'` isn't decorative, and without it this check fails open.** A git pathspec is relative to the
+ **cwd**, so `-- docs/tasks/` run from `docs/tasks/` — the directory you're precisely in
+ when you're writing a task — resolves to `docs/tasks/docs/tasks/` and returns **zero ids**. Zero ids reads as
+-"the id is free", in the one check whose job is to prevent a collision. Measured 2026-08-17: **0 ids** without
+-`:(top)` from `docs/tasks/`, and **24** with it (or from the root). ⚑ And don't copy that 24 anywhere: it's the
+-count for that day, not a constant. An earlier version of this line said 21 —the file count for
+-*one* branch— and that error propagated to two documents before an audit caught it.
++"the id is free", in the one check whose job is to prevent a collision.
+ 
+ - [ ] The `.md`'s id doesn't appear on any other branch with a **different** slug → if it does: `fail`,
+-      category `id-collision`, naming the branch. This has actually happened: `TASK-021…023` live on
+-      `docs/two-gate-signer-auth` and are invisible from any other branch.
++      category `id-collision`, naming the branch. This has actually happened: `TASK-021…023` once lived only on
++      a feature branch, invisible from every other.
+ 
+ ### Step 8 — Uncertainty markers
+ 
+diff -ru a/ai/f5sign-backend/.claude/skills/task-close/SKILL.md b/ai/f5sign-backend/.claude/skills/task-close/SKILL.md
+--- a/ai/f5sign-backend/.claude/skills/task-close/SKILL.md	2026-09-28 10:54:31.028454381 +0200
++++ b/ai/f5sign-backend/.claude/skills/task-close/SKILL.md	2026-09-28 10:55:35.915950467 +0200
+@@ -84,10 +84,8 @@
+ 
+ ### Step 4 — Every deferral and every learning, to a durable home
+ 
+-⚑ **This is the step that justifies the skill, and the one the previous version got wrong.** It wrote
+-learnings to a `notes.md` under `var/`, which is gitignored: a memo nobody will ever read again. This
+-repo already paid for that mistake twice — someone had to manually reconstruct *"eight deferrals that lived
+-only in an untracked memo"*. **A learning that only exists in `var/` is a learning that's lost.**
++⚑ **This is the step that justifies the skill.** `var/` is gitignored, so **a learning that only exists in
++`var/` is a learning that's lost**.
+ 
+ The real homes, by type:
+ 
+@@ -132,7 +130,7 @@
+ ### Step 6 — Commit
+ 
+ This skill **does commit its own edits** (`docs/` and the `.md`), like a normal documentation commit.
+-There's no `--amend` to wait for: `pr-ready` no longer rewrites history.
++There's no `--amend` to wait for: `pr-ready` doesn't rewrite history.
+ 
+ ## Report
+ 
+diff -ru a/ai/f5sign-backend/.claude/skills/task-runner/SKILL.md b/ai/f5sign-backend/.claude/skills/task-runner/SKILL.md
+--- a/ai/f5sign-backend/.claude/skills/task-runner/SKILL.md	2026-09-28 10:54:31.039643591 +0200
++++ b/ai/f5sign-backend/.claude/skills/task-runner/SKILL.md	2026-09-28 10:55:35.916059624 +0200
+@@ -109,8 +109,7 @@
+    tests). Note the **exact number of tests and asserts** in `run.log` and in the summary: without it, you
+    can't separate your own reds from environment ones. **A red baseline doesn't abort: it's declared.**
+    `{"phase":"baseline","status":"pass","tests":N,"assertions":M,"harness":"…"}`.
+-   ⚑ **Until 2026-09-23 this was the FULL suite through `test-runner`, and that is ~5 minutes per task
+-   spent up front.** `Integration/` and `Acceptance/` are 95 % of the suite's time and they run again at
++   ⚑ **Not the full suite:** `Integration/` and `Acceptance/` are 95 % of the suite's time and they run again at
+    the end of the task regardless, so the full baseline was answering in advance a question that only
+    matters if something ends up red. If a slow-tier test IS red at the end, attribute it then: a checkout
+    of the merge-base and one filtered run of that class give the same answer the baseline would have.
+@@ -190,8 +189,7 @@
+ checkout `make -C ../f5sign-infra sf cmd="nelmio:apidoc:dump --format=json"`.
+ 
+ One block per gate, **all in the same message**, `security-audit-runner` included: every one of them only
+-reads the tree and `changes.diff`, so none waits on another. (Until 2026-09-23 the security audit ran after
+-the others, sequentially, for no dependency anyone could name.)
++reads the tree and `changes.diff`, so none waits on another.
+ 
+ ```
+ Agent({
+diff -ru a/ai/f5sign-backend/.claude/skills/task-validate-backend/SKILL.md b/ai/f5sign-backend/.claude/skills/task-validate-backend/SKILL.md
+--- a/ai/f5sign-backend/.claude/skills/task-validate-backend/SKILL.md	2026-09-28 10:54:30.978464415 +0200
++++ b/ai/f5sign-backend/.claude/skills/task-validate-backend/SKILL.md	2026-09-28 10:55:35.915325507 +0200
+@@ -16,8 +16,8 @@
+ ## Inputs
+ 
+ - `var/task-runner/TASK-NNN/changes.diff`
+-- The task's `.md` — its **scope** and **verification** sections, located by intent: they are not
+-  reliably in `§3` and `§5` (measured: scope in §3 in 13 of 21; verification in §5 in 7 of 21)
++- The task's `.md` — its **scope** and **verification** sections, located by intent: records place
++  them at different section numbers
+ 
+ ## Outputs
+ 
+@@ -44,8 +44,7 @@
+ | `make -C ../f5sign-infra wt-backend src=$(pwd)` | A worktree | Its own Postgres, MinIO, RabbitMQ and Mailpit, plus the shared `eu-dss`: the full suite runs there. Reuses the worktree's lane if `wt-backend-up` left it up (`make -C ../f5sign-infra wt-ls`). Gates via `WT_GATES="lint arch phpstan test infection"` |
+ | `make -C ../f5sign-infra wt-backend-test src=$(pwd) only=<regex>` | A worktree, named tests | PHPUnit only, on the kept lane; seconds |
+ 
+-⛔ **Never a hand-rolled `docker run` on `f5sign-net`** for the suite or Infection, whatever an older
+-version of this skill said: it shares the stack's Postgres cluster, and `pg_snapshot_xmin` is cluster-wide,
++⛔ **Never a hand-rolled `docker run` on `f5sign-net`** for the suite or Infection: it shares the stack's Postgres cluster, and `pg_snapshot_xmin` is cluster-wide,
+ so the relay tests go red for reasons that are not the code (BL-138). An hour of diagnosing a regression
+ that does not exist is the usual cost.
+ 
+@@ -139,10 +138,8 @@
+ 
+ **b) The four load-bearing shapes of `deptrac.yaml`, read as data.**
+ 
+-⚠ **Corrected 2026-08-17, and the correction matters:** an earlier version of this step said these
+-rules *"can't go red"*. False. The `ruleset` is a **positive allowlist** and the repo runs with
+-`Uncovered 0 / Allowed 3755`, so a class that depends on a disallowed layer **does** produce
+-`DependsOnDisallowedLayer`. What can't go red is **extending the allowlist**: that doesn't violate
++The `ruleset` is a **positive allowlist** and `composer arch` runs with `--fail-on-uncovered`, so a
++class that depends on a disallowed layer **does** produce `DependsOnDisallowedLayer`. What can't go red is **extending the allowlist**: that doesn't violate
+ anything, it just stops watching. That's why the real check is (a) above —look at the file's diff— plus
+ checking that these four shapes stay intact:
+ 
+@@ -187,13 +184,12 @@
+ - **Row locks**: `Integration/` runs **one connection** under DAMA rollback, so with and without
+   `FOR UPDATE` is indistinguishable. A second connection is needed
+   ([`ProbesRowLocks`](../../../tests/F5Sign/Support/ProbesRowLocks.php)).
+-- **Redelivery / retries**: `async_events` is `in-memory://` in test; nothing gets redelivered.
+ - **Identity after serialization**: a fake that returns the instance it saved proves nothing about
+   `save()`.
+ - **Fixtures that don't discriminate**: if two variables always agree in the test data, a projection
+   that filters on the wrong one still passes. Require the case where they **disagree**.
+ 
+-- **Redelivery / retries**: `async_events` is `in-memory://` in test… **but that's not the whole truth**:
++- **Redelivery / retries**: `async_events` is `in-memory://` in test, so it redelivers nothing; but
+   `when@test` also declares two real AMQP transports (`async_events_amqp`,
+   `async_events_unroutable_amqp`) so broker tests can reach redelivery properties. Before declaring a
+   property unreachable, check whether one of those serves it.
+@@ -241,8 +237,7 @@
+ 
+ ⛔ **Not with `make sf`.** Three reasons: it mounts `../f5sign-backend`, so in a worktree it validates
+ **a different tree**; it uses the `f5sign_app` role, which is not a superuser (the Makefile's `migrate`
+-target uses `$(PHP_ADMIN)`); and `--dry-run` **only prints SQL**, so it says nothing about `down()`. Use
+-the one-off container with the admin URL, as in the precondition.
++target uses `$(PHP_ADMIN)`); and `--dry-run` **only prints SQL**, so it says nothing about `down()`.
+ 
+ - [ ] `up()` applies without errors against a freshly migrated `postgres-test`.
+ - [ ] **`down()` is actually exercised** — `--dry-run` doesn't prove it; either it's applied and
+diff -ru a/ai/f5sign-backend/CLAUDE.md b/ai/f5sign-backend/CLAUDE.md
+--- a/ai/f5sign-backend/CLAUDE.md	2026-09-28 10:54:30.905282979 +0200
++++ b/ai/f5sign-backend/CLAUDE.md	2026-09-28 10:55:35.914338683 +0200
+@@ -6,7 +6,7 @@
+ 
+ ## Current state
+ 
+-- `src/F5Sign/` holds the populated kernel + foundation + 4 populated BC trees (Envelope, Session, SignatureExecution, Notification); Evidence & Audit + Legal exist only as deptrac layers (no `src/` yet). Enumerate rather than trust this list: `ls src/F5Sign/`.
++- `src/F5Sign/` holds the populated kernel + foundation + the populated BC trees (Envelope, Session, SignatureExecution, Notification, IdentityAccess, Storage); Evidence & Audit + Legal exist only as deptrac layers (no `src/` yet). Enumerate rather than trust this list: `ls src/F5Sign/`.
+   - `F5Sign/Kernel/` — categories (`Command`, `Query`, `Event`, `DomainEvent`, `AuditableEvent`, `ValueObject`, `Entity`, `AggregateRoot`, `EntityId`, `Reactor`, `Option`, `Result`), capabilities (`Subject`, `Equatable`, `Issued`, `Issuer`), `Repository`, `Time` (the `Clock` port; its test doubles live in `tests/F5Sign/Kernel/Testing/Time/`), `Context`.
+   - `F5Sign/Foundation/` — `Bus` (Messenger adapters: `MessengerCommandHandler`, `MessengerEventSubscriber`), `EventLog` (the `platform.event_log` store + watermark relay, ADR-0031), `Actor` (issuer / actor-kind carrier), `Serialization` (event-type registry + wire codec), `Persistence`, `Identity` (UUID/string IDs), `Http` (retryable client), `Storage` (object store), `Tenancy` (tenant context), `Time` (system clock), `ValueObject` (`GenericValidationException`, `Uri`), `Billing` (metering port), `Crypto` (field-cipher primitive, ADR-0033), `Logging` (Monolog request-context processor, ADR-0009), `Templating` (content-addressed, insert-only template archive + engine, ADR-0038), `Custodian` (the scheduled custodian: the closed list of sweeps it runs, their bus, and their run records, ADR-0061 §2.8). Enumerate rather than trust this list: `ls src/F5Sign/Foundation/`.
+   - `F5Sign/Envelope/` — populated BC (Domain + Application + Contract + Infrastructure + UI) per the vertical slice.
