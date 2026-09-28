@@ -7,10 +7,8 @@ description: 'Updates the documentation that lives outside the code after a task
 
 Documentation outside the code. Not a hard gate; failures are warnings.
 
-⚑ **Half of the targets this skill used to have do not exist in this repo.** Measured 2026-08-17: there
-is no `CHANGELOG.md`, no `.env.example`, no `docs/asyncapi/`, no `docs/runbooks/`, and no
-`src/*/README.md`. **Creating a documentation surface is a decision, not a sync** — if it's missing and
-needed, report it and file it in BACKLOG; don't invent it mid-task.
+**Creating a documentation surface is a decision, not a sync** — the surfaces this repo does not have are
+listed under *Surfaces that don't exist* below; if one is needed, report it and file it in BACKLOG.
 
 ## Invocation
 
@@ -72,8 +70,8 @@ placeholder*. The two patterns from repo rule 4, and the first is the standard o
 
 | Pattern | When | Examples |
 |---|---|---|
-| **(A) Absent** — the standard | Always, except (B) | There are **six**, and the `.env` header names them: `DATABASE_URL`, `APP_SECRET`, `MESSENGER_TRANSPORT_DSN`, `SIGNING_TOKEN_SECRET`, `IDENTITY_DATABASE_URL` and `PROVISIONING_DATABASE_URL` (the last two arrived with Identity & Access; `CLAUDE.md` still lists only four). `%env()%` fails building the container instead of falling back to a dev password |
-| **(B) Present and empty** — narrow exception | Only if an empty value can **never** work *and* its consumer rejects it | `FIELD_ENCRYPTION_SECRET=` only. **Not transferable**: `SIGNING_TOKEN_SECRET` has a dev value in `.env.dev`, so empty wouldn't fail closed |
+| **(A) Absent** — the standard | Always, except (B) | The list is `CLAUDE.md` repo rule 4's, and the `.env` header names them. `%env()%` fails building the container instead of falling back to a dev password |
+| **(B) Present and empty** — narrow exception | Only if an empty value can **never** work *and* its consumer rejects it | `FIELD_ENCRYPTION_SECRET=` only. **Not transferable**: a variable with a dev value in `.env.dev` (`SESSION_CREDENTIAL_SECRET`) would not fail closed if committed empty |
 
 Add the variable to the matching environment file (local-stack values do go in: they match infra's
 compose and aren't secrets), and **name it in the `.env` header** if it's one of the absent ones.
@@ -119,11 +117,8 @@ Its question→document routing table is what someone new reads. If the map chan
 **Why it exists.** Workspace rule 4 forbids crossing repos in the same commit: *two projects = two
 coordinated PRs*. So a backend contract change and its adoption in `f5sign-dashboard` / `f5sign-signer`
 are different changesets, and without a handoff artifact the second one gets rebuilt by guessing —or
-never arrives, which is what happened with `signed_copy_url`: the signer frontend has been hiding its
-download button ever since because it expects a field the backend never sends, and that lived only in an
-email-channel docblock when this was written — today it's also in
-`docs/ddd/notification-domain-model.md` and in the handoff README. (Leaving the correction visible
-because it's authorship rule 2 in action: the *why* was still true and the factual half had rotted.)
+never arrives, which is what happened with `signed_copy_url`: the signer frontend hides its download
+button because it expects a field the backend never sends.
 
 **When it's written** — predicate, not tags. The diff touches `src/**/UI/Http/`, `config/routes/`, any
 `#[OA\`, a `Contract/` the API emits, an enum whose values go out through the API, a CORS header or
@@ -132,13 +127,6 @@ rule, or an environment variable the frontend needs.
 **Where:** `docs/frontend-handoff/TASK-NNN-<slug>.md` (or `YYYY-MM-DD-<slug>.md` if the change doesn't
 come from a task). Full convention in
 [`docs/frontend-handoff/README.md`](../../../docs/frontend-handoff/README.md).
-
-⚠ **And here's an explicit exception to the rule above**, so it doesn't look like a contradiction: the
-directory and its README were born on branch `docs/task-conventions` and **may not exist on the branch
-you're working on**. Writing the first handoff there **does** create the surface — and it's authorized,
-because the decision is already made and its convention written. What the rule forbids is inventing a
-surface **without a prior decision**; this one has one. If the README isn't on your branch, say so in
-the report and link to the branch that has it.
 
 **What it carries, and the form matters because the reader is an agent in another repo with no access to
 this one:**

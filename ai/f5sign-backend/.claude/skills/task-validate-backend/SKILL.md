@@ -16,8 +16,8 @@ Hard gate for functional quality. Always invoked.
 ## Inputs
 
 - `var/task-runner/TASK-NNN/changes.diff`
-- The task's `.md` — its **scope** and **verification** sections, located by intent: they are not
-  reliably in `§3` and `§5` (measured: scope in §3 in 13 of 21; verification in §5 in 7 of 21)
+- The task's `.md` — its **scope** and **verification** sections, located by intent: records place
+  them at different section numbers
 
 ## Outputs
 
@@ -44,8 +44,7 @@ a route and **write it in the JSON's `harness` field**:
 | `make -C ../f5sign-infra wt-backend src=$(pwd)` | A worktree | Its own Postgres, MinIO, RabbitMQ and Mailpit, plus the shared `eu-dss`: the full suite runs there. Reuses the worktree's lane if `wt-backend-up` left it up (`make -C ../f5sign-infra wt-ls`). Gates via `WT_GATES="lint arch phpstan test infection"` |
 | `make -C ../f5sign-infra wt-backend-test src=$(pwd) only=<regex>` | A worktree, named tests | PHPUnit only, on the kept lane; seconds |
 
-⛔ **Never a hand-rolled `docker run` on `f5sign-net`** for the suite or Infection, whatever an older
-version of this skill said: it shares the stack's Postgres cluster, and `pg_snapshot_xmin` is cluster-wide,
+⛔ **Never a hand-rolled `docker run` on `f5sign-net`** for the suite or Infection: it shares the stack's Postgres cluster, and `pg_snapshot_xmin` is cluster-wide,
 so the relay tests go red for reasons that are not the code (BL-138). An hour of diagnosing a regression
 that does not exist is the usual cost.
 
@@ -139,10 +138,8 @@ ruleset), `phpstan.dist.neon`, or adds entries to `phpstan-baseline.neon`:
 
 **b) The four load-bearing shapes of `deptrac.yaml`, read as data.**
 
-⚠ **Corrected 2026-08-17, and the correction matters:** an earlier version of this step said these
-rules *"can't go red"*. False. The `ruleset` is a **positive allowlist** and the repo runs with
-`Uncovered 0 / Allowed 3755`, so a class that depends on a disallowed layer **does** produce
-`DependsOnDisallowedLayer`. What can't go red is **extending the allowlist**: that doesn't violate
+The `ruleset` is a **positive allowlist** and `composer arch` runs with `--fail-on-uncovered`, so a
+class that depends on a disallowed layer **does** produce `DependsOnDisallowedLayer`. What can't go red is **extending the allowlist**: that doesn't violate
 anything, it just stops watching. That's why the real check is (a) above —look at the file's diff— plus
 checking that these four shapes stay intact:
 
@@ -187,13 +184,12 @@ green guards that nothing executed (`CLAUDE.md` authorship rule 4):
 - **Row locks**: `Integration/` runs **one connection** under DAMA rollback, so with and without
   `FOR UPDATE` is indistinguishable. A second connection is needed
   ([`ProbesRowLocks`](../../../tests/F5Sign/Support/ProbesRowLocks.php)).
-- **Redelivery / retries**: `async_events` is `in-memory://` in test; nothing gets redelivered.
 - **Identity after serialization**: a fake that returns the instance it saved proves nothing about
   `save()`.
 - **Fixtures that don't discriminate**: if two variables always agree in the test data, a projection
   that filters on the wrong one still passes. Require the case where they **disagree**.
 
-- **Redelivery / retries**: `async_events` is `in-memory://` in test… **but that's not the whole truth**:
+- **Redelivery / retries**: `async_events` is `in-memory://` in test, so it redelivers nothing; but
   `when@test` also declares two real AMQP transports (`async_events_amqp`,
   `async_events_unroutable_amqp`) so broker tests can reach redelivery properties. Before declaring a
   property unreachable, check whether one of those serves it.
@@ -241,8 +237,7 @@ The target is the prose of the scope section, with its **In** and **Out** lists:
 
 ⛔ **Not with `make sf`.** Three reasons: it mounts `../f5sign-backend`, so in a worktree it validates
 **a different tree**; it uses the `f5sign_app` role, which is not a superuser (the Makefile's `migrate`
-target uses `$(PHP_ADMIN)`); and `--dry-run` **only prints SQL**, so it says nothing about `down()`. Use
-the one-off container with the admin URL, as in the precondition.
+target uses `$(PHP_ADMIN)`); and `--dry-run` **only prints SQL**, so it says nothing about `down()`.
 
 - [ ] `up()` applies without errors against a freshly migrated `postgres-test`.
 - [ ] **`down()` is actually exercised** — `--dry-run` doesn't prove it; either it's applied and

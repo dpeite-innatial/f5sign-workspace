@@ -45,7 +45,7 @@ block. Creating the seed is a decision (and a BACKLOG row), not something this s
 - `var/task-runner/TASK-NNN/changes.diff`
 - `var/task-runner/TASK-NNN/context-digest.md`
 - `var/task-runner/TASK-NNN/doctrine-guard.report.md` (if it exists; to correlate indexes)
-- the task's `.md` (tags + overridden thresholds if declared)
+- the task's `.md` (overridden thresholds if declared)
 
 Default thresholds (overridable in the `.md`):
 - HTTP endpoint: p95 < 300ms → pass; 300-800ms → warn; > 800ms → warn high
@@ -69,11 +69,9 @@ Default thresholds (overridable in the `.md`):
 
 ### Step 1 — Detect what to measure
 
-By tags and diff:
-- If tag `api`: identify new/modified endpoints (search Controllers in the diff, extract paths)
-- If tag `worker`: identify new/modified handlers
-- No tags to validate: the entry condition is whatever the diff touches, and it's evaluated by
-  whoever delegates.
+By what the diff touches (this task format has no tags):
+- Controllers under `src/**/UI/Http/`: identify new/modified endpoints and their paths
+- Messenger handlers or reactors: identify new/modified handlers
 
 If nothing is measurable → `status: pass`, `summary: "nothing measurable in the diff"`. No
 `tagMismatches`: this format has no tags.
@@ -90,7 +88,7 @@ If nothing is measurable → `status: pass`, `summary: "nothing measurable in th
   - Sort without an index → `warn`
   - Join without an index on the FK → `warn` (doctrine-guard should have caught it, but double check)
 
-### Step 3 — Endpoint benchmark (if tag `api`)
+### Step 3 — Endpoint benchmark (if the diff adds or changes an endpoint)
 
 For each new endpoint:
 - **Warm-up:** 10 requests ignored
@@ -99,7 +97,7 @@ For each new endpoint:
 - Compare against thresholds (defaults or those declared in the `.md`)
 - Result → metrics JSON
 
-### Step 4 — Worker benchmark (if tag `worker`)
+### Step 4 — Worker benchmark (if the diff adds or changes a handler)
 
 - Enqueue 50 test messages against the new handler
 - Measure throughput (msg/s) and average time per message
@@ -147,8 +145,8 @@ the static half.
 ## Interaction with the loop
 
 Never triggers an automatic retry. In supervised mode, if there's a high WARN, task-runner asks the
-user whether to iterate or leave the technical debt documented in `notes.md` (picked up by
-task-close).
+user whether to iterate or record the debt, which `task-close` homes in `§Open follow-ups` and a
+`docs/BACKLOG.md` row (never a `var/` note).
 
 ## What it does NOT do
 

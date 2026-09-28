@@ -9,8 +9,7 @@ Mechanical persistence validation. Invoked when the diff touches `migrations/`,
 `src/**/Infrastructure/Persistence/`, or SQL/RLS in any file.
 
 ⛔ **This repo has no ORM.** `doctrine/orm` is not a dependency and **there isn't even a single
-`*.orm.xml`** (ADR-0018, pure DBAL). Everything this skill used to check about mappings and
-entity↔XML↔table triangulation has no target. If the diff **adds** `doctrine/orm` or a `.orm.xml`,
+`*.orm.xml`** (ADR-0018, pure DBAL), so there are no mappings to check. If the diff **adds** `doctrine/orm` or a `.orm.xml`,
 that reverts an accepted ADR → `fail`, category `retired-mechanism`, and it's the decision gate of
 `implement-backend` Step 2b.
 
@@ -82,12 +81,12 @@ Migrations connect as the **bootstrap superuser** (`POSTGRES_USER`), never as th
 
 ### Step 5 — Rows the domain later reads (authoring rule 6)
 
-The costliest check to skip: in the last review, the one blocking finding came from here.
+The costliest check to skip.
 
 - [ ] **Enumerate the aggregate states the row falls under** — draft, in flight, terminal,
       superseded — and say what the row means **in each one**, on the **write** side as well as
-      the read side. Reasoning only about "what a recipient can see right now" is exactly how
-      that blocker slipped through.
+      the read side. Reasoning only about "what a recipient can see right now" misses the write
+      side.
 - [ ] **A predicate that states the property, not an enumeration of today's states.**
       `sent_at IS NOT NULL` asks the real question (*"could anyone have read this already?"*);
       `status <> 'DRAFT'` reopens the hole the day a pre-send state gets added. Enumeration →

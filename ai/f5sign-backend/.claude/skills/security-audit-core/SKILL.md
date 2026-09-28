@@ -149,9 +149,9 @@ If everything's clean → `status: pass`.
 - **FAIL:** SQL/command injection detected conceptually, endpoint with no auth when it should have one,
   cross-tenant leak, hardcoded secret, unredacted PII in logs, `security-audit-{stack}` or
   `eidas-compliance` returning fail
-- **WARN:** dependency with a LOW/MEDIUM CVE, somewhat verbose error message, and —once only, not per
-  endpoint— that a new surface would call for rate limiting: **the component isn't installed in the
-  backend**, so it's a capability gap, not a defect in the route
+- **WARN:** dependency with a LOW/MEDIUM CVE, somewhat verbose error message, and a new cost-incurring
+  anonymous surface that consumes no rate-limit policy (the limiter is configured; `security-audit-backend`
+  checks it)
 
 ## Report
 

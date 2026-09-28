@@ -56,8 +56,8 @@ Required:
 property, not a list: if `Status` does **not** claim existing code, the record is still an
 editable plan and both fields are required (`fail`). If it already claims code, they're `warn` — because filling in
 the *why* of already-closed work is inventing it after the fact, and an invented `Why` is worse than an absent one.
-**Measured 2026-08-17: `Why` is present in 6 of 21 records and `Decision record` in 12**, so requiring them
-across the board would fail 15 of 21 and the linter would be stricter than the corpus it claims to derive from.
+Older records predate both fields, so requiring them across the board would make the linter stricter than the
+corpus it claims to derive from.
 
 Optional, and their absence isn't penalized: `Builds on`, `Scope`, `Delivery bar`, `Sibling`.
 
@@ -85,7 +85,7 @@ Two valid forms, and no others:
    category `decision-record-unfalsifiable`.
 
 ⚑ **And if the task's scope touches any of these surfaces, form 2 doesn't count.** ⚠ *Scope*
-here is **the section**, not the header's `Scope` field: that field exists in 2 of 21 records and Step 2
+here is **the section**, not the header's `Scope` field: few records carry that field and Step 2
 declares it optional, so gating on it would leave the check empty in almost all of them. If there's neither
 field nor scope section, say so as `warn` (`scope-unstated`) instead of assuming it touches nothing. Surfaces:
 the ruleset or layers of [`deptrac.yaml`](../../../deptrac.yaml), `phpstan.dist.neon`, `phpstan-baseline.neon`,
@@ -120,9 +120,8 @@ Sections are numbered (`## 1. …`) and cited as `§N` from other documents.
 
 - [ ] At least one section whose heading talks about **scope** and another about
       **verification/acceptance/definition of done**. ⚑ Check by *intent*, not against a closed
-      list of headings: the 21 records on this branch use legitimate variants —scope appears in §3, §4 and §6;
-      verification in §4, §5, §6 and §9— and an enumeration exempts "anything not yet on the list"
-      (authoring rule 5).
+      list of headings: records use legitimate variants for both, at different section numbers, and an
+      enumeration exempts "anything not yet on the list" (authoring rule 5).
 - [ ] Numbering with no gaps or repeats, and **starting at 1**.
 - [ ] No empty sections (heading followed immediately by another heading).
 
@@ -148,14 +147,11 @@ done | sort -u
 ⚠ **`':(top)'` isn't decorative, and without it this check fails open.** A git pathspec is relative to the
 **cwd**, so `-- docs/tasks/` run from `docs/tasks/` — the directory you're precisely in
 when you're writing a task — resolves to `docs/tasks/docs/tasks/` and returns **zero ids**. Zero ids reads as
-"the id is free", in the one check whose job is to prevent a collision. Measured 2026-08-17: **0 ids** without
-`:(top)` from `docs/tasks/`, and **24** with it (or from the root). ⚑ And don't copy that 24 anywhere: it's the
-count for that day, not a constant. An earlier version of this line said 21 —the file count for
-*one* branch— and that error propagated to two documents before an audit caught it.
+"the id is free", in the one check whose job is to prevent a collision.
 
 - [ ] The `.md`'s id doesn't appear on any other branch with a **different** slug → if it does: `fail`,
-      category `id-collision`, naming the branch. This has actually happened: `TASK-021…023` live on
-      `docs/two-gate-signer-auth` and are invisible from any other branch.
+      category `id-collision`, naming the branch. This has actually happened: `TASK-021…023` once lived only on
+      a feature branch, invisible from every other.
 
 ### Step 8 — Uncertainty markers
 

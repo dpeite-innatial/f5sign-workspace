@@ -9,13 +9,8 @@ Invoked by `security-audit-core` when **the diff touches signing or crypto** —
 `src/F5Sign/SignatureExecution/`, `Foundation/Crypto/`, DSS, PAdES. This task format has no tags: the
 condition is the diff, and it's evaluated by whoever delegates.
 
-> ⚑ **This skill was trimmed down on 2026-08-17 after an audit.** It used to cover TSA, LTV, LOTL/TSL
-> trust lists, per-user certificates and the XAdES/CAdES/JAdES formats. **None of them has a target in
-> this repo**: zero references to LOTL/TSL, zero OCSP/CRL, `requiresTsa()` with not a single caller in
-> `src/`, no per-user certificate or policy OID, and a single level enum whose four cases are all
-> `PAdES_BASELINE_*`. Those steps used to return **green by vacuity on every diff**, which is the most
-> expensive way to fake coverage. What was removed isn't lost: it lives in ADR-0023's *Consequences*
-> (B-B breadth, the rest deferred) and in `BL-4`.
+TSA, LTV, trust lists, per-user certificates and non-PAdES formats have no target in this repo (Step 6
+says why for each); checking them would return **green by vacuity on every diff**.
 
 ## Invocation
 

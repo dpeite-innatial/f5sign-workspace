@@ -26,9 +26,8 @@ session's model; escalate only after a repeated failure with a diagnosis that ju
 
 - The task's `.md`, in full. Three sections govern the work: **what already exists** (reuse, don't
   rebuild), **the scope** (what is touched and what isn't) and **the verification** (the bar).
-  ⚠ **Locate them by intent, not by number.** Measured 2026-08-17 across the 21 records: the scope is
-  in §3 in 13 of 21 (also in §4 and §6), the verification in §5 in only 7 (also §4, §6, §9), and "what
-  already exists" appears as *What was built*, *What will be built*, *Design grounding*, *Locked decisions*
+  ⚠ **Locate them by intent, not by number.** Records place the scope and the verification at different
+  section numbers, and "what already exists" appears as *What was built*, *What will be built*, *Design grounding*, *Locked decisions*
   or *The model*. `docs/tasks/README.md` §2 explicitly says the headings vary with the work, so
   addressing by `§N` is the closed list that the convention itself forbids.
 - Whatever its `Builds on` and `Decision record` fields cite.
@@ -204,8 +203,8 @@ escalating**; `"exceeds the model"` → fail with `diagnosis: "escalate"`.
 
 - **The domain doesn't import Symfony or Doctrine.** Deptrac (`composer arch`) and the PHPStan placement
   rules watch this; if you spot it before they do, redo it.
-- **Between BCs, only the other's `Contract/` is visible.** `deptrac.yaml` declares **38** layers (37 with
-  an entry in `ruleset` plus `Vendor`) and says so explicitly: `EnvelopeApplication` can see
+- **Between BCs, only the other's `Contract/` is visible.** `deptrac.yaml` says so explicitly (count its
+  layers there, not here): `EnvelopeApplication` can see
   `SessionContract`, `SignatureExecutionContract`, `IdentityAccessContract`… and **no other BC's `Domain`
   or `Infrastructure`**. `Kernel` depends on nothing (`Kernel: []`). If you need data that only lives in
   another BC's `Domain`, the answer is a read port in its `Contract/` (ADR-0008), not an import — and
@@ -215,18 +214,16 @@ escalating**; `"exceeds the model"` → fail with `diagnosis: "escalate"`.
   class that depends on a disallowed layer produces `DependsOnDisallowedLayer`. What it **can't** catch
   going red is **adding the entry to the allowlist**: that doesn't violate anything, it just stops
   watching. So the question when reviewing isn't *"does deptrac pass?"* but *"does this diff touch
-  `deptrac.yaml`?"* — and if it does, that's Step 2b, not a decision made while implementing. Corrected
-  2026-08-17: this bullet used to say the gate was blind to the dependency, which is the dangerous
-  direction to be wrong in.
+  `deptrac.yaml`?"* — and if it does, that's Step 2b, not a decision made while implementing.
 - **Only aggregate roots have a repository.** Subordinate entities are modified through their root.
 - **Commands through the bus; queries via direct call.** ADR-0008: **there is no QueryBus**, and a
   `QueryHandler` is realized with a direct `handle(Query): R` — its §Counterpoint expressly rejects
-  putting an adapter in between. So a controller **does** inject a query handler (three do today) and
+  putting an adapter in between. So a controller **does** inject a query handler and
   that's conformant; what it must not do is inject a *command* handler bypassing the bus, because the bus
   is where the transaction, the tenant and the issuer live (ADR-0010).
 - **VOs: the shape depends on the type, and a blanket rule is wrong** (ADR-0005). A **wrapper** (a single
-  field) is `final readonly`; a **composite** (several fields) is `final` and **not** readonly — 11 of the
-  22 in the tree are, with a public constructor. The model to imitate is
+  field) is `final readonly`; a **composite** (several fields) is `final` and **not** readonly, with a public
+  constructor. The model to imitate is
   [`Settings`](../../../src/F5Sign/Envelope/Domain/ValueObject/Settings.php), which says so in its own
   docblock: *"final (not readonly) per ADR-0005"*. Requiring `final readonly` across the board reintroduces
   the defect ADR-0005 exists to record. Named constructors yes, in both cases.

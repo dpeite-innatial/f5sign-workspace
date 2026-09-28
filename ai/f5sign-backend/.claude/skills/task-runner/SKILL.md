@@ -109,8 +109,7 @@ model; this skill doesn't repeat the list.
    tests). Note the **exact number of tests and asserts** in `run.log` and in the summary: without it, you
    can't separate your own reds from environment ones. **A red baseline doesn't abort: it's declared.**
    `{"phase":"baseline","status":"pass","tests":N,"assertions":M,"harness":"…"}`.
-   ⚑ **Until 2026-09-23 this was the FULL suite through `test-runner`, and that is ~5 minutes per task
-   spent up front.** `Integration/` and `Acceptance/` are 95 % of the suite's time and they run again at
+   ⚑ **Not the full suite:** `Integration/` and `Acceptance/` are 95 % of the suite's time and they run again at
    the end of the task regardless, so the full baseline was answering in advance a question that only
    matters if something ends up red. If a slow-tier test IS red at the end, attribute it then: a checkout
    of the merge-base and one filtered run of that class give the same answer the baseline would have.
@@ -190,8 +189,7 @@ carries the lane's `==>` lines around the JSON: keep from the first `{` to the l
 checkout `make -C ../f5sign-infra sf cmd="nelmio:apidoc:dump --format=json"`.
 
 One block per gate, **all in the same message**, `security-audit-runner` included: every one of them only
-reads the tree and `changes.diff`, so none waits on another. (Until 2026-09-23 the security audit ran after
-the others, sequentially, for no dependency anyone could name.)
+reads the tree and `changes.diff`, so none waits on another.
 
 ```
 Agent({

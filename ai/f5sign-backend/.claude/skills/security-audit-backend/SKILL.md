@@ -1,6 +1,6 @@
 ---
 name: security-audit-backend
-description: 'Security checks specific to the backend stack (PHP/Symfony). Complements security-audit-core with: SQL injection via DBAL (no ORM), Symfony asserts, the real authentication seam of this repo (Identity & Access with a route that declares its credential, NOT SecurityBundle: it is not registered), real idempotency (ADR-0042: the id is NOT a retry key), CORS via a custom CorsListener, and the cryptography that does exist (issued credential with partial enforcement, signing token). ⚠ And it says out loud that PII at rest is NOT encrypted today — FieldCipher has no callers and ADR-0033 is Proposed — instead of claiming a protection that does not exist. Includes the two holes an audit found here: the client-supplied Content-Type without nosniff, and the credential that outlives its resource. Names what is NOT installed —rate limiter— instead of reporting it endpoint by endpoint. Invoked by security-audit-core. Use it with /security-audit-backend TASK-NNN. Trigger with "security backend", "audit PHP", "check Symfony security".'
+description: 'Security checks specific to the backend stack (PHP/Symfony). Complements security-audit-core with: SQL injection via DBAL (no ORM), Symfony asserts, the real authentication seam of this repo (Identity & Access with a route that declares its credential, NOT SecurityBundle: it is not registered), real idempotency (ADR-0042: the id is NOT a retry key), CORS via a custom CorsListener, and the cryptography that does exist (issued credential with partial enforcement, signing token). ⚠ And it says out loud that PII at rest is NOT encrypted today — FieldCipher has no callers and ADR-0033 is Proposed — instead of claiming a protection that does not exist. Includes the two holes an audit found here: the client-supplied Content-Type without nosniff, and the credential that outlives its resource. Checks the rate limiter that exists (one policy set per medium, failing open) instead of asking for one per endpoint. Invoked by security-audit-core. Use it with /security-audit-backend TASK-NNN. Trigger with "security backend", "audit PHP", "check Symfony security".'
 ---
 
 # Security Audit Backend
@@ -70,7 +70,7 @@ What does exist (ADR-0044…ADR-0048), and is what gets checked:
       allowed in the CORS preflight — served here by
       [`CorsListener`](../../../src/F5Sign/Foundation/Http/CorsListener.php), **not**
       `nelmio_cors.yaml`, which doesn't exist.
-- [ ] **The signer token** (`SigningTokenCodec` / `SigningTokenListener`) is not scope-widened: it's per
+- [ ] **The signer token** (issued by `StoreBackedSigningTokenIssuer`, read by `SigningTokenListener`) is not scope-widened: it's per
       recipient and per envelope. ⚠ The bug that closed out identity-access (BL-38): a recipient with a
       valid token **replayed their real tenant claim over a channel that verified nothing** and read
       documents that had been denied to them. Any route that accepts a tenant claim from the client →
@@ -78,17 +78,16 @@ What does exist (ADR-0044…ADR-0048), and is what gets checked:
 - [ ] Tests that verify 401/403 on the unauthorized attempt, and **a cross-tenant one that expects
       404/403**.
 
-### Rate limiting — **not installed**, so it isn't a per-endpoint check
+### Rate limiting — configured, consumed by one endpoint
 
-⚠ `symfony/rate-limiter` **is not a dependency of this repo** and `config/packages/rate_limiter.yaml`
-doesn't exist. Don't flag endpoint by endpoint that "it's missing the limiter": **the whole capability is
-missing**, and repeating it per route buries the fact in noise.
+`symfony/rate-limiter` is configured in `config/packages/rate_limiter.yaml` (policy sets per medium, on a
+Redis-backed pool) and consumed by `POST /api/v1/signing/session/auth/otp/send` through
+`FailOpenOtpSendLimiter`, which picks the set by the medium of the declared method and **fails open**,
+logging at `error` (ADR-0014). Read `CLAUDE.md` § Stack for the current shape.
 
-- [ ] If the diff adds a surface that needs it (login, OTP, resend, signing, bulk send): **a single
-      `warn`** naming the component's absence and what's waiting on it — TASK-022 (in
-      `docs/two-gate-signer-auth`) declares it as one of its two nonexistent prerequisites.
-- [ ] Don't propose `#[RateLimit]` or create a `rate_limiter.yaml`: installing a component is a decision,
-      and it goes through `implement-backend`'s Step 2b gate.
+- [ ] If the diff adds a surface that costs money or touches personal data anonymously (OTP, resend,
+      bulk send): does it consume a policy set? One without → `warn`, naming the surface.
+- [ ] If the diff touches the limiter: the fail-open `error` log stays — that log line is the control.
 
 ### Idempotency — derived identity, not a header
 
@@ -131,12 +130,10 @@ And what does exist here, which is where you actually need to look:
       the destination, not the current state. And **the signing token is deliberately outside the
       grammar**, recorded as a *known non-conformance* in its §2.3. `CredentialKind` has only one case
       today (`API_KEY`). A new secret with its own format is `warn` citing ADR-0045, not `fail`.
-- [ ] **Signing token** (`SigningTokenCodec`): verification with `hash_equals` ✓. ⚠ **The TTL is
-      duplicated in two places and neither is "the use case that mints it"**: `MintSigningTokenController`
-      does `->modify('+7 days')` and `NotifyActivatedStepRecipientsUseCase` declares
-      `private const string TOKEN_TTL = '+7 days'`. Nothing keeps them in sync, so if the diff touches
-      one, check the other. ⚑ And a retention promise in the copy about a 7-day token was a real,
-      already-fixed bug; don't reintroduce it.
+- [ ] **Signing token**: store-backed (`StoreBackedSigningTokenIssuer`), its lifetime the one constant
+      `StoreBackedSigningTokenIssuer::LIFETIME`. A diff that states the lifetime anywhere else (a
+      `modify('+7 days')`, a copy promise) duplicates it → `warn`. ⚑ A retention promise in the copy
+      about a 7-day token was a real, already-fixed bug; don't reintroduce it.
 - [ ] ⚠ **PII at rest: today NOTHING is encrypted, and claiming otherwise is the worst possible mistake
       here.** `FieldCipher` exists and is tested, but has **zero callers in `src/`**, and ADR-0033 is
       `Proposed`, saying it in its own words: *"nothing calls them. No column is enciphered."* There is
@@ -163,12 +160,11 @@ And what does exist here, which is where you actually need to look:
       content-derived type, a closed list, and `nosniff` (+ `Content-Disposition: attachment` where
       applicable). ⚠ The generic bullet *"explicit Content-Type, no autodetect"* **is satisfied by this
       very broken code**: that's why this check is needed and that one isn't enough.
-- [ ] ⛔ **A credential has to die with its resource.** The signing token is stateless, with `exp` and no
-      revocation, 7-day TTL; **no file under `src/F5Sign/Session/` looks at `EnvelopeStatus`**, and
-      `DownloadSigningDocumentController` only guards against `$content === null`. Result: after an
-      envelope is voided, whoever holds the token keeps reading documents for the rest of the week
-      (BL-61, open in the same seam). If the diff adds a route with a token or a new terminal state: ask
-      **what invalidates the credential**, not just what validates it.
+- [ ] ⛔ **A credential has to die with its resource.** Session reads the envelope's liveness
+      (`RecipientAuthContextReader`, `EnvelopeNoLongerLiveException`; ADR-0056/ADR-0059) and revokes
+      sessions on `EnvelopeVoided`. If the diff adds a route with a token or a new terminal state: ask
+      **what invalidates the credential**, not just what validates it, and check the new route asks the
+      same liveness question.
 
 ### Persistence — DBAL, not ORM
 
@@ -200,7 +196,7 @@ looking for what doesn't exist.
       a second connection may be passing without exercising anything.
 - [ ] If it touches a credential or a token: test of the rejection path (bad, expired, or another
       recipient's credential), not just the happy path.
-- [ ] No rate-limit tests: the component isn't installed (see above).
+- [ ] If the diff adds a limited surface: a test of the refusal past the limit, on `cache.adapter.array`.
 
 ## Severity
 
@@ -210,7 +206,7 @@ looking for what doesn't exist.
   - Weak crypto in security contexts (MD5/SHA1 for passwords, hardcoded key)
   - Object-level authz missing when the AC requires it
 - **WARN:**
-  - Rate limit missing on an endpoint that probably needs it
+  - A cost-incurring anonymous surface that consumes no rate-limit policy
   - Verbose error message
   - Security header not explicit
 

@@ -84,10 +84,8 @@ Content, and empty subsections are written as "None" instead of omitted:
 
 ### Step 4 — Every deferral and every learning, to a durable home
 
-⚑ **This is the step that justifies the skill, and the one the previous version got wrong.** It wrote
-learnings to a `notes.md` under `var/`, which is gitignored: a memo nobody will ever read again. This
-repo already paid for that mistake twice — someone had to manually reconstruct *"eight deferrals that lived
-only in an untracked memo"*. **A learning that only exists in `var/` is a learning that's lost.**
+⚑ **This is the step that justifies the skill.** `var/` is gitignored, so **a learning that only exists in
+`var/` is a learning that's lost**.
 
 The real homes, by type:
 
@@ -132,7 +130,7 @@ kind of lie as a stale `Status`, in the opposite direction.
 ### Step 6 — Commit
 
 This skill **does commit its own edits** (`docs/` and the `.md`), like a normal documentation commit.
-There's no `--amend` to wait for: `pr-ready` no longer rewrites history.
+There's no `--amend` to wait for: `pr-ready` doesn't rewrite history.
 
 ## Report
 

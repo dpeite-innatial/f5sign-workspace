@@ -63,7 +63,7 @@ not here.
 
 What follows is the why, so you know what you're reading when that test fails:
 
-This is the check that actually pays off, and the one the previous version didn't have. The natural
+This is the check that actually pays off. The natural
 check —*"is everything the AC asks for declared?"*— **only looks in one direction**. This repo's real
 failure was the opposite: the endpoints had always returned `signing_mode` and
 `recipients[].document_assignments` and **the spec omitted them**; `Envelope.status` didn't publish
@@ -98,12 +98,11 @@ Published events live in `src/F5Sign/<BC>/Contract/Event/`, **not** in `Domain/E
       **can't** end up unregistered, and a malformed one throws `LogicException` **at container compile
       time**, meaning the whole suite goes red before you even get here. `LOAD-BEARING.md` §2 already
       says so. What you **do** need to check is below: the **value** of `EVENT_TYPE`.
-- [ ] ⛔ **Nothing pins the value of `EVENT_TYPE`, and changing it re-types history already written.**
-      There are 26 declared and **no test asserts a value**: the one that pinned them was retired in
-      stage 2 of the event log and its replacement is *queued* in ADR-0031. If the diff **changes** an
-      existing value → `fail`, category `event-type-rewrite`: the log is permanent and append-only, so
-      the bytes already written stop decoding and there's no fixing it. If it **adds** a new one, `pass`
-      with a note.
+- [ ] ⛔ **Changing the value of `EVENT_TYPE` re-types history already written.** The frozen fixtures
+      (Step 4) are keyed by `EVENT_TYPE`, so a renamed value leaves an orphan fixture and a type without
+      one, and `GoldenPayloadBytesTest`'s census goes red. If the diff **changes** an existing value →
+      `fail`, category `event-type-rewrite`: the log is permanent and append-only, so the bytes already
+      written stop decoding and there's no fixing it. If it **adds** a new one, `pass` with a note.
 - [ ] Actually emitted: if the event is new, the diff contains whoever publishes it.
 - [ ] ⚠ **Don't look for a `routing:` entry for an event: it's deliberately empty.** `messenger.yaml`
       itself explains it — *"No class is bus-routed to `async_events` directly: cross-BC events reach
@@ -127,9 +126,7 @@ The log is permanent and **evolution happens only by upcast**: rewriting a store
       `event_type` without a fixture. So: a **new** `event_type` adds its fixture; an **existing** one's
       fixture is **not touched** — a diff that edits an existing fixture turned the alarm into silence
       (`fail`, category `fixture-regenerated`). The round-trip tests alone serialize and deserialize with the
-      same code and cannot see an incompatible `fromPayload()`. ⛑ This item said *"no safety net today —
-      not built"* until 2026-09-23; the fixtures had landed on `develop` before that, and TASK-046's
-      contract check found the text stale.
+      same code and cannot see an incompatible `fromPayload()`.
 
 ### Step 5 — If the contract changed, there has to be a frontend handoff
 
@@ -161,7 +158,7 @@ documentation and say where it lives in the meantime (its `Contract/Event/` clas
 - Enums: {enum} {n} cases in PHP / {m} published
 
 ## Events
-- {Event}: past tense ✓ · registered in EventTypeRegistry ✓ · additive payload ✓
+- {Event}: past tense ✓ · `EVENT_TYPE` unchanged ✓ · additive payload ✓ · fixture {added | untouched}
 
 ## No safety net
 - {payload change without a canonical bytes fixture, if applicable}
