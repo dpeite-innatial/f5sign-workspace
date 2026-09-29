@@ -71,7 +71,7 @@ f5sign-infra/
 │   │   ├── Dockerfile
 │   │   ├── conf/logback.xml
 │   │   └── scripts/{entrypoint,generate-self-signed-keystore,wait-for-tl}.sh
-│   └── scripts/{agent-smoke,check-event-dlx,check-seal,wait-for-healthy}.sh
+│   └── scripts/{smoke-deep,check-event-dlx,check-seal,wait-for-healthy}.sh
 └── scripts/
     └── wt-validate.sh             ← driver for the `wt-*` lanes
 ```
@@ -264,7 +264,7 @@ there since the target existed.)
 | EU DSS | `127.0.0.1:8080` | `8080` | Exposed only in dev (override); healthy != TLs loaded |
 | Mailpit (UI + SMTP sink) | `http://127.0.0.1:8025` | `8025` | **Where emails land in dev.** No credentials |
 
-Shortcuts: `make psql`, `make redis-cli`, `make rabbit-console`, `make minio-console`, `make mc cmd="ls local/"`, `make agent-smoke`.
+Shortcuts: `make psql`, `make redis-cli`, `make rabbit-console`, `make minio-console`, `make mc cmd="ls local/"`, `make smoke-deep`.
 
 ## Frontend tests in Docker
 
