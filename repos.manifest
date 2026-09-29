@@ -8,5 +8,5 @@
 f5sign-backend	git@github.com:dpeite-innatial/f5sign-backend.git	develop
 f5sign-dashboard	git@github.com:dpeite-innatial/f5sign-dashboard.git	feat/ssr-false-spa-static
 f5sign-docs	git@github.com:dpeite-innatial/innasign-doc.git	master
-f5sign-infra	git@github.com:dpeite-innatial/f5sign-infra.git	master
+f5sign-infra	git@github.com:Factorcinco/f5sign-infra.git	master
 f5sign-signer	git@github.com:dpeite-innatial/f5sign-signer.git	develop
