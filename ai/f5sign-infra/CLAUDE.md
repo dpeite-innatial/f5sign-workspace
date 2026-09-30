@@ -30,7 +30,7 @@ Infrastructure repo for the F5Sign product. Contains the Docker orchestration (l
 bumped **Node 20 -> 24** (20 has been OUT OF SUPPORT since 2026-04-30), **Redis 7 -> 8** and
 **RabbitMQ 4.0 -> 4.2**. ⛔ **RabbitMQ can't go past 4.2** even if the broker ships 4.3: the
 `delayed-message-exchange` plugin stays at v4.2.0 and its series has to track the broker's.
-PostgreSQL 16 -> 18 was done the same day (see README § *Copias de seguridad*). EU DSS stays at
+PostgreSQL 16 -> 18 was done the same day (see README § *PostgreSQL*). EU DSS stays at
 6.4: 6.5 only has an RC1.
 
 ## Repo structure
@@ -187,7 +187,7 @@ without touching the one serving traffic — which is what makes it possible to 
 API returning 500 until someone migrated again. **If you read a runbook that says "migrate-prod always goes after
 deploy-prod", it predates this date.**
 
-⚑ **Corrected on 2026-08-26, and this drops the central claim of this block.** It said `backup-prod` was *"the ONLY rollback that exists"* and that *"there's no `restore-prod` or any rollback target"*. That was true: the `pg_restore` recipe was printed in an `echo` nobody had ever run. Now there's **continuous WAL archiving with pgBackRest** (PITR) and a real **`make restore-prod`**, with explicit confirmation. Setup, cron and the order — which isn't obvious: the stanza is created with archiving TURNED OFF — in `README.md` § *Copias de seguridad y recuperacion*.
+⚑ **Corrected on 2026-08-26, and this drops the central claim of this block.** It said `backup-prod` was *"the ONLY rollback that exists"* and that *"there's no `restore-prod` or any rollback target"*. That was true: the `pg_restore` recipe was printed in an `echo` nobody had ever run. Now there's **continuous WAL archiving with pgBackRest** (PITR) and a real **`make restore-prod`**, with explicit confirmation. Setup, cron and the order — which isn't obvious: the stanza is created with archiving TURNED OFF — in `docs/operations/backups.md`.
 
 ⛔ **The watchdog isn't `failed_count`.** That `pg_stat_archiver` counter is cumulative and never resets: a healthy cluster carries the pre-stanza failures forever (measured: 7 with archiving working perfectly). What decides it is whether `last_failed_time` is LATER than `last_archived_time`. And if archiving breaks, Postgres RETAINS the WAL and `pg_wal` fills the disk until writes stop. `make pgbackrest-status-prod` checks both.
 
