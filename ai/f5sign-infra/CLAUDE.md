@@ -30,7 +30,7 @@ Infrastructure repo for the F5Sign product. Contains the Docker orchestration (l
 bumped **Node 20 -> 24** (20 has been OUT OF SUPPORT since 2026-04-30), **Redis 7 -> 8** and
 **RabbitMQ 4.0 -> 4.2**. ⛔ **RabbitMQ can't go past 4.2** even if the broker ships 4.3: the
 `delayed-message-exchange` plugin stays at v4.2.0 and its series has to track the broker's.
-PostgreSQL 16 -> 18 was done the same day (see README § *PostgreSQL*). EU DSS stays at
+PostgreSQL 16 -> 18 was done the same day (see `docs/operations/postgresql.md`). EU DSS stays at
 6.4: 6.5 only has an RC1.
 
 ## Repo structure
@@ -131,7 +131,7 @@ All commands run from the root of **this** repo:
 | Deploy signer ONLY | `make deploy-signer` (bumps `SIGNER_TAG` in `.env.prod`) |
 | **Deployment-window backup** | **`make backup-prod LABEL=...`** — the floor of the cutover, see below |
 | **Restore prod** | **`make restore-prod CONFIRM=si-restaurar`** — destructive; `TARGET="fecha hora"` for PITR |
-| Continuous backup (full/incremental) | `make backup-full-prod` / `make backup-incr-prod` (cron; see README) |
+| Continuous backup (full/incremental) | `make backup-full-prod` / `make backup-incr-prod` (cron; see `docs/operations/backups.md`) |
 | WAL archiving status | `make pgbackrest-status-prod` — ⛔ the watchdog, see below |
 | Secrets no DB backup covers | `make backup-secrets` (.env.prod + seal.p12 + certs, encrypted) |
 | **Migrations in prod** | **`make migrate-prod`** — ⛔ does not go inside `deploy-prod`, see below |
@@ -140,7 +140,7 @@ All commands run from the root of **this** repo:
 | Only download the release images | `make pull-prod` (without touching what's running) |
 
 > **I'm not listing the 21 `*-prod` targets here**, since that's the list that goes stale.
-> `make help` lists all of them; **`README.md` § *Despliegue en preprod / produccion* §5 gives the SEQUENCE**,
+> `make help` lists all of them; **`docs/operations/deploy.md` §5 gives the SEQUENCE**,
 > which is what actually matters and doesn't fit in a table: there are two, one for additive releases and
 > one for releases that aren't.
 
@@ -172,11 +172,11 @@ independent compatibilities, and both need to be asked:
 - ⛔ **Additive but the new code REQUIRES the column**: the trap. It's additive, so the old rule said
   to deploy first — and the new code would start up against a table missing the column. You have to
   **migrate first**. Real case that exposed this: the `epoch_floor_position` the backend adds to
-  `platform.event_checkpoint` so the relay survives a dump/restore (see README PostgreSQL section,
+  `platform.event_checkpoint` so the relay survives a dump/restore (see `docs/operations/postgresql.md`,
   the note on the transaction counter).
 
 Whoever prepares the release is the one who has to answer both questions. The complete sequence, with the
-cutover window, is in `README.md` §5; don't duplicate it here.
+cutover window, is in `docs/operations/deploy.md` §5; don't duplicate it here.
 
 ⚑ **Added on 2026-08-26, and this drops a line that until today was the recommended one.** `migrate-prod` runs
 the console in an **ephemeral container of the NEW image** (`docker compose run --rm --no-deps -u www-data`),
@@ -196,7 +196,7 @@ deploy-prod", it predates this date.**
 non-additive migration is destructive by definition — a `DROP COLUMN`'s doesn't give the data back. The target
 verifies what it produces and **deletes the file if it fails**, so nothing that looks like a backup is left behind. In a
 cutover window there are **two** backups with different `LABEL=` values and only the one taken after the cutover gets
-restored; the reasoning is in `README.md` §5.
+restored; the reasoning is in `docs/operations/deploy.md` §5.
 
 > **Tests ALWAYS run in Docker, never locally** (don't pollute the
 > machine with dependencies). See "Frontend tests in Docker" below.
@@ -579,7 +579,7 @@ PAdES B-LT signing tests and eIDAS validation **must** depend on `dss-wait-tl`. 
 - ⛔ **Don't assume the seal is good because a sealing test is green.** A test that asserts structure (there's a `ByteRange`, the PDF grows) passes the same way with a demo identity. The only thing that tells them apart is checking subject/issuer: `make seal-check-prod`, or by hand `GET /services/rest/server-signing/key/{alias}`.
 - In dev the seal is deliberately self-signed (`CN=F5Sign Dev Seal`) and validation returns `INDETERMINATE`: that's what's stated in the backend's ADR-0023 and isn't a failure. What got fixed wasn't that, but whose key it was.
 
-**Moving a machine from the demo keystore to your own seal is NOT a normal `deploy-prod`** — the host material goes before the image (if the password file is missing NOTHING starts, not just `eu-dss`) and the first deployment blocks itself with its own gate. The procedure, with the escape hatch you need exactly once, is in `README.md` § *Despliegue en preprod / produccion* → *Migracion del sello*; don't duplicate it here.
+**Moving a machine from the demo keystore to your own seal is NOT a normal `deploy-prod`** — the host material goes before the image (if the password file is missing NOTHING starts, not just `eu-dss`) and the first deployment blocks itself with its own gate. The procedure, with the escape hatch you need exactly once, is in `docs/operations/deploy.md` → *Seal migration*; don't duplicate it here.
 
 ## Conventions
 
