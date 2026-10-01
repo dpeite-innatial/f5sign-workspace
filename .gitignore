@@ -29,6 +29,7 @@
 /f5sign-backend-step-policy/
 /f5sign-backend-ending-notice/
 /f5sign-signer-adr0073/
+/f5sign-backend-email-identity/
 
 # IDE / OS / local
 .idea/
