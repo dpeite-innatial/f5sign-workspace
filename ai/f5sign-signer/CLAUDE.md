@@ -9,7 +9,7 @@ Signing frontend for the signer in F5Sign. Public experience (no account require
 - **Pinia** 3.x (via `@pinia/nuxt` 0.11.x) for state management
 - **Tailwind CSS** 3.x with mobile-safe reset (iOS anti-zoom)
 - **vue-i18n** (via `@nuxtjs/i18n` 10.x) — `es` and `en` locales in the MVP (in `i18n/locales/`, not in `app/`), detection via `navigator.language` and query `?lang=`. `language` property (replaces `iso` from v8).
-- **@vueuse/core** 11.x for utility composables
+- **No `@vueuse/core`**: it is not a dependency, whatever older notes say. Composables use the browser API directly (`useTheme` reads `matchMedia`).
 - **zod** for validation
 - **pdfjs-dist** for inline PDF rendering
 - **ofetch** (via `$fetch`) as HTTP client
