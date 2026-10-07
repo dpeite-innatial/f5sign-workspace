@@ -25,7 +25,19 @@
   - Rewording `consent_biometric_required` for the checkbox.
 - **The image's top margin is the signer's job** (maintainer chose option (a)): it leaves about 6 % transparent margin
   in the PNG. This is added to the TASK-053 handoff.
-- **Still to do:** when the implementing agent reports, run the gates and merge.
+- **Stopped mid-build at the maintainer's request (no tests run today). UNCOMMITTED work in the worktree:**
+  - Modified: `config/services.yaml`, `DssPayloadMapper.php`, and the `DssHttpAdapterTest` and
+    `DssPayloadMapperTest` tests.
+  - New: `assets/signature-execution/` (the font advance table), `bin/generate-mark-font-advances`,
+    `Infrastructure/Pdf/MarkFont.php` and `Infrastructure/Pdf/MarkTextLayout.php`, plus the tests
+    `MarkFontTest`, `MarkTextLayoutTest` and `Integration/MarkTextFitTest`.
+  - The agent's plan is in `var/task-runner/mark-text/plan.md`. It was editing the mapper test when stopped.
+  - The lane is down.
+- **To resume:**
+  1. Read `plan.md` and `git diff`.
+  2. Run `wt-backend-up`, then TDD the remaining pieces.
+  3. Run the handoff margin line and the `consent_biometric_required` rewording (not yet done).
+  4. Run a full regression via test-runner, then gates, then merge.
   - Mind the trail: if a mark shows an ellipsized name, the trail must still be truthful (ADR-0072).
 
 ### B — TASK-054 (spec only, branch `docs/task-054-signature-modes`, pushed, worktree `f5sign-backend-task-054`)
