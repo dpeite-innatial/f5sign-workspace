@@ -203,6 +203,10 @@ table, the same method in every fake and spy of a port, a changed signature at e
 repetition goes to the `replicator` agent (`.claude/agents/replicator.md`, which declares its own model).
 Call it **without `model:`**.
 
+⛔ **Never a fork to delegate.** A fork inherits the launcher's model, ignoring `model:`, and re-reads the
+whole conversation on every turn, so it costs more than doing the edit yourself. The `replicator` takes a
+closed brief. If the work needs your context to be understood, it was not mechanical and is not delegable.
+
 **What may be delegated. This is the whole list, not examples:**
 
 | Kind | Agent |
