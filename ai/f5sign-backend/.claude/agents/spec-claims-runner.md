@@ -32,13 +32,27 @@ implementing agent an hour or a wrong build.
    mail provider, a browser): say whether anything in the tree already proves it (a test, a measured
    note). If nothing does, report it as `unmeasured` — do not call the service yourself.
 5. **Contradictions** between the task and its ADR, or with an accepted ADR it does not say it amends.
+6. **Causal and exclusivity claims**: anything about order, triggers, or a set being complete. Examples:
+   *"X happens before Y"*, *"Z is emitted when…"*, *"the reactor on W does…"*, *"this can only mean…"*,
+   *"nothing else writes/deletes/clears it"*, *"the backstop is…"*, *"the envelope cannot end meanwhile"*,
+   and claims about the design's own future behaviour that rest on today's events.
+   - For each, **census the code**: every place that records or emits the event, every writer of the state, and
+     every path that reaches it. Then check that the claim holds on all of them.
+   - Read the event's own docblock: several facts here say outright what they are **not**. For example,
+     `EnvelopeVoided` is "the instant the envelope CLOSED, not the instant it ended".
+   - An *only*, *never* or *cannot* with no census behind it is `UNVERIFIABLE`, never TRUE.
+   - Why: TASK-053's first backstop was a session purge that does not exist. Its replacement was a reactor on
+     "each terminal fact", which treated the close facts as ends. Both read true until the emitters were opened.
 
 ## Rules
 
 - You report; you do not fix, and you do not reopen decisions the record says were taken. A decision you
   disagree with is not a finding; a decision resting on a false claim is.
 - Only what is checkable against this tree. No style comments on the prose.
-- Write the full report to `var/task-runner/TASK-NNN/spec-claims.report.md`.
+- You have no `Write`. Return the full report in your last message, before the JSON. The orchestrator saves it to
+  `var/task-runner/TASK-NNN/spec-claims.report.md`.
+- On a re-run, the prompt names the passages that changed since your last run. Check those first and in full,
+  including category 6: they were written to answer your previous findings, and nothing has checked them yet.
 
 ## Last message: the summary JSON
 

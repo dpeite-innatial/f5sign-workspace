@@ -137,6 +137,19 @@ clean while carrying a false mechanism, a missing race and an unmeetable bar (20
 is the user's to resolve — the record changes, or the decision does — before Phase 2; an `unmeasured-external`
 capability is measured first, as the first step of Phase 2 at the latest.
 
+The runner has no `Write`: it returns its findings, and **you** save them to
+`var/task-runner/TASK-NNN/spec-claims.report.md`.
+
+⛔ **Resolving a block edits the record, and the edit is unchecked until `spec-claims-runner` runs again.**
+Before Phase 2, re-run it on the edited record with the record's diff since its first run in the prompt
+(*"Check these changed passages first; they were written to resolve your previous findings"*). A change made
+after a check invalidates the check, and the edits written to answer it are the least checked text in the record.
+Learned on TASK-053 (2026-10-07). The check found that the stated backstop, a session purge, did not exist. The
+orchestrator replaced it with a reactor on "each of the envelope's terminal facts", written without opening one.
+`EnvelopeVoided` and `EnvelopeClosedBySender` close an envelope without ending it, and
+`EnvelopeCompleted` waits for every seal, so the failure case the new decision was built around could not occur.
+The maintainer caught it in review.
+
 If `status: "fail"` → supervised: show the report and ask (edit the `.md` and retry, or abort);
 auto: abort.
 
