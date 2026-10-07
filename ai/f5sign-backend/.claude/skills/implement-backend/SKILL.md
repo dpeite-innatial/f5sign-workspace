@@ -44,9 +44,10 @@ session's model; escalate only after a repeated failure with a diagnosis that ju
 
 - Code + tests committed on the task's branch.
 - `var/task-runner/TASK-NNN/plan.md` and `context-digest.md`.
-- Final JSON: `{"status":"pass|fail","summary":"...","filesChanged":N,"testsAdded":N,"attempts":N,"diagnosis":"...","last_green_run":{"sha":"…","tests":N,"assertions":M,"harness":"…"}}`
+- Final JSON: `{"status":"pass|fail","summary":"...","filesChanged":N,"testsAdded":N,"attempts":N,"diagnosis":"...","last_green_run":{"sha":"…","tests":N,"assertions":M,"harness":"…"},"delegated":[{"what":"…","targets":N,"agent":"replicator|Explore","outcome":"accepted|fixed-by-hand|redone-by-hand"}]}`
   — `last_green_run` is the full run of every tier at the end (*Validation cadence*); `task-validate-backend`
-  reuses it instead of running the suite again when its `sha` is still the tip.
+  reuses it instead of running the suite again when its `sha` is still the tip. `delegated` lists every
+  delegation of Step 3b, `[]` when there was none; `task-close` records it so the saving can be measured.
 
 ## Execution
 
@@ -76,6 +77,10 @@ session's model; escalate only after a repeated failure with a diagnosis that ju
 | Property | Tier | Does the harness reach it? |
 |---|---|---|
 
+## Delegable work
+| Work | Targets (count) | Own / delegated | Agent | Reference instance |
+|---|---|---|---|---|
+
 ## Decisions made
 ## Deviations from the .md
 ## Final status
@@ -87,6 +92,11 @@ cannot distinguish lock from no-lock), `async_events` is `in-memory://` (nothing
 Infection only looks at `src/F5Sign` and doesn't see code with no callers. A property whose harness can't
 reach it needs another tier or a probe
 ([`ProbesRowLocks`](../../../tests/F5Sign/Support/ProbesRowLocks.php) already exists).
+
+**The "Delegable work" table is not optional either.** Every piece of work that repeats a shape across 3 or
+more targets gets a row, and Step 3b decides whether it goes to the `replicator`. If nothing qualifies, write
+one line saying so and why. Leaving the table empty is the failure it exists to prevent: on TASK-053,
+delegation was offered in the brief as an option and was never used.
 
 **Plan gate:** if ambiguity that can't be resolved with the available context shows up while planning →
 return `status: fail` with an explicit `diagnosis` (`"spec contradictorio"` / `"contexto insuficiente"`)
@@ -186,6 +196,49 @@ slow tiers run **once, when the task is complete**, not per commit.
   agent you launched has finished or been stopped. On TASK-046 two wait loops outlived the agent that
   started them by over an hour, and kept notifying the orchestrator about work that was already done.
 
+### Step 3b — Delegate replication to the `replicator`
+
+The owner's priority is token cost, and part of every task is the same shape repeated: the cases 2..N of a
+table, the same method in every fake and spy of a port, a changed signature at every caller. That
+repetition goes to the `replicator` agent (`.claude/agents/replicator.md`, which declares its own model).
+Call it **without `model:`**.
+
+**What may be delegated. This is the whole list, not examples:**
+
+| Kind | Agent |
+|---|---|
+| Replicate a shape that already exists **and is pinned by a passing test**: the remaining cases of a table, the same method in each fake, spy or implementation of a port | `replicator` |
+| Propagate a changed signature to every caller PHPStan names | `replicator` |
+| Add an attribute or annotation to a list you have already censused (`#[SensitiveParameter]`, `#[UsesClass]`, `services.yaml` entries) | `replicator` |
+| Edit prose from an explicit before/after list | `replicator` |
+| Read a large file or log and return what matters | `Explore` with `model: "haiku"` |
+
+⛔ **Never delegated:**
+- domain, use cases and guards;
+- migrations;
+- the **first** instance of any shape;
+- sabotages;
+- `#[OA\*]` strings;
+- deciding which claim is stale;
+- anything that needs a choice between two shapes.
+
+**Threshold: 3 targets or more.** Below that, writing the brief costs more than the edit.
+
+**The loop:**
+1. **You write the brief.** It names:
+   - the reference instance (file and symbol);
+   - the exact list of targets (file and symbol);
+   - the rule that maps the reference onto each target;
+   - what must not be touched;
+   - the filtered test command that must pass.
+2. **The `replicator` edits and returns the list of what it changed.** It has no Bash, so it cannot run
+   tests, touch git or commit.
+3. **You review its `git diff`, run the filtered test, and commit.** The authoring rules stay yours. Read
+   every hunk: a copied docblock copies its claim (the repo's authoring rule 2).
+4. **Two failed rounds and you do it yourself.** A third brief costs more than the edit.
+
+Record each delegation in `plan.md` and in the final JSON's `delegated`.
+
 **Retry policy:** 3 edit-test iterations per test. After that, diagnosis:
 `"poorly written test"` → fail; `"spec contradictorio"` / `"contexto insuficiente"` → fail **without
 escalating**; `"exceeds the model"` → fail with `diagnosis: "escalate"`.
@@ -276,4 +329,3 @@ line of the response: the JSON.
   the prose corrections rule 1 requires in the same changeset.
 - Doesn't open a PR (`pr-ready`) or update the task's `Status` (`task-close`).
 - Doesn't explore beyond what the task cites: if context is missing, `status: fail` with a diagnosis.
-</content>

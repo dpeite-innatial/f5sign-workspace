@@ -80,7 +80,14 @@ Content, and empty subsections are written as "None" instead of omitted:
 
 ### Debt left behind, and where it lives now
 - {each with its home: this task's §Open follow-ups, a BL-NNN row, or the ADR that records it}
+
+### Delegated work
+- {from implement's JSON `delegated` (its Step 3b): what, how many targets, which agent, and the outcome
+  (accepted / fixed by hand / redone by hand) — or "None, and why", from plan.md's *Delegable work* table}
 ```
+
+The *Delegated work* subsection is how the saving gets measured: over a few tasks it shows whether the
+`replicator`'s output is accepted or keeps being redone by hand.
 
 ### Step 4 — Every deferral and every learning, to a durable home
 

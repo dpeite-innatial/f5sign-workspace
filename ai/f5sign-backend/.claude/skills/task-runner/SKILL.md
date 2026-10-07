@@ -163,7 +163,8 @@ Agent({
 })
 ```
 
-No `model:`: it inherits the session's.
+No `model:`: it inherits the session's. Its `plan.md` carries a *Delegable work* table, and its JSON carries
+`delegated`: the repetition it hands to the `replicator` agent (its Step 3b). Log that list in `run.log`.
 
 ⚑ **Everything the agent must follow goes in this brief or in its skill, before it starts.** A message sent
 to a running agent reaches it only at its next tool call; on TASK-046 a cadence change sent mid-phase
