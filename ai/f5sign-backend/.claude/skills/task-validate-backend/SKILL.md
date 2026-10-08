@@ -83,6 +83,13 @@ suites as *"(target)"*, i.e. not yet built: `--testsuite Unit` errors out.
 
 ### Step 2 — Structural strength: covered-MSI, not line percentage
 
+⛔ **Only when the brief says `infection: final`.** In the first Phase-3 pass the brief says `infection: deferred`:
+skip this step and report it as `"infection":"deferred"`, never as a pass. Infection takes about 35 minutes on this
+suite, and the gates that run beside you often send the branch back for a fix round. A covered-MSI measured on a tip
+that is about to change is spent twice. On TASK-054 (2026-10-08) it ran beside a `contract-check` that found a
+blocker, and the fix round made that measurement stale. The orchestrator calls you again with `infection: final` once
+nothing is left to fix (task-runner Phase 3b), and then this step is the whole of your job.
+
 ```bash
 WT_GATES="infection" make -C ../f5sign-infra wt-backend src=$(pwd)   # worktree (reuses the kept lane)
 make -C ../f5sign-infra composer cmd="infection"                    # main checkout

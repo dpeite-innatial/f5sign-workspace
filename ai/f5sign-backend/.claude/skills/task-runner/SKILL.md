@@ -209,7 +209,7 @@ reads the tree and `changes.diff`, so none waits on another.
 Agent({
   subagent_type: "task-validate-runner",      // or "doctrine-guard-runner" / "contract-check-runner"
   description: "task-validate on TASK-NNN",
-  prompt: "Task: {mdPath}. Workspace: var/task-runner/TASK-NNN/ (changes.diff is there). Harness: {the one from precondition 5}. last_green_run: {sha, tests, assertions, harness, log from Phase 2's JSON}. Paths you may touch: {list}. Report anything outside them, do not edit it. {For every gate except task-validate:} Do not run tests on the lane: cite last_green_run; if you need a run it does not cover, say so in your report. Return the JSON summary as the last line of your response."
+  prompt: "Task: {mdPath}. Workspace: var/task-runner/TASK-NNN/ (changes.diff is there). Harness: {the one from precondition 5}. infection: deferred (Phase 3b runs it once, at the end). last_green_run: {sha, tests, assertions, harness, log from Phase 2's JSON}. Paths you may touch: {list}. Report anything outside them, do not edit it. {For every gate except task-validate:} Do not run tests on the lane: cite last_green_run; if you need a run it does not cover, say so in your report. Return the JSON summary as the last line of your response."
 })
 Agent({
   subagent_type: "security-audit-runner",
@@ -250,6 +250,25 @@ Rules for the split (parallel agents on the same tree):
 
 If a hard gate fails → supervised: show the report and ask (retry Phase 2 with the report as context, max 2
 iterations, or abort); auto: abort.
+
+⚑ **From a worktree, every brief names the workspace and the tree by ABSOLUTE path.** A subagent resolves
+`var/task-runner/TASK-NNN/` against the session's own directory, the main checkout. On TASK-054 two gates looked for
+`changes.diff` there and found nothing, and one gate wrote its report there.
+
+### Phase 3b — Infection, once, on the tip nothing will change
+
+Phase 3 launches `task-validate-runner` with **`infection: deferred`**. Infection, about 35 minutes here, runs **only
+after**:
+- every gate has passed;
+- every fix round (Phase 2 retried with a gate's report) is committed;
+- no blocker, no warning you chose to fix, and no unrecorded deviation is left.
+
+Then launch `task-validate-runner` once more with **`infection: final`** and the tip's `last_green_run`. If that tip
+changes `src/` again afterwards, Infection runs again: the covered-MSI you cite is the one measured on the tip you
+merge.
+
+Learned on TASK-054 (2026-10-08): Infection ran beside a `contract-check` that found a blocker, and the fix round made
+its 84% stale before anyone read it.
 
 ### Phase 4 — Non-gate validations
 
