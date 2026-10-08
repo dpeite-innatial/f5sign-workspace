@@ -207,13 +207,18 @@ restored; the reasoning is in `docs/operations/deploy.md` §5.
   code bind-mounts, no xdebug, no MinIO, no debug ports.
 - **`docker-compose.override.yml`** — **dev**, auto-loads with `docker compose up`
   (`make up`). This is where the dev-only services live (dev caddy, dashboard, signer,
-  minio/minio-init, **mailpit**), the code bind-mounts, xdebug and the published
+  minio/minio-init, **messagepit**), the code bind-mounts, xdebug and the published
   ports. List them in the file itself, which is where they won't go stale.
 
   ⚑ **Mailpit is the dev SMTP sink, and until 2026-08-26 this document only named it as a
   dependency of the worktree lane** — meaning an agent wanting to check a notification email had
   nowhere to look. `MAILER_DSN` points there in dev; in prod **there's no Mailpit** and that
   variable is a `:?` that has to carry a real transport.
+  ⚑ **Since 2026-10-08 the dev sink is MessagePit** (a Mailpit fork, same UI and `/api/v1`), which
+  also captures SMS: the backend's dev `SMS_DSN` is `twilio://…@messagepit:8200?…&tls=0`. The service
+  keeps the network alias `mailpit`. ⚠ The worktree lane still runs plain Mailpit, on purpose: its
+  `.env.test` and the suite target it. MessagePit 1.3.0 does **not** implement the `+1500555xxxx`
+  error numbers its README lists (measured: all 201), so Twilio refusals can't be provoked from dev.
 - **`docker-compose.prod.yml`** — **prod**, explicit (`-f docker-compose.yml -f
   docker-compose.prod.yml`, does not load the override). Own images from GHCR
   (`image:` + `pull_policy: always`), `APP_ENV=prod`, object storage on AWS/Linode
@@ -262,7 +267,7 @@ there since the target existed.)
 | MinIO API (S3) | `127.0.0.1:9100` | `9000` | `minioadmin` / `minioadmin` |
 | MinIO Console | `http://127.0.0.1:9101` | `9001` | Web UI |
 | EU DSS | `127.0.0.1:8080` | `8080` | Exposed only in dev (override); healthy != TLs loaded |
-| Mailpit (UI + SMTP sink) | `http://127.0.0.1:8025` | `8025` | **Where emails land in dev.** No credentials |
+| MessagePit (UI + SMTP + Twilio sink) | `http://127.0.0.1:8025` | `8025` | **Where emails AND SMS land in dev.** SMTP `messagepit:1025`, Twilio `messagepit:8200` (internal) |
 
 Shortcuts: `make psql`, `make redis-cli`, `make rabbit-console`, `make minio-console`, `make mc cmd="ls local/"`, `make smoke-deep`.
 
