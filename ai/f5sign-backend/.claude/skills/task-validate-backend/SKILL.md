@@ -16,18 +16,18 @@ Hard gate for functional quality. Always invoked.
 ## Inputs
 
 - `var/task-runner/TASK-NNN/changes.diff`
+- `var/task-runner/TASK-NNN/plan.md` — its `§ Sweep terms` (Step 5) and `§ Deviations` (Step 4b)
 - The task's `.md` — its **scope** and **verification** sections, located by intent: records place
   them at different section numbers
 
 ## Outputs
 
 - `var/task-runner/TASK-NNN/validate.report.md`
-- `var/task-runner/TASK-NNN/test-results.xml` (JUnit) — ⚠ **only if explicitly requested**:
-  `phpunit.dist.xml` has no `<logging>` block and `composer test` doesn't pass `--log-junit`, so Step 1's
-  command as it stands **produces no file**. To cross-check against the verification section, add
-  `--log-junit var/task-runner/TASK-NNN/test-results.xml` to the phpunit invocation, or read the names
-  from stdout
-- JSON: `{"status":"pass|fail","summary":"...","issues":[...],"harness":"...","msi":0.91,"propertiesUnproven":[]}`
+- No JUnit file: `phpunit.dist.xml` has no `<logging>` block, and on a worktree lane `var/` is a per-lane
+  volume, so a `--log-junit` under it never reaches the host (the only host-visible path is the worktree itself,
+  where an untracked file would dirty the tree). Cross-check the verification section against the run's stdout
+  and its skipped/risky list
+- JSON: `{"status":"pass|fail","summary":"...","issues":[...],"harness":"...","msi":0.91,"propertiesUnproven":[],"criteriaWithoutTest":[]}`
 
 ## Critical precondition — declare the harness, and check it points to YOUR tree
 
@@ -58,8 +58,8 @@ If a service is down during the run → `status: fail`, `summary: "infrastructur
 ### Step 1 — Suite
 
 ⚑ **Reuse the implementation's full run when it covers the tip.** The orchestrator passes
-`last_green_run` (`sha`, counts, harness) from `implement-backend`, whose last act is a full run of every
-tier. If `git rev-parse --short HEAD` equals that `sha`, the working tree is clean, and the harness was a
+`last_green_run` (`sha`, counts, harness) from its Phase 2c, a full run of every tier once all slices have
+landed. If `git rev-parse --short HEAD` equals that `sha`, the working tree is clean, and the harness was a
 full run of **your** tree (the worktree lane, or `make test` in the main checkout), cite it and **do not
 run the suite again**: a second full run on the same commit proves nothing new and costs ~5 minutes. Any
 commit after it, or a dirty tree, and you run it:
@@ -141,7 +141,7 @@ ruleset), `phpstan.dist.neon`, or adds entries to `phpstan-baseline.neon`:
       rule is relaxed, which finding is silenced. It's the only way a reviewer will see it.
 - [ ] **Require an ADR cited in the changeset** → if there isn't one: `fail`, category
       `undeclared-decision`. Extending the allowlist so the gate passes **is the decision**, not the fix
-      (`implement-backend` Step 2b).
+      (`plan-backend` § Decision gate).
 
 **b) The four load-bearing shapes of `deptrac.yaml`, read as data.**
 
@@ -227,6 +227,21 @@ and read their output instead of reproducing them**; if a case is missing, add i
 Whatever can't be proven with this harness goes to `propertiesUnproven` and is `fail` if the task
 declared it proven.
 
+### Step 4b — Every criterion has a test that cites it (TASK-055 and later)
+
+For a record with the criteria table of [`docs/tasks/README.md`](../../../docs/tasks/README.md) §8, and for the
+plan's `V-n` ids of an earlier one:
+
+- [ ] For each live id and sub-id (not struck through; a row split into sub-ids is covered by its sub-ids):
+      `rg -n '@criterion TASK-NNN\b[^\n]*\b<id>\b' tests/` finds at least one test method. An id no test cites →
+      `fail`, listed under *Criteria without a test*.
+- [ ] No citing method is in the cited run's skipped or risky list: a citing test that did not run proves
+      nothing.
+- [ ] Each id's harness matches the table's *Tier / harness* column, or the deviation is recorded in
+      `plan.md § Deviations` → otherwise `warn`.
+
+Step 4 still applies on top: a test that cites an id but whose harness cannot see the property is not proof.
+
 ### Step 5 — The diff doesn't stray outside the declared scope
 
 This task format **doesn't carry a "files to create/modify" table** (that was the legacy `Planning/`).
@@ -236,9 +251,10 @@ The target is the prose of the scope section, with its **In** and **Out** lists:
 - [ ] Nothing in the diff falls under something declared **Out** → if it does: `fail` category
       `out-of-scope`.
 - [ ] Files outside what was anticipated but not forbidden: `warn` category `undeclared-file`.
-- ⚑ If the change re-scopes or renames a concept, check the rule 1 sweep:
-      `rg -n '<retired-term>' src tests migrations docs config CLAUDE.md`. A file that still needs
-      the edit shows up with an **empty diff**, so the diff is not the search surface.
+- [ ] **The rule 1 sweep, always**, with the terms of `plan.md § Sweep terms`:
+      `rg -n '<term>' src tests migrations docs config CLAUDE.md`. A file that still needs
+      the edit shows up with an **empty diff**, so the diff is not the search surface. A hit the diff did not
+      touch → `fail` category `stale-prose`.
 
 ### Step 6 — Migrations (if the diff touches `migrations/`)
 
@@ -271,6 +287,9 @@ target uses `$(PHP_ADMIN)`); and `--dry-run` **only prints SQL**, so it says not
 
 ## Declared and unproven properties
 - {claim from the verification section} → the harness doesn't reach it because {reason}
+
+## Criteria without a test
+- {AC-n / S-n / V-n, or "none"}
 
 ## Outside §Scope
 - {list or "none"}

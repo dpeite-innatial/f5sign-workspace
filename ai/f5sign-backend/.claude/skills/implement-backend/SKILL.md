@@ -1,167 +1,81 @@
 ---
 name: implement-backend
-description: 'Implements a backend task (PHP/Symfony) from docs/tasks/ with property-driven TDD, respecting the domain kernel, the separation between BCs (only the other''s Contract/) and the authorship rules in CLAUDE.md. Stops and asks the user before making any cross-cutting decision — contradicting an accepted ADR, opening a new cross-BC dependency, touching Kernel/Foundation or editing deptrac/phpstan: it drafts the ADR as Proposed and waits for explicit acceptance, never marking it Accepted on its own. Reads the task''s .md (what already exists, the scope and the verification, located by intent rather than by section number), writes code + tests at the tier used by its siblings, annotates endpoints with Nelmio, and produces context-digest.md and plan.md. Only for repositories with a PHP/Symfony stack. Use it with /implement-backend TASK-NNN. Trigger with "implement backend TASK-NNN", "code PHP task...", "run backend implementation of...".'
+description: 'Implements ONE slice of a planned backend task (PHP/Symfony) with property-driven TDD: reads only its slice file and constraints.md, writes the slice''s tests first, watches them fail, implements, sabotages the guard, commits, and returns one of DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED. Stops instead of deciding when the code does not match the slice or a cross-cutting decision appears. Launched by /task-runner Phase 2b through the slice-implementer agent; the plan comes from plan-backend.'
 ---
 
-# Implement (backend)
+# Implement (backend) — one slice
 
-Implementation of a task via property-driven TDD.
+You implement one slice of a task that `plan-backend` already planned. The slice says what to build, which
+files, which reference to imitate, which tests to write and how to verify. **Design decisions were made in
+the plan; your job is to carry them out exactly, and to stop when one is missing.**
 
 > **Before writing code, read the [CLAUDE.md authorship rules](../../../CLAUDE.md).** They exist
 > because the failure each one describes **happened in this repo, on a branch with `make qa` green**, and no
 > gate sees them. This skill references them; it does not duplicate them, because a copy goes out of sync.
 
-## Invocation
-
-```
-/implement-backend TASK-NNN
-/implement-backend {path to the .md}
-/implement-backend TASK-NNN --amplified-context
-```
-
-**No model selection via `Complejidad`**: that field doesn't exist in this task format. It inherits the
-session's model; escalate only after a repeated failure with a diagnosis that justifies it.
-
 ## Inputs
 
-- The task's `.md`, in full. Three sections govern the work: **what already exists** (reuse, don't
-  rebuild), **the scope** (what is touched and what isn't) and **the verification** (the bar).
-  ⚠ **Locate them by intent, not by number.** Records place the scope and the verification at different
-  section numbers, and "what already exists" appears as *What was built*, *What will be built*, *Design grounding*, *Locked decisions*
-  or *The model*. `docs/tasks/README.md` §2 explicitly says the headings vary with the work, so
-  addressing by `§N` is the closed list that the convention itself forbids.
-- Whatever its `Builds on` and `Decision record` fields cite.
-- Fixed references, always:
-  - [`CLAUDE.md`](../../../CLAUDE.md) — conventions + authorship rules
-  - [`docs/LOAD-BEARING.md`](../../../docs/LOAD-BEARING.md) — what looks like duplication and isn't, plus
-    the **Never** list of changes already proposed and rejected, with their reason
-  - [`docs/adr/`](../../../docs/adr/) — the decision that governs the area you touch (repo rule 7)
-  - The docblocks of `src/F5Sign/Kernel/` for the categories you use: they are the canonical definition
-    (`grep -rnE "Kernel (sub-)?category" src/F5Sign/Kernel/` to enumerate them)
-  - [`tests/README.md`](../../../tests/README.md) — tiers, layout and the `P-§` convention
+The orchestrator names, by absolute path:
+
+- the slice: `var/task-runner/TASK-NNN/slices/NN.md`;
+- `var/task-runner/TASK-NNN/constraints.md`;
+- the worktree you work in;
+- on a fix round, the path of the findings file (`slices/NN.findings.md`) and, when the orchestrator escalated, a
+  `Model: opus` line.
+
+Read those, and the files the slice names. ⛔ **Not the task's `.md` and not `plan.md`**: what you need from them
+is in the slice and in `constraints.md`, and reading the rest is the context growth this split exists to avoid.
 
 ## Outputs
 
-- Code + tests committed on the task's branch.
-- `var/task-runner/TASK-NNN/plan.md` and `context-digest.md`.
-- Final JSON: `{"status":"pass|fail","summary":"...","filesChanged":N,"testsAdded":N,"attempts":N,"diagnosis":"...","last_green_run":{"sha":"…","tests":N,"assertions":M,"harness":"…"},"delegated":[{"what":"…","targets":N,"agent":"replicator|Explore","outcome":"accepted|fixed-by-hand|redone-by-hand"}]}`
-  — `last_green_run` is the full run of every tier at the end (*Validation cadence*); `task-validate-backend`
-  reuses it instead of running the suite again when its `sha` is still the tip. `delegated` lists every
-  delegation of Step 3b, `[]` when there was none; `task-close` records it so the saving can be measured.
+- Commits on the task's branch.
+- `var/task-runner/TASK-NNN/slices/NN.report.md`, with these sections: `## Step 1 check` (3 lines: file opened,
+  symbol expected, found), tests written, red reason seen, sabotage performed, files changed, `## Delegated`,
+  `## Claims`, `termsChanged`, `registers`, anything you noticed outside the slice. A fix round appends
+  `## Round N` and does not rewrite the report.
+- Last line, JSON: `{"status":"DONE|DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED","slice":"NN","summary":"…","commits":["sha"],"covers":["AC-1"],"testsAdded":N,"concerns":[],"question":"…","delegated":[],"termsChanged":[],"registers":[{"symbol":"…","wiredIn":"…"}]}`
+  (`termsChanged`: retired terms and symbols whose behaviour changed; `registers`: what this slice wired, per
+  its *Registers* section).
 
 ## Execution
 
-### Step 1 — Context
+### Step 1 — Check the slice against the code before writing anything
 
-1. Read the full `.md`.
-2. Read what §2, `Builds on` and `Decision record` cite.
-3. Read the fixed references above.
-4. ⚑ **If you're going to write a class modeled on an existing one: `ls` the directory and read ALL the
-   siblings**, not just the first one that fits. Where two siblings differ, the difference is a bug in one
-   or a decision — figure out which before copying (authorship rule 3; here a new controller copied the
-   wrong sibling and reintroduced a 500 that had already been fixed and documented).
+Open the reference instance and every file the slice says to modify. If what you find does not match what the
+slice says — a symbol that is not there, a reference that does something else, a test that already passes —
+**stop**: `NEEDS_CONTEXT`, with what the slice expected, what is there, and why it matters. Don't adapt the
+plan on your own. If the slice is unclear before you have edited anything, return `NEEDS_CONTEXT` with no
+commits.
 
-### Step 2 — Plan
+Also stop, whatever the slice says, if doing it would:
 
-`var/task-runner/TASK-NNN/plan.md`:
+- need a choice between two shapes that the slice does not make;
+- touch a file outside the slice's *Files*;
+- trigger any item of the decision gate (`plan-backend` § Decision gate: an accepted ADR contradicted, a new cross-BC
+  dependency, Kernel/Foundation, deptrac/phpstan/baseline, a new realization pattern). That is `BLOCKED`, with
+  the decision named. You never draft the ADR here.
 
-```markdown
-# Plan — TASK-NNN
+### Step 2 — TDD loop
 
-## Execution order (TDD)
-1. [TEST] tests/F5Sign/<BC>/<tier>/...Test::<name>  — property: {P-§ or the claim in §5}
-2. [CODE] src/F5Sign/<BC>/...
-...
-
-## Harness per property
-| Property | Tier | Does the harness reach it? |
-|---|---|---|
-
-## Delegable work
-| Work | Targets (count) | Own / delegated | Agent | Reference instance |
-|---|---|---|---|---|
-
-## Decisions made
-## Deviations from the .md
-## Final status
-```
-
-**The "Harness per property" table is not optional.** It's where it's decided, *before* writing the test,
-whether the chosen tier can see the property: `Integration/` runs one connection under DAMA rollback (it
-cannot distinguish lock from no-lock), `async_events` is `in-memory://` (nothing gets redelivered),
-Infection only looks at `src/F5Sign` and doesn't see code with no callers. A property whose harness can't
-reach it needs another tier or a probe
-([`ProbesRowLocks`](../../../tests/F5Sign/Support/ProbesRowLocks.php) already exists).
-
-**The "Delegable work" table is not optional either.** Every piece of work that repeats a shape across 3 or
-more targets gets a row, and Step 3b decides whether it goes to the `replicator`. If nothing qualifies, write
-one line saying so and why. Leaving the table empty is the failure it exists to prevent: on TASK-053,
-delegation was offered in the brief as an option and was never used.
-
-**Plan gate:** if ambiguity that can't be resolved with the available context shows up while planning →
-return `status: fail` with an explicit `diagnosis` (`"spec contradictorio"` / `"contexto insuficiente"`)
-and **implement nothing**.
-
-### Step 2b — Decision gate: an ADR is not skipped, and it is not coined alone either
-
-⛔ **Stop and ask the user if the work does any of these things.** This is not a list of suspicious
-cases: it is the operative definition of "cross-cutting decision" in this repo (rule 7).
-
-| Trigger | Why it is a decision |
-|---|---|
-| Contradicts an **accepted** ADR | Contradicting it is an ADR change, never a silent edit |
-| Opens a new **cross-BC** dependency | Access between BCs is only through `Contract/`; extending it changes the map |
-| Changes a contract of `src/F5Sign/Kernel/` or `src/F5Sign/Foundation/` | It's substrate: everything inherits it |
-| Edits the ruleset or layers of [`deptrac.yaml`](../../../deptrac.yaml), `phpstan.dist.neon`, or adds to `phpstan-baseline.neon` | **You are editing the rule that judges you** |
-| Introduces a new realization pattern (use case shape, adapter, reactor) | The next one will copy it |
-
-**What to do, in this order:**
-
-1. **Stop before writing the code the decision governs.** Not "implement first, document later": the
-   ADR is the input to the code, not its record.
-2. **Draft the ADR as `Proposed`**, with the section template from
-   [`docs/adr/AUTHORING.md`](../../../docs/adr/AUTHORING.md) — including `Consequences` with its three
-   sublists (**Risks is not optional**) and `Counterpoint` if there's a credible alternative. The id is
-   coined with the `AUTHORING.md` sweep, **run at that moment and from the repo root**.
-3. **Present it to the user and wait for explicit acceptance.** What is decided, what alternative is
-   discarded, and **what it forbids from now on**. Silence is not acceptance; `status: fail` with
-   `diagnosis: "awaiting-adr-acceptance"` and stop there.
-4. ⛔ **Never write `Accepted` on your own.** In this set *Accepted* means **exercised**, not
-   agreed ([`AUTHORING.md`](../../../docs/adr/AUTHORING.md) § status): an ADR that no one has exercised
-   yet stays `Proposed`, and setting it to `Accepted` falsifies the state of the repo.
-5. **If the user rejects it**, the decision is not yours: trim the scope or change approach and go back
-   to the plan gate. Don't implement it "in a smaller way" so the ADR isn't needed.
-6. **When the ADR lands, it lands complete — that's FIVE places**, and `AUTHORING.md` § *Maintenance when
-   adding an ADR* lists them: (1) index row, (2) relationship graph and (3) crosswalk row in
-   [`docs/adr/README.md`](../../../docs/adr/README.md), plus the `Crosswalk` field in the header and the
-   sections the template requires; (4) **making the ADR reachable from the code it governs** with
-   `(ADR-NNNN)` references in the docblocks —*"only the pair makes the decision discoverable in both
-   directions"*—; and (5) **reconciling the affected domain model** in `docs/ddd/` and its status row in
-   `docs/ddd/README.md`. The last two are what AUTHORING calls *"each conditional but each easy to
-   forget"*, and they are exactly the ones this list used to omit.
-
-⚑ **The case that slips through most often: extending the allowlist to make the gate green.** If
-`composer arch` fails, the answer is **not** to add the layer to the list of allowed dependencies — that
-edit *is* the decision, and it silences the one thing that was watching it. Same with a new entry in
-`phpstan-baseline.neon`: every entry in that file is a design finding with its *why* written down, not
-a suppressor.
-
-### Step 3 — TDD loop
-
-For each property in the verification section, in order:
+For each test of the slice, in the order the slice lists them:
 
 1. **Write the test** in the tier used by its siblings (`ls` the BC's test directory; being the only
    `*UseCase.php` with no `*UseCaseTest.php` next to it is the signal, and it has always been right). It
    must carry:
    - `#[CoversClass]` or `#[CoversNothing]` — `phpunit.dist.xml` has `requireCoverageMetadata="true"`
    - `#[UsesClass]` for collaborators, **including the exceptions the test asserts**
-   - The `P-§` citation in the docblock if the property is catalogued (`tests/README.md`)
+   - The criterion it proves, cited in the method's docblock as `@criterion TASK-NNN AC-2a S-1` (grammar:
+     [`docs/tasks/README.md`](../../../docs/tasks/README.md) §8; the plan's `V-n` use the same form), beside the
+     `P-§` citation if the property is catalogued (`tests/README.md`). A row split into sub-ids is cited per sub-id.
 2. **Run it and watch it fail for the right reason** (not a syntax error, not a missing class), directly
    with `make`, not through `test-runner` (see *Validation cadence* below):
-   `make -C ../f5sign-infra wt-backend-test src=$(pwd) only='<Class>::<method>' | tail -30`.
+   `make -C ../f5sign-infra wt-backend-test src=$(pwd) only='<Class>::<method>' | tail -30`. Compare the red
+   reason with the slice's *Guard that must fire* column: a test red for another reason does not prove the guard.
    ⛔ Never a hand-rolled `docker run` on `f5sign-net`: it shares the Postgres cluster and gives false
    reds in the relay (BL-138).
-3. **Write the minimal production code.**
+3. **Write the minimal production code.** A docblock states only what the slice's *Prose to write* gives you or
+   what you verified in the tree this session; never copy the reference's rationale. List each
+   X-because-Y you wrote in the report's `## Claims` (claim → `file:symbol`).
 4. **Green.**
 5. ⚑ **Sabotage the guard and watch the test fail for the right reason; restore it.** This is the step
    that catches tests that can't fail, and without it the property isn't proven — it's just asserted.
@@ -175,17 +89,18 @@ slow tiers run **once, when the task is complete**, not per commit.
 
 | When | What | How |
 |---|---|---|
-| Once, at the start (worktree) | bring the lane up and keep it | `make -C ../f5sign-infra wt-backend-up src=$(pwd)` |
+| Once, at the start (worktree) | check the lane is up | `make -C ../f5sign-infra wt-ls`; if it is absent → `BLOCKED` |
 | Every red/green step | the test you are writing — **whatever its tier**, Acceptance included | `wt-backend-test src=$(pwd) only=<regex>` (~8 s), directly |
 | Before each commit | static gates + hermetic tiers | `WT_GATES="lint arch phpstan test" WT_TIERS=fast make -C ../f5sign-infra wt-backend src=$(pwd) \| tail -40`, directly |
-| Task complete, before handing back | full suite + gates, every tier | the `test-runner` agent (no `model:`), which runs `wt-backend` on the kept lane |
+| All slices landed | full suite + gates, every tier | the orchestrator, through `test-runner` (Phase 2c), not you |
 
 - A commit validated this way is green on the **fast tier only**. Say so in its body; the branch's green is
-  the final full run, and that is the one you cite (`last_green_run`).
+  the orchestrator's final full run.
 - From the main checkout instead of a worktree, the same split with the shared stack:
   `make -C ../f5sign-infra test-db-setup` once, then `make -C ../f5sign-infra composer cmd="test -- --filter <X>"`.
 - ⛔ Never Infection and never `qa` here: Infection runs once, in `task-validate-backend`.
-- Leave the lane up when you finish; the orchestrator tears it down (`wt-backend-down`).
+- The lane is the orchestrator's: it is already up. Don't bring it up or tear it down.
+- **Turn budget:** no green test after about 60 tool calls → `NEEDS_CONTEXT` or `BLOCKED`, with what you tried.
 - ⛔ **Wait for a subagent (`test-runner` or any other) by its completion notification, never by polling
   its output file.** That file stays empty — the result arrives as a notification — so a loop such as
   `until grep -q reported <task>.output; do sleep 10; done` never matches and holds the whole task until the
@@ -195,10 +110,10 @@ slow tiers run **once, when the task is complete**, not per commit.
 - ⛔ **Return with nothing of yours still running.** Before the final JSON, every background command and
   agent you launched has finished or been stopped. On TASK-046 two wait loops outlived the agent that
   started them by over an hour, and kept notifying the orchestrator about work that was already done.
+### Step 2b — Delegate replication
 
-### Step 3b — Delegate replication to the `replicator`
-
-The owner's priority is token cost, and part of every task is the same shape repeated: the cases 2..N of a
+**Only when the slice says `Tier: critical` or the fix-round brief says `Model: opus`**; on sonnet,
+doing the edit yourself costs the same as briefing another sonnet. The owner's priority is token cost, and part of every task is the same shape repeated: the cases 2..N of a
 table, the same method in every fake and spy of a port, a changed signature at every caller. That
 repetition goes to the `replicator` agent (`.claude/agents/replicator.md`, which declares its own model).
 Call it **without `model:`**.
@@ -241,13 +156,11 @@ closed brief. If the work needs your context to be understood, it was not mechan
    every hunk: a copied docblock copies its claim (the repo's authoring rule 2).
 4. **Two failed rounds and you do it yourself.** A third brief costs more than the edit.
 
-Record each delegation in `plan.md` and in the final JSON's `delegated`.
+Record each delegation in the report's `## Delegated` and in the final JSON's `delegated`.
 
-**Retry policy:** 3 edit-test iterations per test. After that, diagnosis:
-`"poorly written test"` → fail; `"spec contradictorio"` / `"contexto insuficiente"` → fail **without
-escalating**; `"exceeds the model"` → fail with `diagnosis: "escalate"`.
-
-### Step 4 — OpenAPI (if you touch `UI/Http/` or `config/routes/`)
+**Retry policy:** 3 edit-test iterations per test. After that, stop: `BLOCKED` with what you tried and what
+you saw (Step 6).
+### Step 3 — OpenAPI (if you touch `UI/Http/` or `config/routes/`)
 
 - `#[OA\Response]` for every **reachable** HTTP code, `#[OA\RequestBody]`, DTOs with typed
   `#[OA\Property]`, security scheme if the route is protected.
@@ -255,8 +168,8 @@ escalating**; `"exceeds the model"` → fail with `diagnosis: "escalate"`.
   aren't internal comments: one of them ended up telling clients to send a value the endpoint doesn't
   accept. They're covered by the rule 1 sweep.
 - Verify: `make -C ../f5sign-infra sf cmd="nelmio:apidoc:dump --format=json"` completes without error.
-
-### Step 5 — Non-negotiable rules
+- The strings come from the slice's *Prose to write*; you write none of your own.
+### Step 4 — Non-negotiable rules
 
 - **The domain doesn't import Symfony or Doctrine.** Deptrac (`composer arch`) and the PHPStan placement
   rules watch this; if you spot it before they do, redo it.
@@ -265,13 +178,13 @@ escalating**; `"exceeds the model"` → fail with `diagnosis: "escalate"`.
   `SessionContract`, `SignatureExecutionContract`, `IdentityAccessContract`… and **no other BC's `Domain`
   or `Infrastructure`**. `Kernel` depends on nothing (`Kernel: []`). If you need data that only lives in
   another BC's `Domain`, the answer is a read port in its `Contract/` (ADR-0008), not an import — and
-  **that's Step 2b**, not a decision made while implementing.
+  **that is a decision**: `BLOCKED` (Step 1), not something settled while implementing.
 - ⚑ **Notification is a support BC: nothing can depend on it** (ADR-0037, category (c)). The gate **does**
   catch this: deptrac's `ruleset` is a **positive allowlist** and the repo runs with `Uncovered 0`, so a
   class that depends on a disallowed layer produces `DependsOnDisallowedLayer`. What it **can't** catch
   going red is **adding the entry to the allowlist**: that doesn't violate anything, it just stops
   watching. So the question when reviewing isn't *"does deptrac pass?"* but *"does this diff touch
-  `deptrac.yaml`?"* — and if it does, that's Step 2b, not a decision made while implementing.
+  `deptrac.yaml`?"* — and if it does, that is a decision: `BLOCKED` (Step 1), not something settled while implementing.
 - **Only aggregate roots have a repository.** Subordinate entities are modified through their root.
 - **Commands through the bus; queries via direct call.** ADR-0008: **there is no QueryBus**, and a
   `QueryHandler` is realized with a direct `handle(Query): R` — its §Counterpoint expressly rejects
@@ -298,8 +211,7 @@ escalating**; `"exceeds the model"` → fail with `diagnosis: "escalate"`.
 - **A schema change is a migration**, and if the migration writes rows the domain later reads,
   authorship rule 6 applies (enumerate the aggregate states the row falls under; prefer a predicate that
   states the property — `sent_at IS NOT NULL` — over one that enumerates today's states).
-
-### Step 6 — Commits
+### Step 5 — Commits
 
 **No single-commit policy.** This repo integrates multi-commit PRs and merges from `develop`; an
 `--amend` on something already pushed forces `--force-with-lease` for no gain. Small, coherent commits,
@@ -307,29 +219,29 @@ each with a message that says *why*, and `git add` of specific files (never `git
 
 Before the last commit:
 
-1. `git status` must not bring in anything the task's scope declares **Out**.
+1. `git status` must not bring in anything outside the slice's *Files*, nor anything `constraints.md` declares **Out**.
 2. If the change re-scoped, renamed or re-gated a concept: rule 1 sweep, in one command —
    `rg -n '<retired-term>' src tests migrations docs config CLAUDE.md`. **The diff is not the search
    surface**: a file that still needs the edit shows up with an empty diff. And `CLAUDE.md` is part of the
    sweep: it's the one surface that doesn't just go stale but starts **giving bad instructions**.
 3. If the task discharges an ADR deferral, or makes something an ADR had marked pending come true, that
    ADR's `Status` / `Enforced by` / `Realized in` go **in this changeset** (authorship rule 7).
+### Step 6 — Report and status
 
-### Step 7 — `context-digest.md`
+| Status | When |
+|---|---|
+| `DONE` | Every test of the slice written, seen red for the right reason, green; sabotage done; committed |
+| `DONE_WITH_CONCERNS` | Done, and something deserves a look before review: a docblock claim you could not verify, a smell outside the slice, a test that only reaches the property indirectly |
+| `NEEDS_CONTEXT` | Step 1 found the slice and the code disagree, or the slice leaves a fact out |
+| `BLOCKED` | A decision the slice does not make, a Step 1 stop, or the retry policy ran out |
 
-≤150 lines: what was implemented · business rules applied · data model touched · contracts
-affected (API and events) · invariants preserved · decisions made and why · binding ADRs ·
-what's left out (with task id if it exists).
-
-### Step 8 — `plan.md § Final status` and JSON
-
-New tests and green, sabotages performed, module suite, files modified, deviations. Last
-line of the response: the JSON.
+`question` carries what you need, stated so the orchestrator can answer it or route it. Write the report, then
+the JSON as the last line.
 
 ## What it does NOT do
 
+- Doesn't plan, re-scope or decide between shapes: the plan did, or the orchestrator will.
 - Doesn't audit security, compliance or performance.
 - Doesn't touch documentation outside the code (that's `docs-sync`), except Nelmio's inline OpenAPI and
   the prose corrections rule 1 requires in the same changeset.
-- Doesn't open a PR (`pr-ready`) or update the task's `Status` (`task-close`).
-- Doesn't explore beyond what the task cites: if context is missing, `status: fail` with a diagnosis.
+- Doesn't run the full suite or Infection: the orchestrator does, once all slices land.

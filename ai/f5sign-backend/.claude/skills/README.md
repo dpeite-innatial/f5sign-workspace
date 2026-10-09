@@ -11,6 +11,8 @@ The adaptation goes in phases. This table is the actual status, measured on **20
 |---|---|---|
 | `spec-lint` | ✅ adapted | — |
 | `implement-backend` | ✅ adapted | — |
+| `plan-backend` | ✅ native | Written for the slice flow (`task-runner` Phase 2a); not yet run against a real task |
+| `task-author` | ✅ native | Written for the record flow (`/task-author`); not yet run against a real task |
 | `task-validate-backend` | ✅ adapted | — |
 | `pr-ready` | ✅ adapted | — |
 | `task-runner` | ✅ adapted | — |

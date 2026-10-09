@@ -125,6 +125,25 @@ Sections are numbered (`## 1. …`) and cited as `§N` from other documents.
 - [ ] Numbering with no gaps or repeats, and **starting at 1**.
 - [ ] No empty sections (heading followed immediately by another heading).
 
+### Step 5b — Criteria table (TASK-055 and later)
+
+Applies to records numbered TASK-055 or higher and to any earlier record whose verification section is already a table with an `Id`
+column ([`docs/tasks/README.md`](../../../docs/tasks/README.md) §8); for any other record, skip it and say so in
+*Checks passed*.
+
+- [ ] The verification section carries the table with the columns of README §8 → if not: `fail`, category
+      `criteria-missing`.
+- [ ] Every id is `AC-n` or `S-n`, and none repeats → `fail`, category `criteria-id`.
+- [ ] No row has origin `proposed` → `fail`, category `criteria-unconfirmed`, naming each id: the owner has not
+      accepted it.
+- [ ] Every `derived` or `proposed` row names its source; every row names a tier or harness → `fail`, category
+      `criteria-incomplete`.
+- [ ] Every `<source>` resolves: an ADR file that exists, `rule N` of `CLAUDE.md` § *Authoring rules*, or a path
+      that exists → `fail`, category `criteria-source-unresolved`.
+- [ ] A row that says "every" or "each" lists its members as sub-ids (`AC-2a…`) in its notes → `warn`, category
+      `criteria-grouped`.
+- [ ] A struck-through id carries why it was dropped → `warn`, category `criteria-dropped-unexplained`.
+
 ### Step 6 — Self-containment
 
 - [ ] Every relative link resolves on disk → if not: `fail`, category `link-broken`.

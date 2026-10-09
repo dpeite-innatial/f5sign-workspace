@@ -26,7 +26,7 @@ mode).
 - Branch pushed to `origin`, PR opened against **`develop`**
 - Follow-up commit with the PR URL in the `.md`
 - `var/task-runner/TASK-NNN/pr-ready.report.md` — ⚠ `var/` may be owned by root and not let you write; in
-  that case, use the session's scratchpad and **say where it ended up** (`task-runner` Phase 0 documents this)
+  that case, use the session's scratchpad and **say where it ended up**
 - JSON: `{"status":"pass|fail","summary":"...","prUrl":"...","prNumber":N,"branchName":"...","draft":bool}`
 
 ## Execution

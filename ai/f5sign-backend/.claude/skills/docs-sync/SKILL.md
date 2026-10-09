@@ -90,7 +90,7 @@ Its question→document routing table is what someone new reads. If the map chan
 ### There's a cross-cutting decision → an ADR, and **only as `Proposed`**
 
 ⛔ **This skill does not accept decisions.** It drafts; the user accepts. It fully inherits
-`implement-backend`'s Step 2b gate:
+`plan-backend`'s Decision gate:
 
 - **The status vocabulary is `Proposed` · `Accepted` · `Superseded`.** There's no `draft`. And
   **`Accepted` means exercised, not agreed**: writing it here misrepresents the repo's state.

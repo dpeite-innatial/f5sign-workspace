@@ -1,6 +1,6 @@
 ---
 name: replicator
-description: Replicates a shape that already exists in the f5sign-backend tree onto an explicit list of targets — the remaining cases of a test table, the same method in every fake of a port, a changed signature at every caller, an attribute on a censused list, prose from a before/after list. Launched by implement-backend (its Step 3b) with a reference instance and the exact targets. Edits only; never runs tests, never touches git, never decides.
+description: Replicates a shape that already exists in the f5sign-backend tree onto an explicit list of targets — the remaining cases of a test table, the same method in every fake of a port, a changed signature at every caller, an attribute on a censused list, prose from a before/after list. Launched by implement-backend (its § Delegate replication, on a critical slice) with a reference instance and the exact targets. Edits only; never runs tests, never touches git, never decides.
 model: sonnet
 tools: Read, Edit, Write, Grep, Glob
 omitClaudeMd: true

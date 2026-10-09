@@ -11,7 +11,7 @@ Mechanical persistence validation. Invoked when the diff touches `migrations/`,
 ⛔ **This repo has no ORM.** `doctrine/orm` is not a dependency and **there isn't even a single
 `*.orm.xml`** (ADR-0018, pure DBAL), so there are no mappings to check. If the diff **adds** `doctrine/orm` or a `.orm.xml`,
 that reverts an accepted ADR → `fail`, category `retired-mechanism`, and it's the decision gate of
-`implement-backend` Step 2b.
+`plan-backend` § Decision gate.
 
 ## Invocation
 

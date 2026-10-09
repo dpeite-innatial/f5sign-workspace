@@ -19,9 +19,9 @@ learned from being lost**.
 
 ## Inputs
 
-- `var/task-runner/TASK-NNN/` — all `*.report.md`, `context-digest.md`, `plan.md`
-  (⚠ if `var/` is owned by root and the reports ended up in the scratchpad, read them from there;
-  `task-runner` Phase 0 says where they landed)
+- `var/task-runner/TASK-NNN/` — all `*.report.md`, `context-digest.md`, `plan.md` (its `§ Deviations`), and
+  `slices/*.report.md` and `slices/*.review.md`, read explicitly: they carry each slice's `## Delegated`,
+  `## Claims` and the findings left open
 - The task's `.md`, to edit it
 
 ## Outputs
@@ -70,7 +70,7 @@ Content, and empty subsections are written as "None" instead of omitted:
 - {diff files the scope didn't anticipate, or "None"}
 
 ### Decisions made during implementation
-- {from context-digest.md; each with its why}
+- {from context-digest.md and plan.md § Deviations; each with its why}
 
 ### Decisions that needed an ADR
 - {ADR-NNNN, proposed and accepted by the user on YYYY-MM-DD — or "None"}
@@ -82,8 +82,12 @@ Content, and empty subsections are written as "None" instead of omitted:
 - {each with its home: this task's §Open follow-ups, a BL-NNN row, or the ADR that records it}
 
 ### Delegated work
-- {from implement's JSON `delegated` (its Step 3b): what, how many targets, which agent, and the outcome
-  (accepted / fixed by hand / redone by hand) — or "None, and why", from plan.md's *Delegable work* table}
+- {from run.log's slice lines: each slice's tier, model, review rounds and status, so the saving of the split can
+  be measured; plus each slice report's `## Delegated` (implement-backend § Delegate replication) with its
+  outcome}
+
+### Cost of the run
+- {five lines copied from the orchestrator's Phase 7 table: totals per model, rounds, escalations}
 ```
 
 The *Delegated work* subsection is how the saving gets measured: over a few tasks it shows whether the
@@ -99,7 +103,7 @@ The real homes, by type:
 | What came up | Where it lives |
 |---|---|
 | Something decided and **not done** | This task's `§Open follow-ups` (the real home) **+ a row in `docs/BACKLOG.md`** indexing it back here |
-| A cross-cutting decision made | Its ADR. If it doesn't exist yet → that's `implement-backend` Step 2b, not a note |
+| A cross-cutting decision made | Its ADR. If it doesn't exist yet → that's `plan-backend` § Decision gate, not a note |
 | An ADR this task made true | That ADR's `Status` / `Enforced by` / `Realized in`, in this changeset (authoring rule 7) — see Step 4b, which is the one that executes it |
 | A guard no harness reaches | A BACKLOG row, citing what harness would be needed |
 | Prose that went stale in another file | Fixed now, not noted: that's the sweep from rule 1 |
@@ -111,7 +115,7 @@ absolute pathspec (`':(top)docs/BACKLOG.md'`) — the same fail-open bug the id 
 ### Step 4b — Moving an ADR from `Proposed` to `Accepted` (this skill owns it, with your OK)
 
 ⚑ **Nobody owned this transition, and that's why ADR-0018 and ADR-0035 kept saying *not yet* while
-their work was already in `master`.** `implement-backend` drafts the ADR as `Proposed` and stops; `docs-sync`
+their work was already in `master`.** `plan-backend` drafts the ADR as `Proposed` and stops; `docs-sync`
 can't mark it `Accepted`; and this is finally where you know what turned out green. So the state change is
 proposed **here**, and only here.
 
@@ -122,7 +126,7 @@ In this set, **`Accepted` means exercised**, not agreed upon. Therefore:
       implemented"* isn't enough: you have to name the artifact.
 - [ ] Fill in **`Enforced by (in-repo)`** and **`Realized in (in-repo)`** with those artifacts, by symbol or
       grep pattern, **never by line number**.
-- [ ] **Propose it to the user and wait for their OK**, the same way `implement-backend` does when coining it:
+- [ ] **Propose it to the user and wait for their OK**, the same way `plan-backend` does when coining it:
       *"ADR-NNNN moves from Proposed to Accepted because {artifact} exercises it"*. ⛔ Without a response, the
       field isn't touched.
 - [ ] If the task exercises **part** of the decision, there's a nuance for that: `Accepted (enforcement partial)`
@@ -160,13 +164,13 @@ There's no `--amend` to wait for: `pr-ready` doesn't rewrite history.
 ## Failure handling
 
 - An unreadable report → WARN, not FAIL.
-- No commit on the branch → FAIL: `implement-backend` never got to run.
+- No commit on the branch → FAIL: no slice of Phase 2b ever landed.
 - `.md` not parseable → FAIL.
 
 ## What it does NOT do
 
 - Doesn't open a PR (`pr-ready`).
-- Doesn't **draft** ADRs (`implement-backend` proposes them, `docs-sync` writes them) — but it **is** the one
+- Doesn't **draft** ADRs (`plan-backend` proposes them, `docs-sync` writes them) — but it **is** the one
   that moves their state when the task exercises them, with your confirmation (Step 4b).
 - Doesn't decide whether it gets published.
 - Doesn't fix code or tests.
