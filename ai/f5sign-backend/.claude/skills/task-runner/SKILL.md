@@ -382,6 +382,13 @@ Then launch `task-validate-runner` once more with **`infection: final`** and the
 changes `src/` again afterwards, Infection runs again: the covered-MSI you cite is the one measured on the tip you
 merge.
 
+⚑ **In the same message, launch Phase 5 (`docs-sync`) and Phase 6 (`task-close`) beside it.** They touch documentation
+only (`docs/`, the record, ADRs), never `src/` or `tests/`, so they cannot stale what Infection measures. An escaped
+mutant it reports is fixed by a test, plus at most one line in the record's deviations, and the closing work is not
+redone. Owner, 2026-10-09: about 20 minutes saved per task. **Only** these two: a gate that can send the branch back
+for a fix round still runs before Infection, never beside it. Announce the run to any other backend session first:
+it is a long run on the shared lane flock.
+
 Learned on TASK-054 (2026-10-08): Infection ran beside a `contract-check` that found a blocker, and the fix round made
 its 84% stale before anyone read it.
 

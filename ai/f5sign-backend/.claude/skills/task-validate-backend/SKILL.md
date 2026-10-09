@@ -84,23 +84,42 @@ suites as *"(target)"*, i.e. not yet built: `--testsuite Unit` errors out.
 ### Step 2 — Structural strength: covered-MSI, not line percentage
 
 ⛔ **Only when the brief says `infection: final`.** In the first Phase-3 pass the brief says `infection: deferred`:
-skip this step and report it as `"infection":"deferred"`, never as a pass. Infection takes about 35 minutes on this
-suite, and the gates that run beside you often send the branch back for a fix round. A covered-MSI measured on a tip
+skip this step and report it as `"infection":"deferred"`, never as a pass. Infection is a long run, and the gates that run beside you often send the branch back for a fix round. A covered-MSI measured on a tip
 that is about to change is spent twice. On TASK-054 (2026-10-08) it ran beside a `contract-check` that found a
 blocker, and the fix round made that measurement stale. The orchestrator calls you again with `infection: final` once
 nothing is left to fix (task-runner Phase 3b), and then this step is the whole of your job.
 
+⚑ **Per task, Infection mutates only the `src/` files the branch touches** (owner, 2026-10-09; first run on
+TASK-055). The whole-`src/` run took about 35 minutes and answered a question about the codebase, not about the task.
+
 ```bash
-WT_GATES="infection" make -C ../f5sign-infra wt-backend src=$(pwd)   # worktree (reuses the kept lane)
-make -C ../f5sign-infra composer cmd="infection"                    # main checkout
+FILES=$(git diff --name-only --diff-filter=AM "$(git merge-base HEAD develop)"..HEAD -- src/F5Sign | paste -sd,)
+make -C ../f5sign-infra wt-backend-infection src=$(pwd) \
+  args="--filter=$FILES --min-covered-msi=85 --min-msi=70"          # worktree (kept lane, resets DB + buckets first)
 ```
+
+- ⚠ **`wt-backend-infection` is requested from infra (2026-10-09) and may not exist yet**: `make -C ../f5sign-infra
+  help | grep infection`. Until it does, the lane gate takes no args and resets nothing when it runs alone, so do
+  not improvise a `docker exec`: report Infection as pending.
+- **`--filter`, not `--git-diff-lines`.** A worktree's `.git` points at a host path the lane container cannot see.
+  The filter takes whole files, so the untouched parts of a file you edited are mutated too.
+- **The thresholds go on the CLI, and `infection.json5.dist` stays as it is.** Its 79 / 50 are calibrated for the
+  whole of `src/`: `minMsi: 50` carries about a thousand uncovered mutants of old code and means nothing on a diff.
+  On the diff, **covered-MSI ≥ 85** (the codebase measured 84 % on TASK-053/054, so new code may not lower it) and
+  **MSI ≥ 70** (an uncovered mutant in changed code is, nearly always, new code with no test).
+- ⛔ **List every escaped mutant on a changed line**, each one killed by a new test or justified in the record's
+  deviations. The list says more than either percentage.
+- **The whole-`src/` run with the config's gates** (`WT_GATES="test infection" make -C ../f5sign-infra wt-backend
+  src=$(pwd)`, or `make -C ../f5sign-infra infection` in the main checkout) is the codebase's net, run before a
+  `develop` → `master` merge, not per task.
+- Report the run's duration, both percentages and the mutant list in `validate.report.md`.
 
 **This repo has no line-coverage threshold and one must not be invented.** The gate is Infection's
 covered-MSI (ADR-0035). `composer coverage:text` / `coverage:clover` exist for inspection, not as a bar.
 
-- **There are TWO gates and `composer infection` fails on either one.** `infection.json5.dist`
-  declares `minCoveredMsi` (depth: of what's covered, how much survives) **and `minMsi`** (breadth:
-  includes what isn't covered). Read both numbers from there, not from here or from memory.
+- **There are TWO gates and `composer infection` fails on either one**: `minCoveredMsi` (depth: of what's covered,
+  how much survives) **and `minMsi`** (breadth: includes what isn't covered). Per task they are the CLI values
+  above; on the whole-`src/` run they are `infection.json5.dist`'s. Read the latter from the file, not from memory.
 - ⛔ **If `minMsi` drops, don't fix it by attributing the broad flows.** The file itself warns about
   this: *"the cheapest way to raise MSI is to attribute the broad flows"* — and that undoes ADR-0035's
   two-tier rule. The fix is a test, not attribution.
