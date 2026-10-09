@@ -12,6 +12,18 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=$PWD; while [ \"$d\" != / ]; do [ -x \"$d/bin/require-agent-model.sh\" ] && exec bash \"$d/bin/require-agent-model.sh\"; d=$(dirname \"$d\"); done; exit 0",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

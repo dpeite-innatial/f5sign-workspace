@@ -43,6 +43,8 @@ The owner's priority is token cost. **Mechanical, high-volume work goes to a sub
 
 Keep reasoning, design, diagnosis and code decisions in the main session. Agents that declare their own model
 (the `*-runner` agents, `test-runner`) are called **without** `model:`, which would override theirs.
+A `PreToolUse` hook enforces it: `bin/require-agent-model.sh` (registered in `ai/shared/settings.json`) refuses
+an `Agent` launch that would inherit the session's model; its header says what it lets through.
 
 ## Tests (all subrepos)
 
