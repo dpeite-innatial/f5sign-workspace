@@ -100,6 +100,8 @@ make -C ../f5sign-infra wt-backend-infection src=$(pwd) \
 
 - **`args` is split on spaces**, like `WT_TEST_ARGS`: no space inside one argument, so the `--filter` list is
   comma-separated. The target empties the lane's DB and object store first and waits for the cluster to go idle.
+- **Its logs land in `<worktree>/var/wt-infection/`** (`infection.log` with the escaped and uncovered mutants,
+  `summary.log`, `per-mutator.md`), copied out of the lane after every run; read the mutant list from there.
 - **`--filter`, not `--git-diff-lines`.** A worktree's `.git` points at a host path the lane container cannot see.
   The filter takes whole files, so the untouched parts of a file you edited are mutated too.
 - **The thresholds go on the CLI, and `infection.json5.dist` stays as it is.** Its 79 / 50 are calibrated for the
