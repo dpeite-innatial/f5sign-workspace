@@ -1,0 +1,420 @@
+diff --git a/config/packages/nelmio_api_doc.yaml b/config/packages/nelmio_api_doc.yaml
+index b88f71f9..b8dcc014 100644
+--- a/config/packages/nelmio_api_doc.yaml
++++ b/config/packages/nelmio_api_doc.yaml
+@@ -113,7 +113,6 @@ nelmio_api_doc:
+                         - ASSERTION_NOT_ACCEPTED
+                         - ASSERTION_REQUIRED
+                         - CREDENTIAL_RETIRED
+-                        - DECLINE_NOT_OFFERED_IN_QUORUM_STEP
+                         - DECLINE_NOT_OFFERED_TO_ROLE
+                         - ENVELOPE_BUSY
+                         - ENVELOPE_NOT_SENT
+diff --git a/src/F5Sign/Envelope/Application/Query/GetEnvelopeContextForRecipientHandler.php b/src/F5Sign/Envelope/Application/Query/GetEnvelopeContextForRecipientHandler.php
+index ba534ba0..d0789e8e 100644
+--- a/src/F5Sign/Envelope/Application/Query/GetEnvelopeContextForRecipientHandler.php
++++ b/src/F5Sign/Envelope/Application/Query/GetEnvelopeContextForRecipientHandler.php
+@@ -62,7 +62,6 @@ final class GetEnvelopeContextForRecipientHandler implements QueryHandler
+             signingAssignments: $context->signingAssignmentsFor($query->recipientId),
+             fields: $context->fieldsFor($query->recipientId),
+             recipientStepIsActive: $context->recipientStepIsActive($recipient),
+-            recipientStepIsQuorum: $context->recipientStepIsQuorum($recipient),
+             closedAt: $context->closedAt,
+             completedAt: $context->completedAt,
+         );
+diff --git a/src/F5Sign/Envelope/Contract/View/EnvelopeContextView.php b/src/F5Sign/Envelope/Contract/View/EnvelopeContextView.php
+index 25a6a88d..7e2ce345 100644
+--- a/src/F5Sign/Envelope/Contract/View/EnvelopeContextView.php
++++ b/src/F5Sign/Envelope/Contract/View/EnvelopeContextView.php
+@@ -415,28 +415,6 @@ final readonly class EnvelopeContextView
+      * {@see \F5Sign\Envelope\Contract\View\RecipientView::isUnclaimedSlot()}, and for the same reason:
+      * one derivation, so no reader re-derives the question from the terms.
+      */
+-    /**
+-     * **Whether this recipient's step closes on a quorum** (`min_signatures`) rather than on every
+-     * member — the step a decline is refused in until quorum declines are built
+-     * ([ADR-0070](../../../../../docs/adr/ADR-0070-an-envelope-ends-in-agreement-or-is-voided-and-sealed.md)
+-     * §2.3).
+-     *
+-     * ⚑ **Matched by step id, and a step that cannot be found answers `true`** — the refusing
+-     * direction, the way {@see self::recipientStepIsActive()} fails closed. A positive quorum only:
+-     * `min_signatures` of `0` or `null` is an ordinary step, as {@see \F5Sign\Envelope\Domain\Entity\Step::isQuorumStep()}
+-     * reads it.
+-     */
+-    public function recipientStepIsQuorum(RecipientView $recipient): bool
+-    {
+-        foreach ($this->steps as $step) {
+-            if ($step->id->equals($recipient->stepId)) {
+-                return $step->minSignatures !== null && $step->minSignatures > 0;
+-            }
+-        }
+-
+-        return true;
+-    }
+-
+     public function recipientStepIsActive(RecipientView $recipient): bool
+     {
+         foreach ($this->steps as $step) {
+diff --git a/src/F5Sign/Envelope/Contract/View/RecipientEnvelopeContextView.php b/src/F5Sign/Envelope/Contract/View/RecipientEnvelopeContextView.php
+index e0ddd875..4d2a9a3e 100644
+--- a/src/F5Sign/Envelope/Contract/View/RecipientEnvelopeContextView.php
++++ b/src/F5Sign/Envelope/Contract/View/RecipientEnvelopeContextView.php
+@@ -77,13 +77,6 @@ final readonly class RecipientEnvelopeContextView
+          * site has to state it.
+          */
+         public bool $recipientStepIsActive,
+-        /**
+-         * Whether the recipient's step closes on a quorum — answered by
+-         * {@see \F5Sign\Envelope\Contract\View\EnvelopeContextView::recipientStepIsQuorum()} where the
+-         * steps are in hand, like {@see self::$recipientStepIsActive}. ⛔ Required, with no default: a
+-         * defaulted `false` would admit a decline in every quorum step at every call site that forgot it.
+-         */
+-        public bool $recipientStepIsQuorum,
+         /**
+          * When the envelope closed and when its lifecycle ended
+          * ([ADR-0073](../../../../../docs/adr/ADR-0073-step-policy-expiry-and-what-an-unagreed-envelope-keeps.md)
+diff --git a/src/F5Sign/Session/Application/Query/RecipientAuthContext.php b/src/F5Sign/Session/Application/Query/RecipientAuthContext.php
+index 8f3a9e93..32d5c05e 100644
+--- a/src/F5Sign/Session/Application/Query/RecipientAuthContext.php
++++ b/src/F5Sign/Session/Application/Query/RecipientAuthContext.php
+@@ -278,11 +278,6 @@ final readonly class RecipientAuthContext
+          * nothing.
+          */
+         public bool $recipientMayDecline = false,
+-        /**
+-         * Whether this recipient's step closes on a quorum, where a decline is refused until quorum
+-         * declines are built (ADR-0070 §2.3). Read as Envelope answers it, never re-derived here.
+-         */
+-        public bool $recipientStepIsQuorum = false,
+     ) {}
+ 
+     /**
+diff --git a/src/F5Sign/Session/Application/Query/RecipientAuthContextReader.php b/src/F5Sign/Session/Application/Query/RecipientAuthContextReader.php
+index 5bd21b6d..2f62ed97 100644
+--- a/src/F5Sign/Session/Application/Query/RecipientAuthContextReader.php
++++ b/src/F5Sign/Session/Application/Query/RecipientAuthContextReader.php
+@@ -223,11 +223,9 @@ final readonly class RecipientAuthContextReader
+             // is wrong in the permissive direction.
+             signableDocumentDigests: self::digestsOf($context),
+             signableDocumentSet: self::fingerprint($context->signingAssignments),
+-            // ⚑ Both asked of Envelope's own answers — the role's predicate and the step Envelope
+-            // resolved for this recipient — so the decline guard re-derives neither (ADR-0070 §2.3,
+-            // §2.4).
++            // ⚑ Asked of Envelope's own answer — the role's predicate — so the decline guard
++            // re-derives nothing (ADR-0070 §2.4).
+             recipientMayDecline: $context->recipient->role->mayDecline(),
+-            recipientStepIsQuorum: $context->recipientStepIsQuorum,
+             // Published on the pre-gate descriptor per the 2026-08-18 amendment to ADR-0049 §2.3.
+             documentTitle: $context->title,
+             locale: $context->recipient->locale?->value,
+diff --git a/src/F5Sign/Session/Application/UseCase/DeclineSignatureUseCase.php b/src/F5Sign/Session/Application/UseCase/DeclineSignatureUseCase.php
+index e72f65e1..625c5395 100644
+--- a/src/F5Sign/Session/Application/UseCase/DeclineSignatureUseCase.php
++++ b/src/F5Sign/Session/Application/UseCase/DeclineSignatureUseCase.php
+@@ -28,8 +28,8 @@ use F5Sign\Session\Domain\Repository\SigningSessionRepository;
+  *
+  * - **No field values, no consent, no signing challenge** — a decline authorizes nothing and records
+  *   nothing a form collected.
+- * - **Role and quorum are asked** — through the context the commit reads anyway, and handed to the
+- *   aggregate, which refuses them by name after the commit's own guards.
++ * - **The role is asked** — through the context the commit reads anyway, and handed to the aggregate,
++ *   which refuses it by name after the commit's own guards.
+  *
+  * ⛔ **Under the row lock, which is what orders a decline racing a commit.** Both acts load the same
+  * session row through `findLockedForUpdate()`, so they serialize: the second one to arrive finds the
+@@ -95,7 +95,6 @@ final readonly class DeclineSignatureUseCase implements UseCase
+         $session->guardDecline(
+             envelopeIsAlive: $auth->envelopeIsAlive,
+             roleMayDecline: $auth->recipientMayDecline,
+-            stepIsQuorum: $auth->recipientStepIsQuorum,
+         );
+ 
+         $admittedAt = $this->admission->decline(
+@@ -111,7 +110,6 @@ final readonly class DeclineSignatureUseCase implements UseCase
+             reason: DeclineReason::fromString($command->reason),
+             envelopeIsAlive: $auth->envelopeIsAlive,
+             roleMayDecline: $auth->recipientMayDecline,
+-            stepIsQuorum: $auth->recipientStepIsQuorum,
+             now: $admittedAt,
+         );
+ 
+diff --git a/src/F5Sign/Session/Domain/Aggregate/SigningSession.php b/src/F5Sign/Session/Domain/Aggregate/SigningSession.php
+index b6c5775c..83a93cac 100644
+--- a/src/F5Sign/Session/Domain/Aggregate/SigningSession.php
++++ b/src/F5Sign/Session/Domain/Aggregate/SigningSession.php
+@@ -1152,7 +1152,6 @@ final class SigningSession extends AggregateRoot
+      * 3. **The envelope must be live** — `ENVELOPE_NO_LONGER_LIVE`, the same answer as the commit's.
+      * 4. **The role must be one that may decline** — `DECLINE_NOT_OFFERED_TO_ROLE`, asked of
+      *    {@see \F5Sign\Envelope\Contract\Type\Role::mayDecline()} by the caller.
+-     * 5. **The step must not close on a quorum** — `DECLINE_NOT_OFFERED_IN_QUORUM_STEP` (D1c).
+      *
+      * The session asks the first three in the commit's order for the commit's reason (ADR-0067 §2.3):
+      * a void whose revocation has drained answers `SESSION_CLOSED`, one that has not answers
+@@ -1171,7 +1170,7 @@ final class SigningSession extends AggregateRoot
+      * ([ADR-0073](../../../../../docs/adr/ADR-0073-step-policy-expiry-and-what-an-unagreed-envelope-keeps.md)
+      * §2.1). `decline()` calls it first, so the guards live here once.
+      */
+-    public function guardDecline(bool $envelopeIsAlive, bool $roleMayDecline, bool $stepIsQuorum): void
++    public function guardDecline(bool $envelopeIsAlive, bool $roleMayDecline): void
+     {
+         if ($this->status->isTerminal()) {
+             throw SigningSessionStateException::sessionIsTerminal($this->id, $this->status);
+@@ -1188,19 +1187,15 @@ final class SigningSession extends AggregateRoot
+         if (!$roleMayDecline) {
+             throw SigningSessionStateException::declineNotOfferedToRole($this->id);
+         }
+-        if ($stepIsQuorum) {
+-            throw SigningSessionStateException::declineNotOfferedInQuorumStep($this->id);
+-        }
+     }
+ 
+     public function decline(
+         DeclineReason $reason,
+         bool $envelopeIsAlive,
+         bool $roleMayDecline,
+-        bool $stepIsQuorum,
+         DateTimeImmutable $now,
+     ): void {
+-        $this->guardDecline($envelopeIsAlive, $roleMayDecline, $stepIsQuorum);
++        $this->guardDecline($envelopeIsAlive, $roleMayDecline);
+ 
+         $this->status = SessionStatus::DECLINED;
+ 
+diff --git a/src/F5Sign/Session/Domain/Exception/SigningSessionStateException.php b/src/F5Sign/Session/Domain/Exception/SigningSessionStateException.php
+index 3f879fb1..837b5098 100644
+--- a/src/F5Sign/Session/Domain/Exception/SigningSessionStateException.php
++++ b/src/F5Sign/Session/Domain/Exception/SigningSessionStateException.php
+@@ -145,20 +145,6 @@ final class SigningSessionStateException extends ConflictException implements Pr
+         );
+     }
+ 
+-    /**
+-     * The recipient's step closes on a quorum, and a decline inside one is not built (ADR-0070 §2.3,
+-     * TASK-046 §4 D1c): its rule is written — void when the quorum becomes unreachable, record
+-     * otherwise — and deferred until quorum steps can be authored. Refused by name rather than handled
+-     * by code no real flow reaches.
+-     */
+-    public static function declineNotOfferedInQuorumStep(SigningSessionId $id): self
+-    {
+-        return new self(
+-            'A decline inside a quorum step is not available: ' . $id->toString(),
+-            'DECLINE_NOT_OFFERED_IN_QUORUM_STEP',
+-        );
+-    }
+-
+     /**
+      * **The access gate has not been passed** — the one condition here whose remedy is *prove
+      * something*, and the one deliberately left on the status default (ADR-0067 §2.4).
+diff --git a/src/F5Sign/Session/UI/Http/DeclineSignatureController.php b/src/F5Sign/Session/UI/Http/DeclineSignatureController.php
+index cc333ed9..c18f7a37 100644
+--- a/src/F5Sign/Session/UI/Http/DeclineSignatureController.php
++++ b/src/F5Sign/Session/UI/Http/DeclineSignatureController.php
+@@ -119,9 +119,7 @@ final readonly class DeclineSignatureController
+                     . '`STEP_NOT_ACTIVE` — the workflow has not reached this recipient yet; the same decline '
+                     . 'succeeds once their step opens. '
+                     . '`DECLINE_NOT_OFFERED_TO_ROLE` — this recipient\'s role may not decline (only SIGNER, '
+-                    . 'APPROVER and CERTIFIED_DELIVERY may); hide the action. '
+-                    . '`DECLINE_NOT_OFFERED_IN_QUORUM_STEP` — the recipient\'s step closes on a quorum, where a '
+-                    . 'decline is not available yet; hide the action.',
++                    . 'APPROVER and CERTIFIED_DELIVERY may); hide the action.',
+                 content: new OA\MediaType(
+                     mediaType: 'application/problem+json',
+                     schema: new OA\Schema(ref: '#/components/schemas/ProblemDetails'),
+diff --git a/tests/F5Sign/Envelope/Testing/Fake/RecipientContextProjection.php b/tests/F5Sign/Envelope/Testing/Fake/RecipientContextProjection.php
+index b613bfd4..1ea30113 100644
+--- a/tests/F5Sign/Envelope/Testing/Fake/RecipientContextProjection.php
++++ b/tests/F5Sign/Envelope/Testing/Fake/RecipientContextProjection.php
+@@ -53,7 +53,6 @@ final class RecipientContextProjection
+                 signingAssignments: $context->signingAssignmentsFor($query->recipientId),
+                 fields: $context->fieldsFor($query->recipientId),
+                 recipientStepIsActive: $context->recipientStepIsActive($recipient),
+-                recipientStepIsQuorum: $context->recipientStepIsQuorum($recipient),
+                 closedAt: $context->closedAt,
+                 completedAt: $context->completedAt,
+             );
+diff --git a/tests/F5Sign/Envelope/Unit/Contract/View/RecipientEnvelopeContextViewTest.php b/tests/F5Sign/Envelope/Unit/Contract/View/RecipientEnvelopeContextViewTest.php
+index 8f0b1fb3..19325886 100644
+--- a/tests/F5Sign/Envelope/Unit/Contract/View/RecipientEnvelopeContextViewTest.php
++++ b/tests/F5Sign/Envelope/Unit/Contract/View/RecipientEnvelopeContextViewTest.php
+@@ -138,7 +138,6 @@ final class RecipientEnvelopeContextViewTest extends TestCase
+             signingAssignments: [],
+             fields: [],
+             recipientStepIsActive: true,
+-            recipientStepIsQuorum: false,
+         );
+     }
+ }
+diff --git a/tests/F5Sign/Envelope/Unit/Contract/View/RecipientReadRulesTest.php b/tests/F5Sign/Envelope/Unit/Contract/View/RecipientReadRulesTest.php
+index f77def9b..c732a0b0 100644
+--- a/tests/F5Sign/Envelope/Unit/Contract/View/RecipientReadRulesTest.php
++++ b/tests/F5Sign/Envelope/Unit/Contract/View/RecipientReadRulesTest.php
+@@ -159,7 +159,6 @@ final class RecipientReadRulesTest extends TestCase
+             signingAssignments: [],
+             fields: [],
+             recipientStepIsActive: true,
+-            recipientStepIsQuorum: false,
+             closedAt: $closed ? $at->modify('+1 hour') : null,
+             completedAt: $completed ? $at->modify('+2 hours') : null,
+         );
+diff --git a/tests/F5Sign/Session/Application/Service/SigningTokenIssuanceTest.php b/tests/F5Sign/Session/Application/Service/SigningTokenIssuanceTest.php
+index 6146beb9..4a8b2bda 100644
+--- a/tests/F5Sign/Session/Application/Service/SigningTokenIssuanceTest.php
++++ b/tests/F5Sign/Session/Application/Service/SigningTokenIssuanceTest.php
+@@ -163,7 +163,6 @@ final class SigningTokenIssuanceTest extends TestCase
+             signingAssignments: [],
+             fields: [],
+             recipientStepIsActive: $withSteps->recipientStepIsActive($recipient),
+-            recipientStepIsQuorum: $withSteps->recipientStepIsQuorum($recipient),
+         );
+ 
+         return new class ($view) implements EnvelopeQueryInterface {
+diff --git a/tests/F5Sign/Session/Application/UseCase/CommitDelegatedSignatureUseCaseTest.php b/tests/F5Sign/Session/Application/UseCase/CommitDelegatedSignatureUseCaseTest.php
+index 351f1905..e4a60657 100644
+--- a/tests/F5Sign/Session/Application/UseCase/CommitDelegatedSignatureUseCaseTest.php
++++ b/tests/F5Sign/Session/Application/UseCase/CommitDelegatedSignatureUseCaseTest.php
+@@ -747,7 +747,6 @@ final class CommitDelegatedSignatureUseCaseTest extends TestCase
+             signingAssignments: [DocumentAssignment::fromPair($recipientId, $signed, signs: true, visible: true)],
+             fields: [],
+             recipientStepIsActive: $withSteps->recipientStepIsActive($recipient),
+-            recipientStepIsQuorum: $withSteps->recipientStepIsQuorum($recipient),
+             closedAt: $closed ? $sentAt->modify('+1 hour') : null,
+         );
+ 
+diff --git a/tests/F5Sign/Session/Application/UseCase/DeclineSignatureUseCaseTest.php b/tests/F5Sign/Session/Application/UseCase/DeclineSignatureUseCaseTest.php
+index 34adff1f..95976355 100644
+--- a/tests/F5Sign/Session/Application/UseCase/DeclineSignatureUseCaseTest.php
++++ b/tests/F5Sign/Session/Application/UseCase/DeclineSignatureUseCaseTest.php
+@@ -147,7 +147,6 @@ final class DeclineSignatureUseCaseTest extends TestCase
+     {
+         $this->assertRefusal('DECLINE_NOT_OFFERED_TO_ROLE', $this->envelopes()->withRole(Role::VIEWER));
+         $this->assertRefusal('DECLINE_NOT_OFFERED_TO_ROLE', $this->envelopes()->withRole(Role::REVIEWER), 'a deferred role answers as a refused one');
+-        $this->assertRefusal('DECLINE_NOT_OFFERED_IN_QUORUM_STEP', $this->envelopes()->onQuorumStep(2));
+         $this->assertRefusal('STEP_NOT_ACTIVE', $this->envelopes()->onDormantStep());
+         $this->assertRefusal('ENVELOPE_NO_LONGER_LIVE', $this->envelopes()->closed());
+         $this->assertRefusal(
+@@ -156,6 +155,28 @@ final class DeclineSignatureUseCaseTest extends TestCase
+         );
+     }
+ 
++    /**
++     * ⛔ **A decline inside a quorum step is no longer refused by Session's own pre-check** (ADR-0073
++     * §2.1, §2.6): the session lets it through and the envelope's admission judges it by the step
++     * policy, which does not end the envelope unless the minimum becomes unreachable — a rule Session
++     * does not ask about any more.
++     */
++    #[Test]
++    public function a_decline_inside_a_quorum_step_now_reaches_the_admission(): void
++    {
++        $sessions = $this->repository();
++
++        $this->useCase($sessions, $this->envelopes()->onQuorumStep(2))->execute($this->command());
++
++        self::assertSame(SessionStatus::DECLINED, $sessions->saved?->status());
++        self::assertCount(
++            1,
++            $this->envelopeCommand->recorded,
++            'the decline crosses to the envelope, which judges a quorum step by its own policy',
++        );
++        self::assertSame('DECLINE', $this->envelopeCommand->recorded[0]['act']);
++    }
++
+     /**
+      * ⛔ **The synchronous guard holds with the revocation never having run** (TASK-046 §5). A sibling's
+      * blocking decline voids the envelope; the reaction that would revoke this recipient's session
+diff --git a/tests/F5Sign/Session/Testing/Fake/FakeEnvelopeQuery.php b/tests/F5Sign/Session/Testing/Fake/FakeEnvelopeQuery.php
+index d8fe3c21..513b7503 100644
+--- a/tests/F5Sign/Session/Testing/Fake/FakeEnvelopeQuery.php
++++ b/tests/F5Sign/Session/Testing/Fake/FakeEnvelopeQuery.php
+@@ -268,7 +268,6 @@ final class FakeEnvelopeQuery implements EnvelopeQueryInterface
+             signingAssignments: $this->signingAssignments,
+             fields: [],
+             recipientStepIsActive: $withSteps->recipientStepIsActive($recipient),
+-            recipientStepIsQuorum: $withSteps->recipientStepIsQuorum($recipient),
+             closedAt: $this->closedAt,
+             completedAt: $this->completedAt,
+         );
+diff --git a/tests/F5Sign/Session/Unit/Domain/Aggregate/SigningSessionDeclineTest.php b/tests/F5Sign/Session/Unit/Domain/Aggregate/SigningSessionDeclineTest.php
+index 31970da1..be01c0d0 100644
+--- a/tests/F5Sign/Session/Unit/Domain/Aggregate/SigningSessionDeclineTest.php
++++ b/tests/F5Sign/Session/Unit/Domain/Aggregate/SigningSessionDeclineTest.php
+@@ -93,13 +93,12 @@ final class SigningSessionDeclineTest extends TestCase
+         self::assertSame('CONFLICT', $this->refusalFrom($this->beforeTheGate())->problemCode(), 'a session that never passed the gate');
+         self::assertSame('ENVELOPE_NO_LONGER_LIVE', $this->refusalFrom($this->open(), envelopeIsAlive: false)->problemCode());
+         self::assertSame('DECLINE_NOT_OFFERED_TO_ROLE', $this->refusalFrom($this->open(), roleMayDecline: false)->problemCode());
+-        self::assertSame('DECLINE_NOT_OFFERED_IN_QUORUM_STEP', $this->refusalFrom($this->open(), stepIsQuorum: true)->problemCode());
+     }
+ 
+     /**
+      * ⛔ **The order, where two guards apply at once.** The session is asked before the envelope — so a
+      * drained revocation still reads `SESSION_CLOSED` (ADR-0067 §2.3) — and the envelope before the
+-     * role and the quorum, so a dead envelope is never reported as a question about who may decline.
++     * role, so a dead envelope is never reported as a question about who may decline.
+      */
+     #[Test]
+     public function when_two_guards_apply_the_earlier_one_answers(): void
+@@ -115,11 +114,7 @@ final class SigningSessionDeclineTest extends TestCase
+         );
+         self::assertSame(
+             'ENVELOPE_NO_LONGER_LIVE',
+-            $this->refusalFrom($this->open(), envelopeIsAlive: false, roleMayDecline: false, stepIsQuorum: true)->problemCode(),
+-        );
+-        self::assertSame(
+-            'DECLINE_NOT_OFFERED_TO_ROLE',
+-            $this->refusalFrom($this->open(), roleMayDecline: false, stepIsQuorum: true)->problemCode(),
++            $this->refusalFrom($this->open(), envelopeIsAlive: false, roleMayDecline: false)->problemCode(),
+         );
+     }
+ 
+@@ -251,13 +246,11 @@ final class SigningSessionDeclineTest extends TestCase
+         SigningSession $session,
+         bool $envelopeIsAlive = true,
+         bool $roleMayDecline = true,
+-        bool $stepIsQuorum = false,
+     ): void {
+         $session->decline(
+             reason: DeclineReason::fromString(self::REASON),
+             envelopeIsAlive: $envelopeIsAlive,
+             roleMayDecline: $roleMayDecline,
+-            stepIsQuorum: $stepIsQuorum,
+             now: $this->now(),
+         );
+     }
+@@ -266,10 +259,9 @@ final class SigningSessionDeclineTest extends TestCase
+         SigningSession $session,
+         bool $envelopeIsAlive = true,
+         bool $roleMayDecline = true,
+-        bool $stepIsQuorum = false,
+     ): ProblemCoded&Throwable {
+         try {
+-            $this->decline($session, $envelopeIsAlive, $roleMayDecline, $stepIsQuorum);
++            $this->decline($session, $envelopeIsAlive, $roleMayDecline);
+         } catch (SigningSessionStateException|AuthGateRefusedException $refusal) {
+             return $refusal;
+         }
+diff --git a/tests/F5Sign/Session/Unit/Domain/Exception/SigningSessionStateMessageTest.php b/tests/F5Sign/Session/Unit/Domain/Exception/SigningSessionStateMessageTest.php
+index 89f41427..b222b996 100644
+--- a/tests/F5Sign/Session/Unit/Domain/Exception/SigningSessionStateMessageTest.php
++++ b/tests/F5Sign/Session/Unit/Domain/Exception/SigningSessionStateMessageTest.php
+@@ -144,7 +144,6 @@ final class SigningSessionStateMessageTest extends TestCase
+             'envelopeNoLongerLive' => [SigningSessionStateException::envelopeNoLongerLive($id), self::SESSION_ID],
+             'alreadyDeclined' => [SigningSessionStateException::alreadyDeclined($id), self::SESSION_ID],
+             'declineNotOfferedToRole' => [SigningSessionStateException::declineNotOfferedToRole($id), self::SESSION_ID],
+-            'declineNotOfferedInQuorumStep' => [SigningSessionStateException::declineNotOfferedInQuorumStep($id), self::SESSION_ID],
+         ];
+     }
+ }
+diff --git a/tests/F5Sign/Session/Unit/Domain/Exception/SigningSessionStateRefusalCensusTest.php b/tests/F5Sign/Session/Unit/Domain/Exception/SigningSessionStateRefusalCensusTest.php
+index acb13f03..6618855f 100644
+--- a/tests/F5Sign/Session/Unit/Domain/Exception/SigningSessionStateRefusalCensusTest.php
++++ b/tests/F5Sign/Session/Unit/Domain/Exception/SigningSessionStateRefusalCensusTest.php
+@@ -227,10 +227,6 @@ final class SigningSessionStateRefusalCensusTest extends TestCase
+                 static fn(): SigningSessionStateException => SigningSessionStateException::declineNotOfferedToRole($id),
+                 'DECLINE_NOT_OFFERED_TO_ROLE',
+             ],
+-            'declineNotOfferedInQuorumStep' => [
+-                static fn(): SigningSessionStateException => SigningSessionStateException::declineNotOfferedInQuorumStep($id),
+-                'DECLINE_NOT_OFFERED_IN_QUORUM_STEP',
+-            ],
+         ];
+     }
+ }
