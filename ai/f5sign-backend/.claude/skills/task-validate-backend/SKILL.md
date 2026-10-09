@@ -98,9 +98,8 @@ make -C ../f5sign-infra wt-backend-infection src=$(pwd) \
   args="--filter=$FILES --min-covered-msi=85 --min-msi=70"          # worktree (kept lane, resets DB + buckets first)
 ```
 
-- ⚠ **`wt-backend-infection` is requested from infra (2026-10-09) and may not exist yet**: `make -C ../f5sign-infra
-  help | grep infection`. Until it does, the lane gate takes no args and resets nothing when it runs alone, so do
-  not improvise a `docker exec`: report Infection as pending.
+- **`args` is split on spaces**, like `WT_TEST_ARGS`: no space inside one argument, so the `--filter` list is
+  comma-separated. The target empties the lane's DB and object store first and waits for the cluster to go idle.
 - **`--filter`, not `--git-diff-lines`.** A worktree's `.git` points at a host path the lane container cannot see.
   The filter takes whole files, so the untouched parts of a file you edited are mutated too.
 - **The thresholds go on the CLI, and `infection.json5.dist` stays as it is.** Its 79 / 50 are calibrated for the
