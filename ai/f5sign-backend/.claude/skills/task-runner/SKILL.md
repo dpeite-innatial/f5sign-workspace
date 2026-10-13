@@ -211,8 +211,8 @@ Agent({
 
 **By waves, in parallel within a wave.** A slice is ready once every slice in its `Depends on` is ticked; launch
 every ready slice of the current wave (`plan.md § Slices`, column `Wave`) in one message, each by its own
-implementer, and review each one as it reports. The lane runs one test run at a time, but its flock queues the
-runs instead of failing them, and writing, reading and reviewing never touch it: on TASK-045 four slices of one
+implementer, and review each one as it reports. Runs that touch the lane's state queue on its lock (hermetic
+`fast=1` runs do not), and writing, reading and reviewing never touch it: on TASK-045 four slices of one
 wave ran together. Two slices may share a wave only if their `Files` are disjoint; if they turn out not to be,
 run them one after the other. Each parallel implementer's brief adds the block below, naming the other slices of
 its wave:

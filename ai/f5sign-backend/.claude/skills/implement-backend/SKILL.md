@@ -77,7 +77,10 @@ For each test (slow tiers) or each class's batch (hermetic tiers):
 2. **Run it and watch it fail for the right reason** (not a syntax error, not a missing class), directly
    with `make`, not through `test-runner` (see *Validation cadence* below):
    `make -C ../f5sign-infra wt-backend-test src=$(pwd) only='<Class>::<method>' | tail -30` (a batch:
-   `only='<TestClass>'`, and read **each** failure in the output, not the count). Compare the red reason with
+   `only='<TestClass>' fast=1`, and read **each** failure in the output, not the count). ⚑ **Always add
+   `fast=1` to a Unit/ or Application/ run**: it is what tells the lane the run is hermetic, and a hermetic
+   run takes no lock — it never queues behind the other slices or other tasks. Without it the run waits
+   for the lane like an Integration one. Compare the red reason with
    the slice's *Guard that must fire* column: a test red for another reason does not prove the guard.
    In a batch, if the class under test does not exist yet, stub it first with methods that return a neutral
    value of their declared type (`0`, `''`, `[]`, `false`, `null` where nullable) and throw nothing: otherwise
@@ -104,7 +107,7 @@ slow tiers run **once, when the task is complete**, not per commit.
 | When | What | How |
 |---|---|---|
 | Once, at the start (worktree) | check the lane is up | `make -C ../f5sign-infra wt-ls`; if it is absent → `BLOCKED` |
-| Every red/green step | Integration/Acceptance: the test you are writing; Unit/Application: the class's batch | `wt-backend-test src=$(pwd) only=<regex>` (median 12-17 s, of which PHPUnit ~3 s), directly |
+| Every red/green step | Integration/Acceptance: the test you are writing; Unit/Application: the class's batch | `wt-backend-test src=$(pwd) only=<regex>` (+ `fast=1` for Unit/Application: no queue) (median 12-17 s, of which PHPUnit ~3 s), directly |
 | Before each commit | static gates + hermetic tiers | `WT_GATES="lint arch phpstan test" WT_TIERS=fast make -C ../f5sign-infra wt-backend src=$(pwd) \| tail -40`, directly |
 | All slices landed | full suite + gates, every tier | the orchestrator, through `test-runner` (Phase 2c), not you |
 

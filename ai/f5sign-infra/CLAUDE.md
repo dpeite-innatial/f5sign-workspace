@@ -422,8 +422,16 @@ class (`EnvelopeStatusTest`) ~8s; `fast=1` ~23s (2,594 tests); `changed=1 fast=1
 9-11s; the full suite on a kept lane, ~4-6 min, of which ~95% is `Integration/` + `Acceptance/`
 (`Acceptance/` runs ≈0.5-1.7s per test — a fixed per-test HTTP setup cost, not individually slow tests).
 
-The flock cap (`WT_CAP_BACKEND`, default 1) still limits concurrent **runs**, not lanes held open: an
-idle kept lane holds no slot and costs the same ~280 MiB idle footprint measured for the ephemeral lane.
+⚑ **Since 2026-10-13 the backend has no single global cap.** It was one slot for every run, taken before
+knowing what the run would do: that day a 3 s filtered test of one worktree queued 107 s behind another
+worktree's PHPStan. Now locks follow what a run does: a **lane lock** (per lane) for anything touching the
+lane's state, so only slices of one task queue on each other; a global **up slot** (`WT_CAP_BACKEND`, 1) for
+cold bring-ups, released before the gates; a global **heavy slot** (`WT_CAP_BACKEND_HEAVY`, 2) around PHPStan
+and Infection; and **no lock** for hermetic tests (`WT_GATES=test` + `fast=1`) on a lane already up — Unit/
+and Application/ boot no kernel and touch no database, so the run skips deps, migrations and `app_now`, runs
+PHPUnit with `--do-not-cache-result` and a private `TMPDIR`. Each run's last line says what it waited for:
+`==> timing: queued Ns (locks: …)`; rows accumulate in `/tmp/f5sign-wt-timing.tsv`. An idle kept lane holds
+no lock and costs the same ~280 MiB idle footprint measured for the ephemeral lane.
 Intended use: `wt-backend-test` for the TDD loop (a direct `make` call, no subagent needed for it), a
 `WT_GATES="lint arch phpstan test" WT_TIERS=fast make wt-backend src=…` before each commit (static gates
 + hermetic tiers), one full `wt-backend` (every tier) when the task is complete, `wt-backend-down` when it
@@ -471,8 +479,10 @@ How it works (`scripts/wt-validate.sh` + `docker-compose.wt.{signer,backend}.yml
   `config.process-timeout`, so without this the suite dies on the clock without anything actually failing.
 - **Shared CAS caches** across lanes (external volumes `f5sign-pnpm-store`, `f5sign-composer-cache`)
   → fast installs; `wt-down`/`wt-gc`/teardown NEVER delete them.
-- **Concurrency cap** (flock): signer=2, backend=1 (`WT_CAP_SIGNER`/`WT_CAP_BACKEND`). **Don't push it
-  on WSL** (OOM risk; it already froze the machine with 2 backend lanes). `mem_limit` is there as a backstop.
+- **Concurrency** (flock): signer=2 runs (`WT_CAP_SIGNER`); backend scoped locks — per lane, cold
+  bring-ups 1 (`WT_CAP_BACKEND`), PHPStan/Infection 2 (`WT_CAP_BACKEND_HEAVY`), hermetic tests none (see
+  *Persistent lanes*). **Don't push the caps on WSL** (OOM risk; it already froze the machine with 2 backend
+  lanes coming up). `mem_limit` is there as a backstop: each lane's php is capped at 2 GiB.
 - **Automatic teardown** via `trap` (`down -v --remove-orphans`). `make wt-gc` is the safety net.
 
 ⛔ **Don't cobble together an ad-hoc `docker run` instead of the lane.** It's the alternative people
