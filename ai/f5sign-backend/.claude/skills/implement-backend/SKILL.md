@@ -57,7 +57,14 @@ Also stop, whatever the slice says, if doing it would:
 
 ### Step 2 — TDD loop
 
-For each test of the slice, in the order the slice lists them:
+The loop's unit depends on the tier. **Integration/ and Acceptance/: one test at a time**, in the order the
+slice lists them — a red there has ambiguous causes (fixtures, RLS, the relay, lane state), and batching lets one
+setup failure topple every test and hide which guard you are proving. **Unit/ and Application/: one batch per
+class under test** — every test of the slice for that class written together, one red run, the code, one green
+run. A filtered run costs ~4 s, nearly all of it lane overhead; what a per-test loop really costs is agent turns
+(~4 runs and ~8 tool calls per test), and for hermetic tests that buys nothing.
+
+For each test (slow tiers) or each class's batch (hermetic tiers):
 
 1. **Write the test** in the tier used by its siblings (`ls` the BC's test directory; being the only
    `*UseCase.php` with no `*UseCaseTest.php` next to it is the signal, and it has always been right). It
@@ -69,8 +76,11 @@ For each test of the slice, in the order the slice lists them:
      `P-§` citation if the property is catalogued (`tests/README.md`). A row split into sub-ids is cited per sub-id.
 2. **Run it and watch it fail for the right reason** (not a syntax error, not a missing class), directly
    with `make`, not through `test-runner` (see *Validation cadence* below):
-   `make -C ../f5sign-infra wt-backend-test src=$(pwd) only='<Class>::<method>' | tail -30`. Compare the red
-   reason with the slice's *Guard that must fire* column: a test red for another reason does not prove the guard.
+   `make -C ../f5sign-infra wt-backend-test src=$(pwd) only='<Class>::<method>' | tail -30` (a batch:
+   `only='<TestClass>'`, and read **each** failure in the output, not the count). Compare the red reason with
+   the slice's *Guard that must fire* column: a test red for another reason does not prove the guard.
+   In a batch, if the class under test does not exist yet, write its empty signatures first: otherwise every
+   test is red with *class not found*, which proves nothing.
    ⛔ Never a hand-rolled `docker run` on `f5sign-net`: it shares the Postgres cluster and gives false
    reds in the relay (BL-138).
 3. **Write the minimal production code.** A docblock states only what the slice's *Prose to write* gives you or
@@ -79,6 +89,8 @@ For each test of the slice, in the order the slice lists them:
 4. **Green.**
 5. ⚑ **Sabotage the guard and watch the test fail for the right reason; restore it.** This is the step
    that catches tests that can't fail, and without it the property isn't proven — it's just asserted.
+   ⛔ **One guard per sabotage, even in a batch**: with two guards broken at once a test can fall to the
+   other one, and the sabotage proves nothing. Keep it cheap instead, with the narrowest `only=`.
 6. Regressions around what you touched: `… wt-backend-test src=$(pwd) changed=1 fast=1 | tail -30`.
 
 #### Validation cadence
@@ -90,7 +102,7 @@ slow tiers run **once, when the task is complete**, not per commit.
 | When | What | How |
 |---|---|---|
 | Once, at the start (worktree) | check the lane is up | `make -C ../f5sign-infra wt-ls`; if it is absent → `BLOCKED` |
-| Every red/green step | the test you are writing — **whatever its tier**, Acceptance included | `wt-backend-test src=$(pwd) only=<regex>` (~8 s), directly |
+| Every red/green step | Integration/Acceptance: the test you are writing; Unit/Application: the class's batch | `wt-backend-test src=$(pwd) only=<regex>` (~4 s), directly |
 | Before each commit | static gates + hermetic tiers | `WT_GATES="lint arch phpstan test" WT_TIERS=fast make -C ../f5sign-infra wt-backend src=$(pwd) \| tail -40`, directly |
 | All slices landed | full suite + gates, every tier | the orchestrator, through `test-runner` (Phase 2c), not you |
 
