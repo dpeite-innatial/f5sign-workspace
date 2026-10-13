@@ -74,8 +74,8 @@ All under `var/task-runner/TASK-NNN/`:
 |---|---|---|
 
 ## Slices
-| # | Title | Tier | Covers | Depends on |
-|---|---|---|---|---|
+| # | Title | Tier | Covers | Depends on | Wave |
+|---|---|---|---|---|---|
 
 ## Sweep terms
 Retired terms, symbols whose behaviour changes, losing alternatives. Seeded from the record's `Concepts re-cut`
@@ -99,6 +99,11 @@ cannot distinguish lock from no-lock), `async_events` is `in-memory://` (nothing
 Infection only looks at `src/F5Sign` and doesn't see code with no callers. A property whose harness can't
 reach it needs another tier or a probe
 ([`ProbesRowLocks`](../../../tests/F5Sign/Support/ProbesRowLocks.php) already exists).
+
+**Waves.** The orchestrator implements the slices of one wave in parallel, in the same worktree. A slice's wave is
+one more than the highest wave among its `Depends on` (wave 1 for none), and two slices share a wave only if their
+`Files` are disjoint: where they overlap, move the later one to the next wave. Cut for waves where the work allows
+it — a slice that depends on nothing it does not use waits for nothing.
 
 **Each slice, `slices/NN.md`, in this form and no other** (at most about 90 lines):
 

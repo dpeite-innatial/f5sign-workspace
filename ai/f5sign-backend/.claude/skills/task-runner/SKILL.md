@@ -162,7 +162,7 @@ The maintainer caught it in review.
 If `status: "fail"` → supervised: show the report and ask (edit the `.md` and retry, or abort);
 auto: abort.
 
-### Phase 2 — Plan, then one slice at a time [GATE]
+### Phase 2 — Plan, then slices by waves [GATE]
 
 The task is planned once on the top model and implemented in small slices, each by a **fresh** agent that reads
 only its slice and `constraints.md`. One agent implementing a whole task reread its whole growing context on every
@@ -190,7 +190,8 @@ Agent({
   `model: "haiku"`: every AC/S/V id and sub-id is in a slice's `Covers` and in a Tests row; every scope-`In` path
   is in a slice or listed as untouched; every new handler, listener, controller or route has `Registers`; the
   trigger words (`migrations/`, a lock, `_authn`, `Contract/`, RLS) imply `critical`; no TBD or placeholder;
-  method names are consistent across slices. A failure goes back to `plan-runner` once, in amend mode. No Opus
+  method names are consistent across slices; every slice's wave is later than the waves of its `Depends on`, and
+  the slices of one wave have disjoint `Files`. A failure goes back to `plan-runner` once, in amend mode. No Opus
   plan review: this check and the approval view below catch what such a review would.
 - **Supervised: show the plan before any slice runs.** The view carries: the slices with tier and a one-line
   reason for the tier; the criteria → slice matrix with uncovered ids highlighted; the decisions the plan made
@@ -201,14 +202,30 @@ Agent({
   (`git hash-object` of the record). Then one line per slice:
   `- [ ] NN title (tier) | commits a..b | round N | findings slices/NN.findings.md`.
   **The ledger, not your memory of the conversation, says what is done**: after a compaction or a `--resume`,
-  continue at the first unchecked slice and trust the checked ones (`git log` confirms their commits).
+  continue with the unchecked slices whose `Depends on` are all ticked, and trust the checked ones (`git log`
+  confirms their commits).
 - **`--plan-only` stops here.** Running 2b in a fresh session with `--resume` (or `/compact` after 2a and after
   2c) keeps the orchestrator's context small; the ledger makes that safe.
 
 #### 2b — Each slice: implement, review, fix
 
-In the ledger's order, one slice at a time (a worktree's lane takes one run at a time, so slices don't run in
-parallel). ⛔ **Never Read a `*.report.md` or `*.review.md` in full unless its status is not a pass**: consume the
+**By waves, in parallel within a wave.** A slice is ready once every slice in its `Depends on` is ticked; launch
+every ready slice of the current wave (`plan.md § Slices`, column `Wave`) in one message, each by its own
+implementer, and review each one as it reports. The lane runs one test run at a time, but its flock queues the
+runs instead of failing them, and writing, reading and reviewing never touch it: on TASK-045 four slices of one
+wave ran together. Two slices may share a wave only if their `Files` are disjoint; if they turn out not to be,
+run them one after the other. Each parallel implementer's brief adds the block below, naming the other slices of
+its wave:
+
+```
+PARALLEL RUN: slices {others} are being implemented at the same time in this worktree, on disjoint files.
+Touch only your slice's files. Stage and commit with explicit paths only (never `git add -A`, `git add .`,
+`git commit -a`, `git stash`, `git checkout -- .` or `git reset`). On index.lock, wait and retry. A test run
+may wait on the lane's flock: let it wait, kill nothing. Ignore changed files that are not yours, and run
+filtered tests only, never the whole suite.
+```
+
+⛔ **Never Read a `*.report.md` or `*.review.md` in full unless its status is not a pass**: consume the
 JSON. Findings travel by file, not through your context.
 
 ```
