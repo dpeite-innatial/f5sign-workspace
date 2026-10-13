@@ -219,8 +219,11 @@ its wave:
 
 ```
 PARALLEL RUN: slices {others} are being implemented at the same time in this worktree, on disjoint files.
-Touch only your slice's files. Stage and commit with explicit paths only (never `git add -A`, `git add .`,
-`git commit -a`, `git stash`, `git checkout -- .` or `git reset`). On index.lock, wait and retry. A test run
+Touch only your slice's files. Commit with `git commit --only -m "…" -- <your paths>`: the index is shared, and
+a bare `git commit` also commits whatever another slice has staged (a `git mv` stages at once). Never
+`git add -A`, `git add .`, `git commit -a`, `git stash`, `git checkout -- .` or `git reset`. For a new file or a
+rename, `git add`/`git mv` only your own paths, then the same `--only` commit naming every path of both sides of
+the rename. On index.lock, wait and retry. A test run
 may wait on the lane's flock: let it wait, kill nothing. Ignore changed files that are not yours, and run
 filtered tests only, never the whole suite.
 ```
