@@ -453,6 +453,15 @@ How it works (`scripts/wt-validate.sh` + `docker-compose.wt.{signer,backend}.yml
   stays out: cache=filesystem and lock=flock, the tests don't touch it. DB = `postgres-test` tmpfs per lane
   (reuses `docker/postgres/init-*.{sql,sh}`); migrates as `f5sign` (superuser), tests as `f5sign_app`
   (non-superuser, real RLS). `var/` and `vendor/` go to per-lane volumes (they don't pollute the worktree).
+  ⚠ **So inside the lane `var/` is NOT the worktree's `var/`**: a directory created on the host under
+  `var/` does not exist in the container, and anything a script writes there stays in the volume
+  (TASK-059, 2026-10-14: `tests/bin/render-trail-fixtures.php` refused a host-made output directory).
+  Create the directory and run the script **inside** the lane, then stream the result out — the same
+  way the infection gate copies its logs to `<src>/var/wt-infection/`:
+  `BACKEND_SRC=<worktree> docker compose -p wt-<lane> -f docker-compose.wt.backend.yml --profile wt exec -T php-fpm-wt tar -cf - -C var <dir> | tar -xf - -C <worktree>/var`
+  (from this repo; `<lane>` = the worktree's basename, `make wt-ls` lists them). Not a path outside
+  `var/`: the rest of the worktree IS bind-mounted, but the container writes as root, and root-owned
+  files there make `git worktree remove` fail.
 - **`eu-dss` is the only SHARED one**, and because of what it **is**, not what it costs: pure
   request/response, its only state is the Trusted Lists cache (read-only, identical for everyone). It's reached via
   `eu-dss-proxy` (socat), the **only** container in the lane on both networks: if the php container
