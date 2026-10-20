@@ -60,6 +60,11 @@ specified, work through each item and write a criterion where it applies:
 - **Wiring**: the handler, listener, route or tagged service that must be registered for the change to run.
 - **ADR status**: which accepted or `Proposed` ADR the change exercises, or contradicts.
 - **What must not change** (a regression criterion), and a PII field that must be **absent** from a payload.
+- **The defect itself, when the `Type` is Corrective**: one criterion that replays the input that failed, literally
+  (the request body, the event, the state it was in), at the tier where the defect surfaced — the HTTP request in
+  `Acceptance/` when a client hit it, not a unit test of the validator behind it. Its sabotage is *the code before
+  the fix*, and its notes name the incident (date, what was observed) with no customer data. A test that asserts
+  the new rule on an invented input proves the rule; only the replayed input proves the defect is gone.
 - **One `app_now()` per write** where the change stamps more than one timestamp.
 
 Propose a row only where a prompt applies; a prompt that does not apply produces nothing.

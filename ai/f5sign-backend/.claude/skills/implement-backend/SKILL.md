@@ -30,7 +30,8 @@ is in the slice and in `constraints.md`, and reading the rest is the context gro
 
 - Commits on the task's branch.
 - `var/task-runner/TASK-NNN/slices/NN.report.md`, with these sections: `## Step 1 check` (3 lines: file opened,
-  symbol expected, found), tests written, red reason seen, sabotage performed, files changed, `## Delegated`,
+  symbol expected, found), tests written, red reason seen, `## Reproduced` (only for a criterion that reproduces a
+  defect), sabotage performed, files changed, `## Delegated`,
   `## Claims`, `termsChanged`, `registers`, anything you noticed outside the slice. A fix round appends
   `## Round N` and does not rewrite the report.
 - Last line, JSON: `{"status":"DONE|DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED","slice":"NN","summary":"…","commits":["sha"],"covers":["AC-1"],"testsAdded":N,"concerns":[],"question":"…","delegated":[],"termsChanged":[],"registers":[{"symbol":"…","wiredIn":"…"}]}`
@@ -86,6 +87,10 @@ For each test (slow tiers) or each class's batch (hermetic tiers):
    value of their declared type (`0`, `''`, `[]`, `false`, `null` where nullable) and throw nothing: otherwise
    every test is red with *class not found* — or, with an empty body under a return type, with a `TypeError` —
    and neither proves a guard.
+   ⚑ **A criterion that reproduces a defect** (the record's corrective row: its sabotage is *the code before the
+   fix*) must go red with the **defect's own symptom** — the 201 where a 422 is expected, the row that should not
+   exist — on the unchanged code, never with a stub's neutral value. Paste that run's command and literal failure
+   into the report under `## Reproduced`: it is the only evidence that the test can see the defect.
    ⛔ Never a hand-rolled `docker run` on `f5sign-net`: it shares the Postgres cluster and gives false
    reds in the relay (BL-138).
 3. **Write the minimal production code.** A docblock states only what the slice's *Prose to write* gives you or

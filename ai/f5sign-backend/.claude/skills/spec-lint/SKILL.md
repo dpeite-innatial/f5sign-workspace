@@ -143,6 +143,10 @@ column ([`docs/tasks/README.md`](../../../docs/tasks/README.md) §8); for any ot
 - [ ] A row that says "every" or "each" lists its members as sub-ids (`AC-2a…`) in its notes → `warn`, category
       `criteria-grouped`.
 - [ ] A struck-through id carries why it was dropped → `warn`, category `criteria-dropped-unexplained`.
+- [ ] If `Type` says Corrective, at least one row reproduces the defect: its sabotage is the code before the fix,
+      or its notes replay the incident's input → if none does: `fail` while `Status` claims no code, `warn` once it
+      does (the same age condition as `Why`, Step 2), category `corrective-unreproduced`. A corrective record
+      without one lets the fix be proven on an input the defect never used.
 
 ### Step 6 — Self-containment
 
