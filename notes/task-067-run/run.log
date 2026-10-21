@@ -1,0 +1,43 @@
+{"phase":"prepare","status":"pass","at":"2026-10-21T10:58:06Z","worktree":"/var/www/html/factor5_others/f5sign/f5sign-backend-field-values-drawn-into-the-pdf","branch":"feat/field-values-drawn-into-the-pdf"}
+{"phase":"spec-lint","status":"pass","warnings":1,"at":"2026-10-21T11:00:24Z"}
+{"phase":"baseline","status":"pass","tests":6458,"assertions":67831,"harness":"wt-backend lane (kept), fast=1, tree 7eb55a28","at":"2026-10-21T11:00:24Z"}
+{"phase":"spec-claims","status":"fail","blocks":2,"warnings":5,"at":"2026-10-21T11:03:10Z"}
+{"phase":"spec-lint","run":2,"status":"fail","blocks":2,"note":"offrepo tags on new passages; fixed","at":"2026-10-21T11:12:20Z"}
+{"phase":"spec-claims","run":2,"status":"pass","warnings":3,"note":"trail source, visibility consequence, AC-13 wording; fixed","at":"2026-10-21T11:12:20Z"}
+{"phase":"spec-lint","run":3,"status":"pass-after-fix","note":"one OFFREPO tag added; AC-7 'rule 5' warning is a linter misread (authoring rule 5)","at":"2026-10-21T11:14:37Z"}
+{"phase":"record-commit","sha":"857d896f","record_sha1":"ee663986a2d4674a5d80338f260c6a5af2aff723","at":"2026-10-21T11:14:37Z"}
+{"phase":"infra-lane-image","status":"ready","infra_commit":"fff6a57","tag":"f5sign/backend:dev-task067","at":"2026-10-21T11:19:30Z"}
+{"phase":"probe-dss","status":"pass","A1_invisible_fieldId":"works","A2_no_imageParameters":"creates own field","B_png":"works","C_rotate":"needs rotation AUTOMATIC with fieldId","D_cropbox":"works with our conversion","results":"probe/RESULTS.md","at":"2026-10-21T11:22:21Z"}
+{"phase":"plan","status":"awaiting-adr-acceptance","slices":15,"waves":6,"tiers":{"critical":13,"standard":2},"plan_check":"pass (AC-7c listed in plan table but not in slice 12 Covers; test present)","at":"2026-10-21T11:38:17Z"}
+{"phase":"wave","wave":1,"slices":["01","02","03","04","05"],"status":"launched","at":"2026-10-21T11:41:33Z"}
+{"phase":"slice","slice":"03","tier":"standard","agent":"implementer+reviewer","model":"sonnet","rounds":0,"status":"approved","commits":["e3b01885"],"delegated":[],"concerns":["lint dry-run flagged 7 files of parallel slices"],"at":"2026-10-21T11:54:23Z"}
+{"phase":"slice","slice":"02","tier":"standard","model":"sonnet","rounds":0,"status":"approved","commits":["c7b66b82","261a4aac"],"delegated":[],"concerns":["no red-first run"],"at":"2026-10-21T11:55:10Z"}
+{"phase":"lane-image","status":"built","tag":"f5sign/backend:dev-task067","id":"4a022c7e","from":"4626e3e6","pyhanko":"0.29.0","at":"2026-10-21T11:59:15Z"}
+{"phase":"slice","slice":"05","tier":"critical","model":"opus","rounds":1,"status":"approved","commits":["4626e3e6","0ce300c7"],"delegated":[],"concerns":["version via pyhanko.version","tzlocal stderr warning","arm64 hashes"],"at":"2026-10-21T12:01:15Z"}
+{"phase":"slice","slice":"01","tier":"critical","model":"opus","rounds":1,"status":"approved","commits":["904c0331","3bc0762e","acaa8a18"],"delegated":[],"concerns":["orientation pinned by payload assertion only"],"at":"2026-10-21T12:03:32Z"}
+{"phase":"slice","slice":"04","tier":"critical","model":"opus","rounds":1,"status":"approved","commits":["7ffbea16","843a9507","7b242857"],"delegated":[],"concerns":["FieldValueRecordingTest date bomb (pre-existing)"],"at":"2026-10-21T12:08:32Z"}
+{"phase":"slice","slice":"06","tier":"critical","model":"opus","rounds":1,"status":"approved","commits":["98f406de","75c77746"],"delegated":[],"concerns":["extra fixture"],"at":"2026-10-21T12:14:00Z"}
+{"phase":"slice","slice":"10","tier":"critical","model":"opus","rounds":0,"status":"approved","commits":["b552f305"],"delegated":[],"concerns":[],"at":"2026-10-21T12:23:16Z"}
+{"phase":"slice","slice":"09","tier":"critical","model":"opus","rounds":0,"status":"approved","commits":["27f5620b"],"delegated":[],"concerns":[],"at":"2026-10-21T12:27:32Z"}
+{"phase":"slice","slice":"07","tier":"critical","model":"opus","rounds":0,"status":"approved","commits":["b0b3f0cd"],"delegated":[],"concerns":["/Lock direct -> 08","strict reader -> 08"],"at":"2026-10-21T12:32:08Z"}
+{"phase":"slice","slice":"11","tier":"critical","model":"opus","rounds":0,"status":"approved","commits":["eb6ba124"],"delegated":[],"concerns":["Integration signing tests unrun until 08"],"at":"2026-10-21T12:39:43Z"}
+{"phase":"merge-develop","sha":"715f6ea0","brings":"TASK-066 + fixture clock pin (a368ded4)","check":"FixedDateFixturesPinTheClockTest|FieldValueRecordingTest OK 15","at":"2026-10-21T12:45:21Z"}
+{"phase":"slice","slice":"08","tier":"critical","model":"opus","rounds":1,"status":"approved","commits":["fcab14eb","9653a7be"],"delegated":[],"concerns":["lenient /Prev"],"at":"2026-10-21T12:54:53Z"}
+{"phase":"slice","slice":"16","tier":"standard","model":"sonnet","rounds":0,"status":"approved","commits":["1143803c","7bfb545b"],"delegated":[],"concerns":[],"at":"2026-10-21T13:13:32Z"}
+{"phase":"slice","slice":"13","tier":"critical","model":"opus","rounds":1,"status":"approved","commits":["5d7b65af","405ad571"],"delegated":[],"concerns":[],"at":"2026-10-21T13:15:26Z"}
+{"phase":"slice","slice":"12","tier":"critical","model":"opus","rounds":1,"status":"approved","commits":["9c8b71d5","33670db2","9dd8a81b"],"delegated":[],"concerns":[],"at":"2026-10-21T13:21:40Z"}
+{"phase":"full-suite-early","tree":"dd41500a","tests":7971,"assertions":90524,"failures":2,"static":"lint/arch/phpstan pass","harness":"wt lane image dev-task067","at":"2026-10-21T13:41:20Z"}
+{"phase":"slice","slice":"14","tier":"critical","model":"opus","rounds":1,"status":"approved","commits":["dd41500a","a6ab69dd"],"delegated":[],"concerns":[],"at":"2026-10-21T13:44:07Z"}
+{"phase":"slice","slice":"18","tier":"standard","model":"sonnet","rounds":1,"status":"approved","commits":["1184f55a","372098ba"],"at":"2026-10-21T13:56:05Z"}
+{"phase":"slice","slice":"17","tier":"critical","model":"opus","rounds":0,"status":"approved","commits":["a426ac0d"],"at":"2026-10-21T13:56:30Z"}
+{"phase":"slice","slice":"19","tier":"critical","model":"opus","rounds":0,"status":"approved","commits":["11260871"],"at":"2026-10-21T13:57:00Z"}
+{"phase":"manual-owner","status":"pass","what":"owner opened s1-sealed.pdf and s1-sealed-cropbox.pdf in Adobe Reader: signatures and drawn values look right","not_done":"tamper check (a locked value changed after its signature) not repeated on these files; measured in the spike","at":"2026-10-21T14:06:01Z"}
+{"phase":"closing-review","status":"changes","findings":6,"to_task_close":["BL-269/BL-366","record header"],"to_docs_sync":["CLAUDE.md stack"],"to_slice_20":["DocumentSigner docblock","AC-7d","SensitiveParameter","dead helper","STDERR noise"],"at":"2026-10-21T14:17:57Z"}
+{"phase":"full-suite","tree":"65005c60","tests":7979,"assertions":90696,"failures":0,"static":"lint 0/2190, deptrac 0/0, phpstan ok","harness":"wt lane image dev-task067","log":"/tmp/tmp.PtI8Cgos4A.log","ran_s":669,"at":"2026-10-21T14:20:06Z"}
+{"phase":"full-suite","tree":"4a1a27fa","tests":8001,"assertions":90748,"failures":0,"static":"lint 0/2191, deptrac 0/0, phpstan ok","harness":"wt lane image dev-task067","log":"/tmp/tmp.OmDY6qL6tv.log","at":"2026-10-21T14:41:42Z"}
+{"phase":"task-validate","status":"pass","warnings":2,"msi":"deferred","at":"2026-10-21T14:43:04Z"}
+{"phase":"security-audit","status":"warn","blocking":0,"warnings":11,"fix_now":["geometry->sign without drawing","python -I","check untouched fields"],"to_backlog":["sensitive-param census","CPU/NPROC limits","/Kids DAG","sandbox","digest pins","wheel CVE scan","BL-366 off-page"],"owner_decided":["co-step lock (§4 #3)"],"existing":["reservations clear-text ADR-0033"],"at":"2026-10-21T14:47:41Z"}
+{"phase":"full-suite","tree":"337c4afd","tests":8015,"assertions":90792,"failures":0,"static":"lint 0/2191, deptrac 0/0, phpstan ok","harness":"wt lane image dev-task067","log":"/tmp/tmp.NTbe1EO0Xm.log","at":"2026-10-21T15:12:06Z"}
+{"phase":"slice","slice":"21","tier":"critical","model":"opus","rounds":2,"status":"approved","commits":["c124d0b2","86601f5e","d263c7e7","cbf029f6","dfb13ce6","e883cb13","91b0e8db"],"at":"2026-10-21T15:12:47Z"}
+{"phase":"docs-sync","status":"pass","commit":"f4077802","at":"2026-10-21T15:14:15Z"}
+{"phase":"infection","status":"fail","gate":"infra 4df531b changed-lines --fail-on-survivors","tree":"91b0e8db","msi":83,"covered_msi":88,"escaped":87,"not_covered":43,"timed_out":4,"log":"var/task-runner/TASK-067/infection-final.log","at":"2026-10-21T15:30:07Z"}

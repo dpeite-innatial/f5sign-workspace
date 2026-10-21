@@ -1,0 +1,168 @@
+make: Entering directory '/var/www/html/factor5_others/f5sign/f5sign-infra'
+WT_KEEP=1 WT_GATES=infection WT_INFECTION_ARGS='--min-covered-msi=85 --min-msi=70' WT_INFECTION_SCOPE='changed' ./scripts/wt-validate.sh backend /var/www/html/factor5_others/f5sign/f5sign-backend-field-values-drawn-into-the-pdf
+==> lane=f5sign-backend-field-values-drawn-into-the-pdf  repo=backend  src=/var/www/html/factor5_others/f5sign/f5sign-backend-field-values-drawn-into-the-pdf  proj=wt-f5sign-backend-field-values-drawn-into-the-pdf  reused=1  keep=1  hermetic=0
+==> image=f5sign/backend:dev-task067
+==> levantando dependencias del lane (postgres-test minio rabbitmq mailpit eu-dss-proxy)...
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-mailpit-1 Running 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-eu-dss-proxy-1 Running 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-postgres-test-1 Running 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-minio-1 Running 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-rabbitmq-1 Running 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-rabbitmq-1 Waiting 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-mailpit-1 Waiting 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-eu-dss-proxy-1 Waiting 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-postgres-test-1 Waiting 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-minio-1 Waiting 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-mailpit-1 Healthy 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-rabbitmq-1 Healthy 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-postgres-test-1 Healthy 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-eu-dss-proxy-1 Healthy 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-minio-1 Healthy 
+==> minio buckets: already created (lane reused)
+==> [instalando] vendor up to date (composer.lock unchanged); skipping composer install
+==> [estado] corrida completa sobre lane reusado: vacio la BD y el object store
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-postgres-test-1 Creating 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-postgres-test-1 Created 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-postgres-test-1 Starting 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-postgres-test-1 Started 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-postgres-test-1 Waiting 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-postgres-test-1 Healthy 
+==> [migrando] como superuser f5sign (fresh database)
+[notice] Migrating up to DoctrineMigrations\Version20261021095351
+[notice] finished in 509.3ms, used 80.5M memory, 74 migrations executed, 559 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20261021095351
+
+
+==> [app_now] installing the test body
+app_now(): test body installed (honours app.frozen_now)
+==> WARNING: changes that cannot be mapped to tests (run the full suite before committing):
+      config/packages/signature_execution.yaml
+      config/services.yaml
+==> [gate infection] initial run: 134 test files naming a changed class (WT_INFECTION_INITIAL=full for the whole suite)
+134 test files -> /var/www/html/var/wt-infection-config/infection.json
+==> [gate infection] mutacion (lento; opt-in via WT_GATES) --min-covered-msi=85 --min-msi=70
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-php-fpm-wt-run-71ad154f4a4d Creating 
+ Container wt-f5sign-backend-field-values-drawn-into-the-pdf-php-fpm-wt-run-71ad154f4a4d Created 
+
+    ____      ____          __  _
+   /  _/___  / __/__  _____/ /_(_)___  ____
+   / // __ \/ /_/ _ \/ ___/ __/ / __ \/ __ \
+ _/ // / / / __/  __/ /__/ /_/ / /_/ / / / /
+/___/_/ /_/_/  \___/\___/\__/_/\____/_/ /_/
+
+#StandWithUkraine
+
+Infection - PHP Mutation Testing Framework version 0.31.9
+
+
+Running initial test suite...
+
+PHPUnit version: 11.5.56
+
+.: killed by tests, A: killed by SA, M: escaped, U: uncovered
+E: fatal error, X: syntax error, T: timed out, S: skipped, I: ignored
+
+
+Generate mutants...
+
+Processing source code files...
+..................................................   (   50)
+.........M............M.........M.................   (  100)
+..................................................   (  150)
+..................................................   (  200)
+..................................................   (  250)
+........M.........................................   (  300)
+..........M........................T.....E........   (  350)
+........M..................UUUUUUUUUU....M........   (  400)
+.......T..........................................   (  450)
+...T..T...M.......................................   (  500)
+..................................................   (  550)
+..................................................   (  600)
+.......................M..........................   (  650)
+....................................M...........M.   (  700)
+M................M.MMM.................M....M.....   (  750)
+.................
+
+767 mutations were generated:
+     734 mutants were killed by Test Framework
+      10 mutants were not covered by tests
+      18 covered mutants were not detected
+       1 errors were encountered
+       4 time outs were encountered
+
+Metrics:
+         Mutation Score Indicator (MSI): 96%
+         Mutation Code Coverage: 98%
+         Covered Code MSI: 97%
+
+Generated Reports:
+         - /var/www/html/var/infection/infection.log
+         - /var/www/html/var/infection/summary.log
+         - /var/www/html/var/infection/per-mutator.md
+
+Please note that some mutants will inevitably be harmless (i.e. false positives).
+ ! [NOTE] The MSI is 26.35% percentage points over the required MSI. Consider   
+ !        increasing the required MSI percentage the next time you run          
+ !        Infection.                                                            
+
+ ! [NOTE] The Covered Code MSI is 12.62% percentage points over the required    
+ !        Covered Code MSI. Consider increasing the required Covered Code MSI   
+ !        percentage the next time you run Infection.                           
+
+
+Time: 2m 15s. Memory: 0.18GB. Threads: 4
+==> [gate infection] logs copied to /var/www/html/factor5_others/f5sign/f5sign-backend-field-values-drawn-into-the-pdf/var/wt-infection/ (escaped and uncovered mutants: infection.log)
+      Total: 767
+      
+      Killed by Test Framework: 734
+      Killed by Static Analysis: 0
+      Errored: 1
+      Syntax Errors: 0
+      Escaped: 18
+      Timed Out: 4
+      Skipped: 0
+      Ignored: 0
+      Not Covered: 10
+==> [gate infection] verdict: mutants on changed lines vs develop (whole-file MSI above is information)
+      Mutants on lines changed since c02a3d39 (2068 changed lines in 38 file(s) of src/F5Sign, working tree included):
+        Escaped mutants: 18
+        Not covered mutants: 10
+        Timed Out mutants: 4
+        Skipped mutants: 0
+        - escaped: src/F5Sign/SignatureExecution/Application/Service/DrawnRevisionCheck.php:86 TrueValue
+        - escaped: src/F5Sign/SignatureExecution/Application/Service/DrawnRevisionCheck.php:97 TrueValue
+        - escaped: src/F5Sign/SignatureExecution/Application/Service/DrawnRevisionCheck.php:108 TrueValue
+        - escaped: src/F5Sign/SignatureExecution/Domain/Pdf/Form/FieldTextLayout.php:91 IncrementInteger
+        - escaped: src/F5Sign/SignatureExecution/Domain/Pdf/Form/FieldTextLayout.php:148 LessThan
+        - escaped: src/F5Sign/SignatureExecution/Domain/Pdf/Form/FieldTextLayout.php:189 Concat
+        - escaped: src/F5Sign/SignatureExecution/Domain/Pdf/Form/HelveticaWidths.php:86 ReturnRemoval
+        - escaped: src/F5Sign/SignatureExecution/Domain/Pdf/Form/PageBox.php:75 CastFloat
+        - escaped: src/F5Sign/SignatureExecution/Infrastructure/Pdf/PyHankoFormEngine.php:121 Throw_
+        - escaped: src/F5Sign/SignatureExecution/Infrastructure/Pdf/PyHankoFormEngine.php:218 UnwrapArrayMap
+        - escaped: src/F5Sign/SignatureExecution/Infrastructure/Pdf/PyHankoFormEngine.php:235 UnwrapArrayMap
+        - escaped: src/F5Sign/SignatureExecution/Infrastructure/Pdf/PyHankoFormEngine.php:239 UnwrapArrayMap
+        - escaped: src/F5Sign/SignatureExecution/Infrastructure/Pdf/PyHankoFormEngine.php:285 UnwrapArrayValues
+        - escaped: src/F5Sign/SignatureExecution/Infrastructure/Pdf/PyHankoFormEngine.php:300 UnwrapArrayMap
+        - escaped: src/F5Sign/SignatureExecution/Infrastructure/Pdf/PyHankoFormEngine.php:301 UnwrapArrayMap
+        - escaped: src/F5Sign/SignatureExecution/Infrastructure/Pdf/PyHankoFormEngine.php:302 UnwrapArrayMap
+        - escaped: src/F5Sign/SignatureExecution/Infrastructure/Pdf/PyHankoFormEngine.php:352 DecrementInteger
+        - escaped: src/F5Sign/SignatureExecution/Infrastructure/Pdf/PyHankoFormEngine.php:352 IncrementInteger
+        - timed out: src/F5Sign/SignatureExecution/Domain/Pdf/Form/FieldTextLayout.php:73 Minus
+        - timed out: src/F5Sign/SignatureExecution/Domain/Pdf/Form/FieldTextLayout.php:152 UnwrapArraySlice
+        - timed out: src/F5Sign/SignatureExecution/Domain/Pdf/Form/FieldTextLayout.php:189 LogicalAndNegation
+        - timed out: src/F5Sign/SignatureExecution/Domain/Pdf/Form/FieldTextLayout.php:190 FunctionCallRemoval
+        - not covered: src/F5Sign/SignatureExecution/Domain/Pdf/Form/HelveticaWidths.php:89 Foreach_
+        - not covered: src/F5Sign/SignatureExecution/Domain/Pdf/Form/HelveticaWidths.php:90 DecrementInteger
+        - not covered: src/F5Sign/SignatureExecution/Domain/Pdf/Form/HelveticaWidths.php:90 IncrementInteger
+        - not covered: src/F5Sign/SignatureExecution/Domain/Pdf/Form/HelveticaWidths.php:90 Plus
+        - not covered: src/F5Sign/SignatureExecution/Domain/Pdf/Form/HelveticaWidths.php:92 Foreach_
+        - not covered: src/F5Sign/SignatureExecution/Domain/Pdf/Form/HelveticaWidths.php:93 GreaterThan
+        - not covered: src/F5Sign/SignatureExecution/Domain/Pdf/Form/HelveticaWidths.php:93 GreaterThanNegotiation
+        - not covered: src/F5Sign/SignatureExecution/Domain/Pdf/Form/HelveticaWidths.php:94 DecrementInteger
+        - not covered: src/F5Sign/SignatureExecution/Domain/Pdf/Form/HelveticaWidths.php:94 IncrementInteger
+        - not covered: src/F5Sign/SignatureExecution/Domain/Pdf/Form/HelveticaWidths.php:94 Plus
+==> lane wt-f5sign-backend-field-values-drawn-into-the-pdf KEPT (tear it down with: make wt-backend-down src=/var/www/html/factor5_others/f5sign/f5sign-backend-field-values-drawn-into-the-pdf)
+==> timing: queued 0s (locks: lane,backend-heavy), ran 151s, exit 1
+make: *** [Makefile:1930: wt-backend-infection] Error 1
+make: Leaving directory '/var/www/html/factor5_others/f5sign/f5sign-infra'

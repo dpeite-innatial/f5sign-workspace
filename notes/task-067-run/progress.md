@@ -1,0 +1,26 @@
+plan: approved 2026-10-21 | record sha1 2e4f72a63ad590c31bcc54fc4ecd2fc6b3236df3 | ADR-0085 accepted (d3582e5d)
+- [x] 01 DSS signs into a field of ours (critical) | commits 904c0331..acaa8a18 | round 1 (prose findings fixed; checked by orchestrator) | findings slices/01.findings.md
+- [x] 02 PageBox conversion (standard) | commits c7b66b82..261a4aac | round 0 (approved) | findings slices/02.findings.md
+- [x] 03 FieldTextLayout (standard) | commits e3b01885, fa4e58fa (namespace) | round 0 (approved) | findings slices/03.findings.md
+- [x] 04 Reservations at admission (critical) | commits 7ffbea16..7b242857 | round 1 (docblock finding fixed; checked by orchestrator) | findings slices/04.findings.md
+- [x] 05 Dockerfile pyHanko + W1 (critical) | commits 4626e3e6..0ce300c7 | round 1 (finding fixed, comment-only; checked by orchestrator) | findings slices/05.findings.md
+- [x] 06 Form engine port/adapter (critical) | commits 98f406de..75c77746 | round 1 (docblock finding fixed; checked by orchestrator) | findings slices/06.findings.md
+- [x] 07 Script: inspect, preparation (critical) | commits b0b3f0cd | round 0 (approved) | findings slices/07.findings.md
+- [x] 09 FormRevisionPlanner (critical) | commits 27f5620b | round 0 (approved) | findings slices/09.findings.md
+- [x] 10 DrawnRevisionCheck (critical) | commits b552f305 | round 0 (approved) | findings slices/10.findings.md
+- [x] 08 Script: fill per type (critical) | commits fcab14eb..9653a7be | round 1 (security finding + font ruling fixed, round-2 review approved) | findings slices/08.findings.md
+- [x] 11 DocumentSigner draws then signs (critical) | commits eb6ba124 | round 0 (code approved; rule-1 hit outside the slice moved to the closing sweep) | findings slices/11.findings.md
+- [x] 12 Live SEQUENTIAL_PADES (critical) | commits 9c8b71d5..9dd8a81b | round 1 (docblock fix; checked by orchestrator) | findings slices/12.findings.md
+- [x] 13 Live SINGLE_SEAL (critical) | commits 5d7b65af..405ad571 | round 1 (prose fix + AC-2c/AC-6c sabotages red at their own asserts; checked by orchestrator) | findings slices/13.findings.md
+- [x] 14 Delivery bar S-1 (critical) | commits dd41500a..a6ab69dd | round 1 (shared reader; values asserted at each ByteRange; checked by orchestrator) | findings slices/14.findings.md
+- [x] 15 Records and sweep (critical) | commits 28bbfa00..99755780 (+ 65005c60 orchestrator) | round 0 (reviewed by the closing review) | findings slices/15.findings.md
+- [x] 16 Fixture sample.pdf well-formed + AnnulmentSealTest counts fill+seal (standard, fix slice added by orchestrator) | commits 1143803c..7bfb545b | round 0 (checked by orchestrator: strict pyHanko open ok, broken copy byte-identical)
+- [x] 17 Unreadable PDF signed without drawing (critical, fix slice) | commits a426ac0d | round 0 (approved) | findings slices/17.findings.md
+- [x] 18 Mark tests compare numbers (standard, fix slice) | commits 1184f55a..372098ba | round 0 (approved)
+- [x] 19 Visible mark appearance sized to our field (critical, fix slice) | commits 11260871..47981b28 | round 1 (approved; rotated + CropBox BBox asserted, sabotage red)
+- [x] 20 Closing fixes (critical) | commits 860d33a0..4a1a27fa | round 1 (follow-ups applied; checked by orchestrator)
+- [x] 21 Security-audit hardening (critical, fix slice) | commits c124d0b2..91b0e8db | round 2 (review findings fixed)
+- [x] 22a Infection survivors PyHankoFormEngine (critical) | commits 5491396b | 33 killed, 10 justified
+- [x] 22b Infection survivors PageBox (critical) | commits 6448c9ce | 23 killed, 1 dead code removed, 1 justified
+- [x] 22c Infection survivors FieldTextLayout+HelveticaWidths (critical) | commits f402c4db..fbace9df | killed by sabotage-checked tests, dead max(1,…) removed, 4 equivalent + 4 infinite-loop timeouts justified
+- [x] 22d Infection survivors rest (critical) | commits 459d467a | 22 killed, 3 justified (isset TrueValue)
