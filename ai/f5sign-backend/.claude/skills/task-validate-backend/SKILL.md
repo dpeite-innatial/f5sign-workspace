@@ -89,21 +89,27 @@ that is about to change is spent twice. On TASK-054 (2026-10-08) it ran beside a
 blocker, and the fix round made that measurement stale. The orchestrator calls you again with `infection: final` once
 nothing is left to fix (task-runner Phase 3b), and then this step is the whole of your job.
 
-⚑ **Per task, Infection mutates only the `src/` files the branch touches** (owner, 2026-10-09; first run on
-TASK-055). The whole-`src/` run took about 35 minutes and answered a question about the codebase, not about the task.
+⚑ **Per task, Infection mutates only the lines the branch changed** (owner, 2026-10-09 for files; lines since
+2026-10-21). The whole-`src/` run took about 35 minutes and answered a question about the codebase, not about the task.
 
 ```bash
-FILES=$(git diff --name-only --diff-filter=AM "$(git merge-base HEAD develop)"..HEAD -- src/F5Sign | paste -sd,)
 make -C ../f5sign-infra wt-backend-infection src=$(pwd) \
-  args="--filter=$FILES --min-covered-msi=85 --min-msi=70"          # worktree (kept lane, resets DB + buckets first)
+  args="--min-covered-msi=85 --min-msi=70"          # worktree (kept lane, resets DB + buckets first)
 ```
 
-- **`args` is split on spaces**, like `WT_TEST_ARGS`: no space inside one argument, so the `--filter` list is
-  comma-separated. The target empties the lane's DB and object store first and waits for the cluster to go idle.
+- **No `--filter`.** The target passes `--git-diff-lines` against `develop`, so only the changed lines' mutants
+  exist, and its initial run is only the test files that name a changed class (measured on TASK-067: 159 s against
+  735 s, same verdict mutant by mutant). A `--filter` you pass is superseded. Two cases fall back by themselves and
+  say so: **untracked** files under `src/F5Sign` (whole files; `git add -N` them to keep the fast path) and a changed
+  **trait** (whole-suite initial run).
+- **`args` is split on spaces**, like `WT_TEST_ARGS`: no space inside one argument. The target empties the lane's DB
+  and object store first and waits for the cluster to go idle.
 - **Its logs land in `<worktree>/var/wt-infection/`** (`infection.log` with the escaped and uncovered mutants,
-  `summary.log`, `per-mutator.md`), copied out of the lane after every run; read the mutant list from there.
-- **`--filter`, not `--git-diff-lines`.** A worktree's `.git` points at a host path the lane container cannot see.
-  The filter takes whole files, so the untouched parts of a file you edited are mutated too.
+  `summary.log`, `per-mutator.md`, `changed-lines.log` with the verdict), copied out of the lane after every run;
+  read the mutant list from there.
+- ⚠ **"Not covered" on a changed line now fails the verdict.** Until 2026-10-21 the verdict script misread
+  Infection's `Not Covered mutants` header and counted them as skipped, so a record from before that date that says
+  "0 not covered" did not measure it.
 - **The thresholds go on the CLI, and `infection.json5.dist` stays as it is.** Its 79 / 50 are calibrated for the
   whole of `src/`: `minMsi: 50` carries about a thousand uncovered mutants of old code and means nothing on a diff.
   On the diff, **covered-MSI ≥ 85** (the codebase measured 84 % on TASK-053/054, so new code may not lower it) and
