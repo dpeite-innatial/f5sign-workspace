@@ -39,7 +39,6 @@
 /backups/
 /.playwright-cli/
 /f5sign-infra-sentry/
-/f5sign-infra-infection-diff-lines/
 f5sign-signer-deps/
 /f5sign-signer-decline/
 /f5sign-backend-explicit-access-gate/
