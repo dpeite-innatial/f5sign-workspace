@@ -42,3 +42,7 @@
 f5sign-signer-deps/
 /f5sign-signer-decline/
 /f5sign-backend-explicit-access-gate/
+/f5sign-backend-correction-reaches-the-changed-contact/
+/f5sign-backend-resend-interval-per-channel/
+/f5sign-backend-field-values-drawn-into-the-pdf/
+/f5sign-backend-fixture-expiry-date-bomb/
