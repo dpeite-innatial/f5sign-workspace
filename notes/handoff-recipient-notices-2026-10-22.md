@@ -7,7 +7,22 @@ Four backend records designed with the owner on 2026-10-22. Implementation order
 | TASK-047 per-recipient sealed receipt | `feat/per-recipient-receipt` / `f5sign-backend-per-recipient-receipt` | ADR-0086 Proposed | committed + pushed (`01a971f4`, `c90c8135`) |
 | TASK-069 early per-document seal (SEQUENTIAL_PADES, after agreement) | `feat/early-document-seal` / `f5sign-backend-early-document-seal` | ADR-0087 Proposed | committed + pushed (`34a6dde7`) |
 | TASK-070 read-only copy link (closes BL-188) | `feat/copy-link` / `f5sign-backend-copy-link` | ADR-0088 Proposed | committed + pushed (`331aa0ce`) on 2026-10-23, owner-confirmed after spec-lint pass and claims check |
-| TASK-071 per-recipient notices | — | ADR-0089 (to draft) | not written |
+| TASK-071 per-recipient notices | `feat/recipient-notices` / `f5sign-backend-recipient-notices` | ADR-0089 Proposed | committed + pushed (`52591c2a`) on 2026-10-23, owner-confirmed; needs an f5sign-infra change (EvidenceAudit event queue + binding with DLX, `NOTIFICATION_COPY_BASE_URL`) in the same infra PR as TASK-070's secret |
+
+## Launch order and test-lane priority (owner, 2026-10-23)
+
+Run in parallel, with **TASK-047 first in the queue for the test lane** (the per-worktree `wt-backend` lane is
+exclusive): a session working on any other of these tasks lets a TASK-047 run go ahead of its own runs and gates.
+
+| Wave | In parallel | Starts when |
+|---|---|---|
+| 1 | TASK-047 (priority), TASK-068, TASK-069, and TASK-070 without its receipt part | now |
+| 2 | TASK-070's receipt route and bars (AC-4, AC-6f, S-1, S-2) | TASK-047 on develop |
+| 3 | TASK-071 | TASK-047, TASK-069 and TASK-070 on develop |
+
+Merge order: 068 → 047 → 069 → 070 → 071. Conflict spots: `TrailAssembler` (047, 069),
+`SigningReadersRefuseUnsentEnvelopeTest` (068, 070), `signed_copy: FINAL` (068, 069). TASK-068's ADR takes ADR-0090
+or higher. Before deploying TASK-070: an `f5sign-infra` PR injecting `COPY_READ_CREDENTIAL_SECRET`.
 
 Root `.gitignore` has three uncommitted worktree lines (one per worktree above).
 
@@ -20,7 +35,7 @@ Root `.gitignore` has three uncommitted worktree lines (one per worktree above).
 - AC-14 census over `RoleStanding` × the facts reads use (released informational members are minted; delegated, unclaimed, NOT_BUILT refused); guard lives in the mint service.
 - New AC-9 (lock) and AC-17 (route/Authn/reader censuses); infra must inject `COPY_READ_CREDENTIAL_SECRET` (coordinated f5sign-infra PR).
 
-## Owner decisions already taken for TASK-071 (the notices)
+## Owner decisions for TASK-071 (now written; kept for context)
 
 - Principle: a recipient whose part ends gets something complete and final at that moment.
 - One final notice when, at their act, their receipt exists and all documents they sign are sealed (TASK-069); otherwise an act notice ("your signature is recorded; the process continues; you'll get everything when it completes") and a close notice. SINGLE_SEAL always two.
@@ -29,3 +44,10 @@ Root `.gitignore` has three uncommitted worktree lines (one per worktree above).
 - Informational: `SEALED_COPY_READY` unchanged in who/when, moved to the copy link.
 - Delivery by link on the recipient's declared channels (ADR-0077), email and SMS.
 - Mechanism to settle in ADR-0089: Notification needs a fact for "receipt issued" (amends ADR-0086, which records none) and reacts to it and to `DOCUMENT_SEALED`; idempotent by `NotificationId::fromCause`.
+
+## 2026-10-23 additions
+
+- Delegated recipients are treated like everyone else (copy link minted, notices of their position, copy-ready included); TASK-070's census was amended by its session.
+- A signer of an annulled envelope gets one ending notice, after the seal, with the copy link.
+- "Final" = every document the recipient can see is sealed or requested for an early seal in the same call.
+- Sessions running: cc = TASK-047 (lane priority), a6 = TASK-068, 08 = TASK-069, 31 = TASK-070.

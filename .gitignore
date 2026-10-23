@@ -46,3 +46,5 @@ f5sign-signer-deps/
 /f5sign-backend-per-recipient-receipt/
 /f5sign-backend-early-document-seal/
 /f5sign-backend-copy-link/
+/f5sign-backend-recipient-notices/
+/f5sign-infra-copy-read-secret/
