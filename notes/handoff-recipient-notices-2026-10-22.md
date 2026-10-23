@@ -62,3 +62,7 @@ final notice (sent at the early seal) would contradict `CONTAINS_YOUR_SIGNATURE`
 TASK-071 runs: amend ADR-0090 §2.2 / `SignedCopy::of()` so `FINAL` uses TASK-071's own "final" (every document the
 recipient can see is sealed), or keep `FINAL` at completion and word the notice to match. TASK-069 adds a BACKLOG
 row pointing here (BL-465 or above).
+
+Owner decision 2026-10-23 (option A): `FINAL` takes TASK-071's meaning. TASK-071 amends ADR-0090 §2.2 and
+`SignedCopy::of()` so a recipient's copy reads `FINAL` once every document they can see is sealed, early seal
+included, not only at `completedAt`; TASK-071's record and ADR-0089 take that amendment into their scope.

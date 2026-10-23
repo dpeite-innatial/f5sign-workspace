@@ -42,7 +42,6 @@
 f5sign-signer-deps/
 /f5sign-signer-decline/
 /f5sign-backend-explicit-access-gate/
-/f5sign-backend-signed-copy-after-commit/
 /f5sign-backend-per-recipient-receipt/
 /f5sign-backend-early-document-seal/
 /f5sign-backend-copy-link/
