@@ -108,7 +108,9 @@ model; this skill doesn't repeat the list.
    there's no `--resume` → ask whether to resume or restart. ⚠ `var/` may be owned by root when tools ran in
    containers: if `mkdir` gives *Permission denied*, create it inside the container
    (`docker run --rm -v $(pwd):/var/www/html -w /var/www/html f5sign/backend:dev mkdir -p var/task-runner/TASK-NNN`).
-6. **`run.log`** (JSON lines): `{phase: "prepare", status: "pass", at: ISO8601}`.
+6. **`run.log`** (JSON lines): `{phase: "prepare", status: "pass", at: ISO8601}`. ⛔ **Every timestamp comes
+   from `date -u +%FT%TZ` run at that moment, never typed.** A hand-written one reads as data and is not:
+   TASK-068's log had every slice at `:00:00` and one stamp minutes in the future. § run.log has the fields.
 7. **Worktree lane**: from a worktree, `make -C ../f5sign-infra wt-backend-up src=$(pwd)` brings its lane
    up and **keeps** it, so every later run (baseline, TDD, gates) reuses it instead of paying the startup
    again. Tear it down after Phase 6: `make -C ../f5sign-infra wt-backend-down src=$(pwd)`; once the branch
@@ -228,6 +230,11 @@ may wait on the lane's flock: let it wait, kill nothing. Ignore changed files th
 filtered tests only, never the whole suite.
 ```
 
+**Stamp each slice** (§ run.log): `started` when you launch its implementer, `implemented` when it first returns
+`DONE`/`DONE_WITH_CONCERNS`, `ended` when its reviewer approves. Any time you spend waiting on the user for it
+(a `NEEDS_CONTEXT` they must answer, a supervised question, a plan approval) goes to `waits` as
+`{"kind":"owner","from":…,"to":…}`, stamped on asking and on their answer.
+
 ⛔ **Never Read a `*.report.md` or `*.review.md` in full unless its status is not a pass**: consume the
 JSON. Findings travel by file, not through your context.
 
@@ -318,7 +325,9 @@ When every slice is ticked:
    ADR to land (the five places of `plan-backend` § Decision gate), the task adds a registration (a listener, a
    Messenger handler, a route or a tagged service), or the closing review returned `changes`. `plan-runner`
    writes it in amend mode; it then runs through 2b. After it, repeat 1–3 so `last_green_run` is the tip.
-6. Log every slice in `run.log`: tier, model, rounds, turns, tokens, status (Phase 7 reads these).
+6. Log every slice in `run.log`: tier, model, rounds, turns, tokens, status, its stamps and waits (Phase 7 reads
+   these). Phase 2c and each Phase 3–6 phase get a `started` stamp beside their `at`, and an owner wait inside
+   one of them goes to its `waits` the same way.
 
 ### Phase 3 — Conditional validations
 
@@ -456,10 +465,13 @@ If they accept, apply the status change in its own commit, without signing the c
 Summary of phases, changed files, added tests, covered criteria, active warnings, and **which harness
 validated**. Add the cost table, from `run.log`:
 
-| slice | tier | model | rounds | status | turns/tokens |
-|---|---|---|---|---|---|
+| slice | tier | model | rounds | status | turns/tokens | work min | fix min | owner wait | lane wait |
+|---|---|---|---|---|---|---|---|---|---|
 
-Turns and tokens come from the agent result's usage when it carries them; leave the cell empty otherwise.
+Turns and tokens come from the agent result's usage when it carries them; leave the cell empty otherwise. Work is
+`implemented − started`, fix is `ended − implemented` (review and fix rounds), both minus the owner and lane waits
+inside them. Add one line per phase from 2c on (gates, close) and the task's total wall-clock from `prepare` to
+the end, with its owner and lane waits apart, so the next estimate starts from work time, not from waiting.
 `task-close` copies a five-line cost block (totals per model, rounds, escalations) into the record's
 deviations section. After three tasks have run under this flow, re-measure against TASK-048 and TASK-054 and
 write the comparison to the workspace root's `notes/`. Ask: open a PR?
@@ -479,7 +491,17 @@ Each child skill receives `taskDir` (`{workspace}`) and `taskMdPath`, writes its
 ## run.log
 
 One JSON line per phase: `{"phase":"prepare","status":"pass","at":"2026-08-17T10:15:00Z"}`. One per slice and
-agent: `{"phase":"slice","slice":"03","tier":"critical","agent":"implementer","model":"opus","rounds":2,"status":"DONE","turns":41,"tokens":512000,"delegated":[],"concerns":[],"at":"…"}`.
+agent: `{"phase":"slice","slice":"03","wave":2,"tier":"critical","agent":"implementer","model":"opus","rounds":2,"status":"DONE","turns":41,"tokens":512000,"delegated":[],"concerns":[],"started":"…","implemented":"…","ended":"…","waits":[{"kind":"owner","from":"…","to":"…"}],"lane_wait_s":0,"at":"…"}`.
+
+- Stamps: `date -u +%FT%TZ` at the moment, never typed (Phase 0 step 6). A stamp you missed stays absent; a
+  reconstructed one is worse than none.
+- `waits` holds only the time a slice or phase stood still on the user (`kind: "owner"`). Fix rounds are not a
+  wait: they are `ended − implemented`.
+- `lane_wait_s`: the lane's own measure of queueing, read when the slice ends, never estimated. Every
+  `wt-validate` run appends `ended-at, repo, lane, what, queued s, ran s, exit` to `/tmp/f5sign-wt-timing.tsv`
+  (and prints `==> timing: queued Ns`); sum the queued column over this worktree's lane (the directory name)
+  for the rows between `started` and `ended`. Slices of one wave share the lane, so their windows overlap: the
+  wave waited the largest of them, not their sum.
 
 ## Failure handling
 
