@@ -51,3 +51,14 @@ Root `.gitignore` has three uncommitted worktree lines (one per worktree above).
 - A signer of an annulled envelope gets one ending notice, after the seal, with the copy link.
 - "Final" = every document the recipient can see is sealed or requested for an early seal in the same call.
 - Sessions running: cc = TASK-047 (lane priority), a6 = TASK-068, 08 = TASK-069, 31 = TASK-070.
+
+## Open for TASK-071 before its launch (from the TASK-069 session, 2026-10-23)
+
+With TASK-068 and TASK-069 both in, a signer whose documents are sealed early downloads the sealed revision at once,
+but their `signed_copy` reads `CONTAINS_YOUR_SIGNATURE`, not `FINAL`, until the envelope completes: ADR-0090 §2.2
+keys `FINAL` on `completedAt` (`SignedCopy::of()`). Owner decision 2026-10-23: TASK-069 leaves it; TASK-071 decides
+the "your copy is final" signal. TASK-071's record says its notices must not contradict the signer's screen, so its
+final notice (sent at the early seal) would contradict `CONTAINS_YOUR_SIGNATURE`. To settle with the owner before
+TASK-071 runs: amend ADR-0090 §2.2 / `SignedCopy::of()` so `FINAL` uses TASK-071's own "final" (every document the
+recipient can see is sealed), or keep `FINAL` at completion and word the notice to match. TASK-069 adds a BACKLOG
+row pointing here (BL-465 or above).
