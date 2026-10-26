@@ -1,0 +1,36 @@
+{"phase":"prepare","status":"pass","at":"2026-10-23T08:58:44Z"}
+{"phase":"spec-lint","status":"pass","blocking":0,"warnings":2,"at":"2026-10-23T09:00:21Z"}
+{"phase":"baseline","status":"pass","tests":6740,"assertions":72182,"tree":"c90c8135","harness":"wt-backend lane (kept), fast=1","at":"2026-10-23T09:00:36Z"}
+{"phase":"spec-claims","status":"fail","blocking":2,"warnings":2,"at":"2026-10-23T09:02:37Z"}
+{"phase":"spec-claims","status":"pass","run":3,"note":"B1/B2 resolved by owner 2026-10-23; warns fixed","at":"2026-10-23T09:10:20Z"}
+{"phase":"plan","status":"approved","amends":1,"at":"2026-10-23T09:50:03Z"}
+{"phase":"wave","wave":1,"slices":["01","02"],"model":"opus","at":"2026-10-23T09:50:16Z"}
+{"phase":"slice","slice":"02","tier":"critical","agent":"implementer+reviewer","model":"opus","rounds":0,"status":"approved","tokens":177045,"delegated":[],"concerns":3,"at":"2026-10-23T10:06:15Z"}
+{"phase":"slice","slice":"01","tier":"critical","model":"opus","rounds":1,"status":"approved","tokens":146315,"delegated":[],"concerns":3,"at":"2026-10-23T10:06:39Z"}
+{"phase":"slice","slice":"04","tier":"critical","model":"opus","rounds":1,"status":"approved","tokens":170905,"delegated":[],"concerns":3,"at":"2026-10-23T10:21:43Z"}
+{"phase":"slice","slice":"07","tier":"critical","model":"opus","rounds":0,"status":"approved-with-deferred-findings","tokens":189432,"delegated":[],"concerns":4,"at":"2026-10-23T10:37:30Z"}
+{"phase":"slice","slice":"05","tier":"critical","model":"opus","rounds":1,"status":"approved","tokens":226150,"delegated":[],"concerns":5,"at":"2026-10-23T10:46:45Z"}
+{"phase":"slice","slice":"03","tier":"critical","model":"opus","rounds":0,"status":"approved","tokens":107323,"delegated":[],"concerns":0,"at":"2026-10-23T10:48:38Z"}
+{"phase":"slice","slice":"06","tier":"critical","model":"opus","rounds":2,"status":"approved","tokens":224046,"delegated":[],"concerns":3,"at":"2026-10-23T11:12:07Z"}
+{"phase":"slice","slice":"08","tier":"critical","model":"opus","rounds":2,"status":"approved","tokens":235628,"delegated":[],"concerns":3,"at":"2026-10-23T11:36:41Z"}
+{"phase":"slice","slice":"10","tier":"critical","model":"opus","rounds":1,"status":"approved","tokens":160064,"delegated":[],"concerns":0,"at":"2026-10-23T11:55:50Z"}
+{"phase":"slice","slice":"09","tier":"critical","model":"opus","rounds":2,"status":"approved","tokens":173976,"delegated":[],"concerns":2,"at":"2026-10-23T12:00:17Z"}
+{"phase":"slice","slice":"11","tier":"critical","model":"opus","rounds":1,"status":"approved","tokens":171723,"delegated":[],"concerns":3,"at":"2026-10-23T12:01:17Z"}
+{"phase":"slice","slice":"12","tier":"critical","model":"opus","rounds":3,"status":"approved","tokens":213984,"delegated":[],"concerns":2,"at":"2026-10-23T12:22:24Z"}
+{"phase":"slice","slice":"13","tier":"critical","model":"opus","rounds":3,"status":"approved","tokens":246494,"delegated":[],"concerns":2,"at":"2026-10-23T12:26:19Z"}
+{"phase":"merge-develop","status":"pass","fast":6893,"filtered":76,"harness":"wt-backend lane","at":"2026-10-23T12:27:33Z"}
+{"phase":"slice","slice":"14","tier":"critical","model":"opus","rounds":1,"status":"approved","tokens":172368,"delegated":[],"concerns":1,"at":"2026-10-23T12:41:26Z"}
+{"phase":"slice","slice":"15","tier":"standard","model":"sonnet","rounds":1,"status":"approved","tokens":100032,"delegated":[],"concerns":1,"at":"2026-10-23T12:45:50Z"}
+{"phase":"full-suite","status":"fail-1-then-fixed","tree":"affed9ba","tests":8403,"assertions":97554,"failures":1,"fixed_in":"2ae3ff08","harness":"wt-backend lane","log":"/tmp/tmp.yDibjZG3js.log","at":"2026-10-23T12:54:35Z"}
+{"phase":"slice","slice":"16","tier":"critical","model":"opus","rounds":1,"status":"done","tokens":162588,"at":"2026-10-23T13:11:59Z"}
+{"phase":"pause","status":"paused-by-owner","tip":"1404641b","at":"2026-10-23T13:31:23Z"}
+{"phase":"full-suite","status":"pass","tree":"1404641b","tests":8403,"assertions":97584,"gates":"arch,phpstan ok; lint fixed in next commit","harness":"wt-backend lane","log":"/tmp/tmp.oYP13m9v89.log","at":"2026-10-23T13:41:53Z"}
+{"phase":"doctrine-guard","status":"pass","blockers":0,"warnings":1,"warning":"no tenant_id-leading index on issued_receipt (mirrors issued_trail; accepted)","at":"2026-10-26T08:57:48Z"}
+{"phase":"contract-check","status":"fail","blocking":"handoff-missing (routed to docs-sync)","at":"2026-10-26T08:57:54Z"}
+{"phase":"task-validate","status":"pass","warnings":4,"msi":"deferred","criteriaWithoutTest":0,"at":"2026-10-26T08:58:27Z"}
+{"phase":"security-audit","status":"warn","blocking":0,"warnings":5,"eidas":"not delegated (no signing internals changed)","at":"2026-10-26T09:00:49Z"}
+{"phase":"docs-sync","status":"pass","commit":"04700f8b","at":"2026-10-26T09:04:04Z"}
+{"phase":"task-close","status":"awaiting-adr-acceptance","commit":"2866ca06","at":"2026-10-26T09:04:04Z"}
+{"phase":"infection","status":"fail","msi":0.833,"coveredMsi":0.932,"escaped":44,"notCovered":76,"tree":"f3bc315a","at":"2026-10-26T09:05:02Z"}
+{"phase":"slice","slice":"17","tier":"critical","model":"opus","rounds":1,"status":"approved","tokens":386125,"infection":{"tree":"7e2b661c","mutants":687,"killed":652,"escaped":28,"notCovered":7,"msi":0.94,"coveredMsi":0.95},"at":"2026-10-26T09:39:40Z"}
+{"phase":"merge","status":"merged","develop":"957077fa","pushed":true,"migrated":true,"ai_store":"5d4443e","at":"2026-10-26T09:55:50Z"}
