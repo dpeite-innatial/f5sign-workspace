@@ -42,8 +42,6 @@
 f5sign-signer-deps/
 /f5sign-signer-decline/
 /f5sign-backend-explicit-access-gate/
-/f5sign-backend-copy-link/
 /f5sign-backend-recipient-notices/
 /f5sign-infra-copy-read-secret/
 /f5sign-infra-evidenceaudit-events/
-/f5sign-backend-relay-order/
