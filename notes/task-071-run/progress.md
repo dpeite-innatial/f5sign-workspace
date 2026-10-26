@@ -1,0 +1,25 @@
+plan: approved 2026-10-26 | record sha1 1a6228dfaf65f8343b0c2c904a1de8b32223dbd1
+- [x] 01 Envelope records RECIPIENT_PART_ENDED; decline requests seal (critical) | commits 405f9f52..f5c36338 | round 1 | findings slices/01.findings.md
+- [x] 02 RECEIPT_ISSUED inside the claim (critical) | commits 2a63bd2d | round 0 | findings slices/02.findings.md
+- [x] 03 Three recipient notice purposes (no link) (critical) | commits baff062c..26b9c597 | round 1 | findings slices/03.findings.md
+- [x] 04 Locked part-notice record (critical) | commits 1e35679a..1bbb3238 | round 1 | findings slices/04.findings.md
+- [x] 05 Five _YOUR_COPY ending notices (no link) (critical) | commits e35cdb5d..831b4ae2 | round 1 | findings slices/05.findings.md
+- [x] 06 Trail and receipt over both new facts (standard) | commits 5bef6e45..4849cc08 | round 1 | findings slices/06.findings.md
+- [x] 07 PartNoticePolicy + census (critical) | commits b12358f6..3d2fad06 | round 1 | findings slices/07.findings.md
+- [x] 08 signed_copy FINAL once visible sealed (critical) | commits cdbdfffa,efabf9ca | round 0 | findings slices/08.findings.md
+- [x] 09 New purposes in history (standard) | commits 08354f80 | round 0 | findings slices/09.findings.md
+- [x] 10 Part and receipt reach Notification (critical) | commits 9c8a1af9..220d12f9 | round 1 | findings slices/10.findings.md
+- [x] 11 Early seal re-decides (critical) | commits 6c7799df..52212b58 | round 1 | findings slices/11.findings.md
+- [x] 12 Close spares signed/declined (critical) | commits a84fcef7 | round 0 | findings slices/12.findings.md
+- [x] 13 End: boundary per recipient (critical) | commits 97051e4d..30377358 | round 1 | findings slices/13.findings.md
+- [x] 14 [after 070] copy link on notices (critical) | commits 1f1d6053..3513d30b | round 1 | findings slices/14.findings.md
+- [x] 15 [after 070] SEALED_COPY_READY copy link (critical) | commits 7a2f0a09..512384bf | round 1 | findings slices/15.findings.md
+- [x] 16 [after 070] refused mint real UoW (critical) | commits 5e1a123f | round 0 | findings slices/16.findings.md
+- [x] 17 [after 070] copy list prose FINAL (standard(writes`#[OA\*]`strings:reviewonopus)) | commits b436d5c1..02891ce5 | round 1 | findings slices/17.findings.md
+- [x] 18 [after 070] waybill + SINGLE_SEAL e2e (critical) | commits abd1b038..de5ea500 | round 1 | findings slices/18.findings.md
+- [x] 19 [after 070] decline + secured-early e2e (critical) | commits ecefc60f,b818f79e | round 0 | findings slices/19.findings.md
+- [x] 20 AC-18 broker (red until infra) (critical) | commits 78f8ade1..1e262930 | round 1 | findings slices/20.findings.md
+- [x] 21 Trail labels for the two new facts (standard) | commits bcd9dd20 | round 0 | findings slices/21.findings.md
+- [x] 22 Closing: decisions read after the lock; seal waits on a concurrent part (critical) | commits 05a728a8..d54ed1f2 | round 1 | findings slices/22.findings.md
+- [x] 23 Closing: review findings F1-F4 and e2e assertions (standard, opus review) | commits 60d970fa | round 0 | findings slices/23.findings.md
+- [x] 24 Kill the escaped Infection mutants (standard, opus review) | commits 663efd2d..46b51ec7 | round 1 | findings slices/24.findings.md
