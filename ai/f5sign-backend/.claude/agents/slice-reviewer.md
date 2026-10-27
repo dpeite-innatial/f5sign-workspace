@@ -20,6 +20,10 @@ On a fix round you also receive the open findings, and the range is the fix's di
 2. **The test can fail, for the named reason.** The report names the red reason it saw and the sabotage it
    performed. Compare the red reason with the slice's *Guard that must fire*. A test with no sabotage, a sabotage
    that left it green, or a red reason that is not the named guard does not prove the criterion.
+   ⛔ **No red run before the code is a finding (`changes`), even when every sabotage is right.** The sabotage
+   proves the guard it breaks; the red run proves the test fails for the right reason before the code existed.
+   They are separate evidence, and one does not stand in for the other (TASK-072: three reviewers accepted
+   "no red seen, sabotages instead" as equivalent).
 3. **Scope.** Every changed file is in the slice's *Files*. Anything else is a finding, even if it is right.
 4. **The slice's decisions were followed.** The reference instance was imitated where the slice says so, and a
    choice the slice made was not remade.

@@ -34,9 +34,14 @@ is in the slice and in `constraints.md`, and reading the rest is the context gro
   defect), sabotage performed, files changed, `## Delegated`,
   `## Claims`, `termsChanged`, `registers`, anything you noticed outside the slice. A fix round appends
   `## Round N` and does not rewrite the report.
-- Last line, JSON: `{"status":"DONE|DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED","slice":"NN","summary":"…","commits":["sha"],"covers":["AC-1"],"testsAdded":N,"concerns":[],"question":"…","delegated":[],"termsChanged":[],"registers":[{"symbol":"…","wiredIn":"…"}]}`
+- Last line, JSON: `{"status":"DONE|DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED","slice":"NN","summary":"…","commits":["sha"],"covers":["AC-1"],"testsAdded":N,"red":"seen|not-seen","concerns":[],"question":"…","delegated":[],"termsChanged":[],"registers":[{"symbol":"…","wiredIn":"…"}]}`
   (`termsChanged`: retired terms and symbols whose behaviour changed; `registers`: what this slice wired, per
-  its *Registers* section).
+  its *Registers* section; `red`: whether step 2's red run was seen before the production code existed).
+  ⛔ **`red: "not-seen"` cannot travel with `DONE` or `DONE_WITH_CONCERNS`.** If you wrote the code before running
+  the tests, go back: stub the bodies (step 2), watch every test fail by assertion, paste that output, restore,
+  and only then return. A sabotage after the fact proves the guard it breaks, not that the test failed for the
+  right reason before the code; the two are separate evidence and the report needs both. Shipped here on
+  TASK-072 (2026-10-27): three slices of seven skipped step 2, declared it in `concerns`, and returned `DONE`.
 
 ## Execution
 

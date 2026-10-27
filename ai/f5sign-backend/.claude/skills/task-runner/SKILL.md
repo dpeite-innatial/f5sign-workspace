@@ -251,7 +251,7 @@ Act on its status:
 
 | Status | What you do |
 |---|---|
-| `DONE` | Review it (below) |
+| `DONE` | Review it (below). ⛔ With `red: "not-seen"` (or the field missing), send it back to the implementer for step 2 of `implement-backend` before any review |
 | `DONE_WITH_CONCERNS` | Read the concerns. One about correctness or scope is fixed before review; an observation goes to `plan.md § Deviations` |
 | `NEEDS_CONTEXT` | Answer from the task or the plan if you can, by fixing the slice file, and launch a fresh implementer. If the answer changes the plan, it is the user's (supervised) or an amend (below) |
 | `BLOCKED` | Something has to change before a retry: more context, the stronger model, a smaller slice, or a corrected plan. ⛔ **Never relaunch the same model on the same slice unchanged.** A decision (ADR) or a mis-cut slice goes to `plan-runner` in amend mode; an ADR it drafts goes to the user as in 2a |
