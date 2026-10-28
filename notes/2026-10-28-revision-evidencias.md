@@ -241,6 +241,8 @@ Decidido con el owner (2026-10-28):
 - Columna de etiquetas de 44mm → **36mm**: medía casi lo mismo que el subtítulo "INVITACIÓN Y VERIFICACIÓN" y parecía
   ajustarse a él (ningún subtítulo influye: el ancho es fijo); además dejaba un hueco grande. Las etiquetas largas
   ("Versión de la plataforma") pasan a dos líneas.
+- **Sin el nombre del tenant, de momento** (owner): fuera de la banda de portada, de la fila "Titular" de los datos del
+  sobre y del autor del PDF. El JSON adjunto lo sigue llevando (`envelope.tenant_label`).
 
 ## Formato visual (para la tarea de diseño)
 

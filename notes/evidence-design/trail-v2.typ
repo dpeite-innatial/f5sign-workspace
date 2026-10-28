@@ -392,7 +392,6 @@
 #set document(
   title: "Registro de auditoría",
   // Typst takes a string or an array here, never `none`, so an empty label gives no author.
-  author: if env.tenant_label.stated { env.tenant_label.value } else { () },
   keywords: ("f5sign", "registro de auditoría", env.envelope_id),
 )
 #let accent = rgb("#26272b")
@@ -504,7 +503,7 @@
   #v(2pt)
   #text(size: 17pt, weight: "bold", env.title) \
   #v(1pt)
-  #text(size: 8.5pt, fill: luma(225))[#if env.tenant_label.stated [#env.tenant_label.value · ]Sobre #mono(env.envelope_id)]
+  #text(size: 8.5pt, fill: luma(225))[Sobre #mono(env.envelope_id)]
   ], image("logo.svg", height: 5.5mm, alt: "F5Sign"))
 ]
 
@@ -636,7 +635,6 @@
 #kv(
   ("Sobre", mono(env.envelope_id)),
   ("Título", env.title),
-  ("Titular", [#stated(env.tenant_label) #note[Nombre con el que se dio de alta al titular en la plataforma; no es su razón social.]]),
   ("Creado por", if env.created_by == none { note[No consta.] } else { actor(env.created_by) }),
   ("Creado", if env.created_at == none { note[No consta.] } else { when(env.created_at) }),
   ("Enviado", if env.sent_at == none { note[No consta.] } else { when(env.sent_at) }),
