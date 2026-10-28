@@ -409,7 +409,8 @@
 #set par(justify: false, leading: 0.6em)
 #set page(
   paper: "a4",
-  margin: (x: 16mm, top: 20mm, bottom: 20mm),
+  margin: (x: 16mm, top: 15mm, bottom: 20mm),
+  header-ascent: 25%,
   header: context if counter(page).get().first() > 1 {
     set text(size: 7pt, fill: gray)
     grid(columns: (1fr, auto), [Registro de auditoría · #env.title], [Sobre #env.envelope_id])
