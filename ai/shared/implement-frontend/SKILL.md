@@ -30,7 +30,7 @@ TDD implementation of a frontend task. The model is chosen based on `Complejidad
   source of truth, never by hand from the handoff prose.
 - If `--amplified-context`: parent story README + parent epic README + dependencies' `.md` + event catalog if applicable
 - Fixed references: `Arquitectura/Arquitectura Frontend.md`, `.claude/skills/planning-detail/references/wireframe-conventions.md`
-- `tailwind.config.ts` (canonical tokens)
+- `tailwind.config.ts` (canonical tokens; on Tailwind 4 there is none: the `@theme` blocks of the main CSS file)
 
 ## Outputs
 
@@ -46,7 +46,7 @@ TDD implementation of a frontend task. The model is chosen based on `Complejidad
 1. Read the task's `.md` in full
 2. Read files from `## Contexto requerido`
 3. Read fixed references (frontend architecture + wireframe conventions)
-4. Read `tailwind.config.ts` to learn tokens
+4. Read `tailwind.config.ts` (Tailwind 3) or the `@theme` blocks of the main CSS (Tailwind 4) to learn tokens
 5. If the project has types generated from OpenAPI (e.g. `types/api.ts` or similar): read them if the task consumes endpoints
 
 ### Step 2 — Plan

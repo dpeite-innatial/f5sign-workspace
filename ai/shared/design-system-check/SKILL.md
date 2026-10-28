@@ -17,7 +17,7 @@ Design system coherence validation. Only if tags include `ui`. **Not a hard gate
 
 - `var/task-runner/T{id}/changes.diff`
 - Task `.md`
-- `tailwind.config.ts` (technical source of truth for tokens)
+- The token source (technical source of truth): `tailwind.config.ts` on Tailwind 3; on Tailwind 4 (no config file, e.g. the signer) the `@theme` / `@theme inline` blocks of the main CSS (`app/assets/css/tailwind.css`), plus any `@plugin` file it loads
 - `.claude/skills/planning-detail/references/wireframe-conventions.md` (semantic reference)
 - Optional: `design-system/allowed-arbitrary.json` (whitelist of accepted arbitrary values)
 - Declared base components (e.g. `components/base/` or `components/ui/`)
@@ -29,13 +29,13 @@ Design system coherence validation. Only if tags include `ui`. **Not a hard gate
 
 ## Precondition
 
-If `tailwind.config.ts` doesn't exist: emit WARN "tokens not defined, design without a system" and return `pass` (nothing to validate against).
+Find the token source first: `tailwind.config.ts`/`.js`, or else a CSS file with `@import 'tailwindcss'` and `@theme` blocks (Tailwind 4). ⚠ A missing config file alone is NOT "no design system": on Tailwind 4 it is the normal case. Only if neither exists: emit WARN "tokens not defined, design without a system" and return `pass` (nothing to validate against).
 
 ## Execution
 
 ### Step 1 — Extract canonical tokens
 
-Parse `tailwind.config.ts` (or `tailwind.config.js`):
+Parse the token source (`tailwind.config.ts`/`.js`, or the `@theme` variables on Tailwind 4: `--color-surface` is the class `bg-surface`, `--spacing-tap-min` is `h-tap-min`, `--shadow-paper` is `shadow-paper`, and so on). Tailwind 4 also renamed scale steps (`shadow-sm`→`shadow-xs`, `rounded`→`rounded-sm`, `outline-none`→`outline-hidden`): read the version from `package.json` before calling a class unknown:
 - List of allowed colors (tokens + their shades)
 - Allowed spacing scale (`xs`, `sm`, `md`, ... or numeric values `0, 1, 2, 4, 8, 16, ...`)
 - Font sizes (`text-xs`, `text-sm`, ...)

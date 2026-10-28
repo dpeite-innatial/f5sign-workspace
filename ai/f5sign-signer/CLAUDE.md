@@ -6,15 +6,15 @@ Signing frontend for the signer in F5Sign. Public experience (no account require
 
 - **Nuxt** 4.x with **Vue** 3.5+ (Composition API + `<script setup>`). New layout: app code in `app/`, configs and `tests/`/`public/`/`types/`/`i18n/` at the root.
 - **TypeScript** 5.x in strict mode
-- **Pinia** 3.x (via `@pinia/nuxt` 0.11.x) for state management
-- **Tailwind CSS** 3.x with mobile-safe reset (iOS anti-zoom)
+- **Pinia** 4.x (via `@pinia/nuxt` 1.x) for state management
+- **Tailwind CSS** 4.x through `@tailwindcss/vite` (there is no Nuxt module), with mobile-safe reset (iOS anti-zoom). Tokens and resets in `app/assets/css/tailwind.css` (`@theme inline`, every own rule in `@layer base`); the two-theme palette in `tailwind.theme.ts`, loaded with `@plugin`. A new colour goes in both files. Floor: Safari 16.4, Chrome 111, Firefox 128 (accepted by the owner, 2026-10-28).
 - **vue-i18n** (via `@nuxtjs/i18n` 10.x) — `es` and `en` locales in the MVP (in `i18n/locales/`, not in `app/`), detection via `navigator.language` and query `?lang=`. `language` property (replaces `iso` from v8).
 - **No `@vueuse/core`**: it is not a dependency, whatever older notes say. Composables use the browser API directly (`useTheme` reads `matchMedia`).
 - **zod** for validation
 - **pdfjs-dist** for inline PDF rendering
 - **ofetch** (via `$fetch`) as HTTP client
-- **pnpm** 9.x, **Node**: `package.json` requires `>=20.19.0` (Nuxt 4 requirement). Dev runs on `node:24-alpine`; the production `Dockerfile` builds with `node:20-alpine`, out of support since 2026-04-30.
-- **postcss** ^8.5.15 forced via `pnpm.overrides` (fix for CVE GHSA-qx2v-qp2m-jg93)
+- **pnpm** 12.x, pinned exactly in `packageManager`. **No corepack**: Node 26 doesn't ship it, so the containers install that version with npm (infra's `pnpm-install`, the `Dockerfile`) and run plain `pnpm`. **Node**: dev container and production `Dockerfile` on `node:26-alpine`; the `engines` floor stays at 24 because the Playwright images bring their own Node.
+- **postcss** ^8.5.15 forced via `overrides` in `pnpm-workspace.yaml` (fix for CVE GHSA-qx2v-qp2m-jg93); since pnpm 11 the `pnpm` field of `package.json` is ignored.
 
 Note: **no `chart.js`** or **`@headlessui/vue`** in the signer — the flow is touch-based and minimal, it doesn't need heavy admin UI.
 
@@ -45,7 +45,7 @@ Nuxt 4 default layout (`srcDir: 'app/'`):
 ```
 f5sign-signer/
 ├── nuxt.config.ts               ← viewport-fit=cover, theme-color
-├── tailwind.config.ts
+├── tailwind.theme.ts            ← palette, both themes (Tailwind plugin)
 ├── tsconfig.json                ← extends .nuxt/tsconfig.json
 ├── tsconfig.test.json           ← standalone for Vitest
 ├── vitest.config.ts
