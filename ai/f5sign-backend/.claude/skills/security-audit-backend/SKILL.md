@@ -78,11 +78,11 @@ What does exist (ADR-0044…ADR-0048), and is what gets checked:
 - [ ] Tests that verify 401/403 on the unauthorized attempt, and **a cross-tenant one that expects
       404/403**.
 
-### Rate limiting — configured, consumed by one endpoint
+### Rate limiting — configured, consumed by three endpoints
 
 `symfony/rate-limiter` is configured in `config/packages/rate_limiter.yaml` (policy sets per medium, on a
-Redis-backed pool) and consumed by `POST /api/v1/signing/session/auth/otp/send` through
-`FailOpenOtpSendLimiter`, which picks the set by the medium of the declared method and **fails open**,
+Redis-backed pool) and consumed by the three OTP send routes (signing session, its machine twin and the
+copy) through `FailOpenOtpSendLimiter`, which picks the set by the medium of the declared method and **fails open**,
 logging at `error` (ADR-0014). Read `CLAUDE.md` § Stack for the current shape.
 
 - [ ] If the diff adds a surface that costs money or touches personal data anonymously (OTP, resend,
