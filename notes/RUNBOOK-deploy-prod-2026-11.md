@@ -71,7 +71,9 @@ Qué hay que mirar:
 
 Las 22 migraciones nunca han corrido contra datos de prod, y varias reescriben filas o añaden `CHECK` y `UNIQUE`
 (§7). Conviene restaurar un dump de prod en un entorno aislado, ejecutar `migrate` con el rol dueño y después el
-registro de la clave.
+registro de la clave. **Después, prueba el rollback:** restaura el mismo dump con la receta de §8 sobre la base ya
+migrada y comprueba que el esquema y `doctrine_migration_versions` vuelven exactos. Esa receta solo se ha medido en una
+reproducción pequeña; si `--create` falla con el dump real, avisa a infra, que corregiría `deploy.md` y el `Makefile`.
 
 ⚠ Un dump de prod contiene datos personales: no lo dejes en la máquina de desarrollo al terminar.
 
@@ -161,7 +163,7 @@ tras el registro de la clave.
 ```bash
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml stop caddy
 # ── ventana abierta ──────────────────────────────────────────────
-make worker-status-prod             # propuesto: esperar a profundidad 0, relay al día
+make worker-status-prod             # propuesto: esperar a 0 mensajes en toda cola con consumidor
 make worker-down-prod
 make backup-prod LABEL=corte        # LA copia buena: ya sin escrituras
 make init-roles-prod                # antes de migrar; al terminar lista los roles
@@ -170,8 +172,8 @@ make migrate-prod                   # corre desde la imagen nueva, sin desplegar
 make register-wrapping-key-prod     # antes de servir tráfico; se puede repetir
 
 # propuesto: punto de decisión, sin tráfico ni workers
-docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d php-fpm
-docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml exec php-fpm ls /run/secrets
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --wait php-fpm
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml exec -T php-fpm ls /run/secrets
 # arranca y no aparece wrapping_key_pair → seguir. Si no → rollback dentro de ventana (§8).
 
 make deploy-prod                    # NO deploy-backend: dejaría el relay en la imagen vieja
@@ -181,7 +183,8 @@ make worker-status-prod
 ```
 
 - **Vaciar colas (propuesto):** parar caddy primero corta las escrituras nuevas y deja que el código viejo procese lo
-  suyo. Según la lectura de los `fromPayload` desde `v0.0.2`, los eventos en cola se decodifican también con el
+  suyo. `queue.failed` y `queue.events.unroutable` no tienen consumidor y no bajan a 0, y `worker-status-prod` no
+  muestra el avance del relay. Según la lectura de los `fromPayload` desde `v0.0.2`, los eventos en cola se decodifican también con el
   código nuevo: las claves añadidas son opcionales y no desaparece ningún tipo. Por eso no parece obligatorio, pero
   no se ha ejecutado, y un mensaje indecodificable bloquea su cola hasta purgarla a mano (BL-100). Si un reintento
   retrasado impide llegar a 0, decide en ese momento.
@@ -280,9 +283,23 @@ que lanza una excepción. No se ha medido qué hace después el relay o el worke
 | Momento | Qué hacer |
 |---|---|
 | Falla algo **antes** de abrir la ventana | Sin efecto en datos. Revierte `BACKEND_TAG` en `.env.prod`, que ya está cambiado desde §3; si no, el siguiente `run` o `deploy` usa la imagen nueva. Si el signer nuevo ya está desplegado, vuelve también a su tag anterior. |
-| Falla **dentro** de la ventana, antes de `deploy-prod` | `make backup-prod LABEL=antes-del-restore`, restaura `corte` con `pg_restore` (la receta exacta la imprime `backup-prod` al terminar; ver `backups.md`), vuelve a `BACKEND_TAG` y `SIGNER_TAG` anteriores, `make deploy-prod` y reabre. |
+| Falla **dentro** de la ventana, antes de `deploy-prod` | `make backup-prod LABEL=antes-del-restore`, restaura `corte` con la receta de abajo, vuelve a `BACKEND_TAG` y `SIGNER_TAG` anteriores, `make deploy-prod` y reabre. |
 | Falla **después** de `deploy-prod` | Desde ahí pueden haber salido correos y sweeps, aunque no se haya abierto al público, así que restaurar ya no sale gratis. Arreglar hacia delante. Restaurar `corte` pierde lo escrito desde entonces: en una plataforma de firma son firmas que el firmante vio confirmadas. Solo con decisión expresa del owner. |
 
+**Receta para restaurar `corte`,** de la rama de infra `docs/deploy-cutover-sequence` (`374949e`), aún sin mergear a
+`master`:
+
+```bash
+DC="docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml"
+$DC stop php-fpm worker relay custodian
+$DC exec -T -e PGPASSWORD=<password> postgresql \
+  pg_restore -U <POSTGRES_USER> -d postgres --clean --if-exists --create < <fichero>-corte.dump
+```
+
+- ⛔ **No uses la receta que imprimía `backup-prod` hasta `8cae056`** (`-d <db> --clean --if-exists`). No deshace una
+  migración: deja el esquema nuevo e indica la versión vieja en `doctrine_migration_versions`, así que el estado de
+  migraciones también mentiría. Infra lo midió en una reproducción pequeña, igual que la receta nueva. ⚠ Ninguna se ha
+  probado con un dump real: eso cubre el ensayo de §2.
 - ⛔ **`make restore-prod` no restaura `corte`.** Restaura desde pgBackRest y, sin `TARGET`, reproduce el WAL hasta el
   final: te devolvería al estado ya migrado. Solo vale como recuperación a un instante, con un `TARGET` explícito
   anterior a la migración.
@@ -296,6 +313,9 @@ que lanza una excepción. No se ha medido qué hace después el relay o el worke
 
 - ❓ El tag real de prod, la rama y el remote del host (§0).
 - ❓ Si el signer nuevo funciona contra el backend viejo durante los minutos que van entre §3 y §4.
+- ❓ Merge a `master` de `docs/deploy-cutover-sequence` (`374949e`). Hasta entonces, el host imprime la receta vieja de
+  restauración, `deploy.md` no tiene estas correcciones y el runbook mantiene los «propuesto».
+- ⚠ La receta de restauración con `--create`: medida solo en una reproducción pequeña.
 - ⚠ `pull-prod` sin los ficheros de la clave: probado solo en `--dry-run` y con una imagen.
 - ⚠ `migrate-prod` y `register-wrapping-key-prod`: el primer uso real en prod será el estreno de esta combinación.
 - ⚠ **BL-492:** una excepción aparcada en el failure transport, o enviada a Sentry, puede conservar un motivo
