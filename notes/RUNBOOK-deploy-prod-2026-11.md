@@ -2,7 +2,7 @@
 
 **Estado: borrador. No está ejecutado ni ensayado, y la base es una suposición.**
 
-- **Destino:** `f5sign-backend` `develop` @ `ce035a80` (Key Management). Infra `master` @ `8cae056`.
+- **Destino:** `f5sign-backend` `develop` @ `12f654fc` (Key Management en `ce035a80`, más un commit de documentación). Infra `master` @ `16e6760`.
 - **Base supuesta:** backend `v0.0.2` (`085ffef8`, 2026-10-05; `v0.0.1` es el mismo commit). Es lo más probable,
   pero nadie lo ha medido en el host. **Si la fase 0 da otro tag, este documento hay que recalcularlo.**
 - **Tamaño desde esa base:** 1022 commits y 22 migraciones.
@@ -81,9 +81,7 @@ reproducción pequeña; si `--create` falla con el dump real, avisa a infra, que
 
 ## 3. Preparación, con tráfico arriba
 
-⚠ **Conflicto de orden en `deploy.md`:** la parte de TASK-070/071 pide `git pull` de infra **antes** de la release,
-y la de Key Management lo pone **después** de `pull-prod`. Aquí va primero el `git pull`, porque los targets de
-la clave y el compose nuevo salen de ese checkout. Por eso `pull-prod` corre sin los ficheros de la clave. Infra lo
+El `git pull` de infra va primero, porque los targets de la clave y el compose nuevo salen de ese checkout. Por eso `pull-prod` corre sin los ficheros de la clave. Infra lo
 ha probado en `--dry-run` y con una sola imagen, sin problema, pero no de forma real; el paso 3 da la salida.
 
 **1. Infra y variables**
@@ -130,8 +128,8 @@ make pull-prod                              # solo si falló antes
 sudo make backup-secrets BACKUP_DIR=$HOME/f5sign-backups && sudo chown -R $(id -un): $HOME/f5sign-backups
 ```
 
-Saca el paquete del host y guarda la passphrase aparte. `deploy.md` lo escribe sin `sudo`, pero el par es de root con
-permisos `600` y el target falla sin él.
+Saca el paquete del host y guarda la passphrase aparte. Lleva `sudo` porque el par es de root con permisos `600` y el
+target falla sin él.
 
 ⛔ **Sin el par de claves, todo valor cifrado queda ilegible para siempre, en la base y en cada backup.** Nunca generes
 otro sobre una base que ya tenga valores cifrados: restaura los ficheros desde este paquete. La clave no tiene
@@ -156,14 +154,12 @@ pausa hasta la ventana. ❓ Confirmarlo con la sesión del signer.
 
 ## 4. La ventana
 
-**Dos pasos se apartan de `deploy.md`; el owner los aceptó el 2026-11-04.** Están marcados con «propuesto» hasta que
-`deploy.md` los incorpore. La secuencia antigua era: `worker-down-prod`, `stop caddy`, y `deploy-prod` directamente
-tras el registro de la clave.
+Sigue la secuencia de corte de `deploy.md` §5, que ya incluye vaciar las colas y el punto de decisión.
 
 ```bash
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml stop caddy
 # ── ventana abierta ──────────────────────────────────────────────
-make worker-status-prod             # propuesto: esperar a 0 mensajes en toda cola con consumidor
+make worker-status-prod             # esperar a 0 mensajes en toda cola con consumidor
 make worker-down-prod
 make backup-prod LABEL=corte        # LA copia buena: ya sin escrituras
 make init-roles-prod                # antes de migrar; al terminar lista los roles
@@ -171,7 +167,7 @@ make migrate-status-prod
 make migrate-prod                   # corre desde la imagen nueva, sin desplegarla
 make register-wrapping-key-prod     # antes de servir tráfico; se puede repetir
 
-# propuesto: punto de decisión, sin tráfico ni workers
+# punto de decisión, sin tráfico ni workers
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --wait php-fpm
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml exec -T php-fpm ls /run/secrets
 # arranca y no aparece wrapping_key_pair → seguir. Si no → rollback dentro de ventana (§8).
@@ -182,7 +178,7 @@ make migrate-status-prod
 make worker-status-prod
 ```
 
-- **Vaciar colas (propuesto):** parar caddy primero corta las escrituras nuevas y deja que el código viejo procese lo
+- **Vaciar colas:** parar caddy primero corta las escrituras nuevas y deja que el código viejo procese lo
   suyo. `queue.failed` y `queue.events.unroutable` no tienen consumidor y no bajan a 0, y `worker-status-prod` no
   muestra el avance del relay. Según la lectura de los `fromPayload` desde `v0.0.2`, los eventos en cola se decodifican también con el
   código nuevo: las claves añadidas son opcionales y no desaparece ningún tipo. Por eso no parece obligatorio, pero
@@ -190,7 +186,7 @@ make worker-status-prod
   retrasado impide llegar a 0, decide en ese momento.
 - **`queue.failed`:** usa el serializador PHP por defecto, no el de los eventos, así que un mensaje aparcado puede no
   deserializarse si su clase ha cambiado. Revísalo en la fase 0 y resuelve lo que haya **antes** de la ventana.
-- **Punto de decisión (propuesto):** `deploy-prod` levanta a la vez caddy, workers y custodian, y desde ese momento
+- **Punto de decisión:** `deploy-prod` levanta a la vez caddy, workers y custodian, y desde ese momento
   pueden salir correos y sweeps. Solo prueba el arranque y la configuración, no el flujo completo.
 - **`init-roles-prod`:** `Version20261015093359` falla sin `f5sign_notification_custodian`, que entró en el script de
   infra el 15 de octubre. No la hagas tolerante: un objeto creado sin su rol queda en manos de un superusuario que se
@@ -286,8 +282,7 @@ que lanza una excepción. No se ha medido qué hace después el relay o el worke
 | Falla **dentro** de la ventana, antes de `deploy-prod` | `make backup-prod LABEL=antes-del-restore`, restaura `corte` con la receta de abajo, vuelve a `BACKEND_TAG` y `SIGNER_TAG` anteriores, `make deploy-prod` y reabre. |
 | Falla **después** de `deploy-prod` | Desde ahí pueden haber salido correos y sweeps, aunque no se haya abierto al público, así que restaurar ya no sale gratis. Arreglar hacia delante. Restaurar `corte` pierde lo escrito desde entonces: en una plataforma de firma son firmas que el firmante vio confirmadas. Solo con decisión expresa del owner. |
 
-**Receta para restaurar `corte`,** de la rama de infra `docs/deploy-cutover-sequence` (`374949e`), aún sin mergear a
-`master`:
+**Receta para restaurar `corte`,** la que imprime `backup-prod` desde infra `16e6760`:
 
 ```bash
 DC="docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml"
@@ -296,7 +291,8 @@ $DC exec -T -e PGPASSWORD=<password> postgresql \
   pg_restore -U <POSTGRES_USER> -d postgres --clean --if-exists --create < <fichero>-corte.dump
 ```
 
-- ⛔ **No uses la receta que imprimía `backup-prod` hasta `8cae056`** (`-d <db> --clean --if-exists`). No deshace una
+- ⛔ **No uses la receta anterior** (`-d <db> --clean --if-exists`), que un dump o un checkout antiguos aún pueden
+  mostrar. No deshace una
   migración: deja el esquema nuevo e indica la versión vieja en `doctrine_migration_versions`, así que el estado de
   migraciones también mentiría. Infra lo midió en una reproducción pequeña, igual que la receta nueva. ⚠ Ninguna se ha
   probado con un dump real: eso cubre el ensayo de §2.
@@ -313,8 +309,6 @@ $DC exec -T -e PGPASSWORD=<password> postgresql \
 
 - ❓ El tag real de prod, la rama y el remote del host (§0).
 - ❓ Si el signer nuevo funciona contra el backend viejo durante los minutos que van entre §3 y §4.
-- ❓ Merge a `master` de `docs/deploy-cutover-sequence` (`374949e`). Hasta entonces, el host imprime la receta vieja de
-  restauración, `deploy.md` no tiene estas correcciones y el runbook mantiene los «propuesto».
 - ⚠ La receta de restauración con `--create`: medida solo en una reproducción pequeña.
 - ⚠ `pull-prod` sin los ficheros de la clave: probado solo en `--dry-run` y con una imagen.
 - ⚠ `migrate-prod` y `register-wrapping-key-prod`: el primer uso real en prod será el estreno de esta combinación.
