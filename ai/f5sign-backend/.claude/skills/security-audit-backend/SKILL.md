@@ -1,6 +1,6 @@
 ---
 name: security-audit-backend
-description: 'Security checks specific to the backend stack (PHP/Symfony). Complements security-audit-core with: SQL injection via DBAL (no ORM), Symfony asserts, the real authentication seam of this repo (Identity & Access with a route that declares its credential, NOT SecurityBundle: it is not registered), real idempotency (ADR-0042: the id is NOT a retry key), CORS via a custom CorsListener, and the cryptography that does exist (issued credential with partial enforcement, signing token). ⚠ And it says out loud that PII at rest is NOT encrypted today — FieldCipher has no callers and ADR-0033 is Proposed — instead of claiming a protection that does not exist. Includes the two holes an audit found here: the client-supplied Content-Type without nosniff, and the credential that outlives its resource. Checks the rate limiter that exists (one policy set per medium, failing open) instead of asking for one per endpoint. Invoked by security-audit-core. Use it with /security-audit-backend TASK-NNN. Trigger with "security backend", "audit PHP", "check Symfony security".'
+description: 'Security checks specific to the backend stack (PHP/Symfony). Complements security-audit-core with: SQL injection via DBAL (no ORM), Symfony asserts, the real authentication seam of this repo (Identity & Access with a route that declares its credential, NOT SecurityBundle: it is not registered), real idempotency (ADR-0042: the id is NOT a retry key), CORS via a custom CorsListener, and the cryptography that does exist (issued credential with partial enforcement, signing token). ⚠ And it says out loud that no column is encrypted today — FieldCipher has no callers and ADR-0033 is Proposed; Key Management encrypts only the decline reason in the event log (ADR-0096) — instead of claiming a protection that does not exist. Includes the two holes an audit found here: the client-supplied Content-Type without nosniff, and the credential that outlives its resource. Checks the rate limiter that exists (one policy set per medium, failing open) instead of asking for one per endpoint. Invoked by security-audit-core. Use it with /security-audit-backend TASK-NNN. Trigger with "security backend", "audit PHP", "check Symfony security".'
 ---
 
 # Security Audit Backend
@@ -134,8 +134,9 @@ And what does exist here, which is where you actually need to look:
       `StoreBackedSigningTokenIssuer::LIFETIME`. A diff that states the lifetime anywhere else (a
       `modify('+7 days')`, a copy promise) duplicates it → `warn`. ⚑ A retention promise in the copy
       about a 7-day token was a real, already-fixed bug; don't reintroduce it.
-- [ ] ⚠ **PII at rest: today NOTHING is encrypted, and claiming otherwise is the worst possible mistake
-      here.** `FieldCipher` exists and is tested, but has **zero callers in `src/`**, and ADR-0033 is
+- [ ] ⚠ **PII in columns: today NO column is encrypted, and claiming otherwise is the worst possible
+      mistake here.** Key Management (ADR-0096) encrypts only the decline reason, and only in the event
+      log: its copy in `envelope.recipient.decline_reason` is in clear. `FieldCipher` exists and is tested, but has **zero callers in `src/`**, and ADR-0033 is
       `Proposed`, saying it in its own words: *"nothing calls them. No column is enciphered."* There is
       live plaintext — `envelope.recipient.email`, `full_name`, `notification.delivery.destination`. So
       the check **is not** "is it encrypted?" (the answer is no, always), it's: **does this diff add a

@@ -61,8 +61,9 @@ Run over the diff's files. Skip categories whose scope doesn't appear in the dif
 - [ ] PII in logs: emails, phone numbers, DNI/NIE, IBAN, addresses, real names — redacted or excluded.
 - [ ] ⚑ **Assert the closed set of keys, don't do a spot-check.** An "I don't see PII here" misses the
       new field: enumerate the fields the surface emits/persists and decide on **all** of them. ⚠ On the
-      backend, PII kept out of the event log is correct and checkable (ADR-0031, Path B), but **PII at
-      rest is NOT encrypted today**: `FieldCipher` has no callers and ADR-0033 is `Proposed`. Don't
+      backend, PII kept out of the event log is correct and checkable (ADR-0031, Path B), and free text
+      a person writes enters it encrypted where ADR-0096 is built (today only the decline reason). But
+      **no column is encrypted today**: `FieldCipher` has no callers and ADR-0033 is `Proposed`. Don't
       assume that protection; if the diff adds a column with PII, it's a finding
 - [ ] PII in URLs: not in the path or query string (goes in body or headers)
 - [ ] Responses don't expose more PII than the endpoint needs
