@@ -41,7 +41,3 @@
 /f5sign-infra-sentry/
 f5sign-signer-deps/
 /f5sign-signer-decline/
-/f5sign-backend-explicit-access-gate/
-/f5sign-backend-form-engine-binary-framing/
-/f5sign-backend-document-certificate/
-/f5sign-backend-unclaimed-slot-machine/
