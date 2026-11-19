@@ -42,7 +42,7 @@ The architectural contracts are the **kernel categories** in `src/F5Sign/Kernel/
   - **Redis** — `ext-redis` is a hard `require`, `symfony/cache` a direct one. The `app`/`system` pools are filesystem; the one Redis pool is `cache.rate_limiter` (`config/packages/cache.yaml`, `%env(RATE_LIMITER_DSN)%`), because a per-container counter gives N replicas N times the budget. `when@test` swaps it for `cache.adapter.array`, so no test needs Redis. Its other live use is `LOCK_DSN` in the prod compose. The DB number travels **inside** the DSN (`/3`; infra reserves 0 cache / 1 locks / 2 idempotency / 3 rate limiter); the `REDIS_*_DB` variables are documentation nothing reads.
 - `lcobucci/jwt` ^5 — direct `require` since ADR-0050, used **only** for the recipient's two short-lived credentials: the session credential (`Foundation/Http/SessionCredentialCodec`) and the copy read credential (`Foundation/Http/CopyReadCredentialCodec`). ⛔ Not a general JWT layer: `symfony/security-bundle` and `lexik/jwt-authentication-bundle` sit in `composer.json` but are registered in **neither** `config/bundles.php` nor anything else (see *Bundles enabled* below), and admission runs on the route-declared `Authn` seam (ADR-0048), not on a firewall.
 - PostgreSQL 18
-- PHPUnit 11.5 (with `dama/doctrine-test-bundle` for transactional isolation)
+- PHPUnit 13.4 (with `dama/doctrine-test-bundle` for transactional isolation)
 - PHPStan ≥ 2.1 level 9 + custom architecture rules
 - Deptrac ≥ 4.6 (visibility contract; the core-five BC layer-sets plus Notification are declared in [`deptrac.yaml`](deptrac.yaml) — count them there rather than here)
 - Twig 3 (`twig/twig` + `symfony/twig-bundle`, direct `require` since ADR-0052) — **layout composition for one channel's email markup only**; see the bundle note below before reaching for it anywhere else
@@ -89,13 +89,15 @@ Always go through the infra Makefile:
 | Full setup (build + up + install + migrate) | `make install` |
 | Stack up / down | `make up` / `make down` |
 | Tests (auto-ensures stack + test-db) | `make test` |
+| Tests but the acceptance tier, while developing (see `tests/README.md` for when acceptance must run too) | `make test-without-acceptance` |
 | Tests with HTML coverage | `make test-coverage` |
 | Tests with text coverage | `make test-coverage-text` |
 | Static analysis | `make phpstan` |
 | Architecture (deptrac) | `make composer cmd=arch` (no dedicated target yet) |
 | Lint | `make lint` |
 | Format (apply) | `make format` |
-| Full QA (lint + arch + phpstan + tests + infection) | `make qa` |
+| Full QA (lint + arch + phpstan + tests with coverage + Infection on the lines changed against `origin/develop`, `bin/infection-changed`) | `make qa` |
+| Infection on the whole of `src/F5Sign` (the global covered-MSI floor) | `make infection` |
 | Migrations | `make migrate` |
 | Migration status | `make migrate-status`. ⛔ **Never `make sf cmd="doctrine:migrations:status"`**: the application role cannot see the versions table, so on a database that is up to date it answers `Executed 0` and every migration as new |
 | New migration | `make migration` (main checkout) · `make wt-backend-sf src=<worktree> cmd=doctrine:migrations:generate` (a worktree). ⛔ **Never name one by hand**: the version is the time it was generated (`VersionYmdHis`), because Doctrine records a migration by class name only and two hand-picked `…000001`s on one day made a database skip one without an error. `MigrationVersionTest` refuses a hand-numbered one |
