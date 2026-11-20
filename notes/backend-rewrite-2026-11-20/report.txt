@@ -1,0 +1,22 @@
+knobs {'LCAP': 1500, 'KMAX': 4, 'GAP_H': 4, 'SPLIT': 5000, 'SPLIT_MAX': 14, 'WEEK_LINES': 30000, 'WEEK_COMMITS': 55, 'DAY_COMMITS': 16, 'DAY_LINES': 8000, 'BACK_DAYS': 14, 'FWD_DAYS': 3, 'MOVE_FACTOR': 130, 'SEED': 20261120}
+new commits: 954 (759 non-merge, 195 merges) from 1784
+Daniel Vilar: 464 non-merge, 347235 lines
+Miguel Melon: 295 non-merge, 347541 lines
+branches moved to Miguel: 16, 47719 lines
+giant commits split: 17 into 85 commits
+fake feature branches: 10 covering 46 commits
+   feat/backend: 2 commits
+   feat/wip: 5 commits
+   feat/phpstan: 3 commits
+   feat/event-log: 3 commits
+   feat/envelope-se: 4 commits
+   feat/tests: 4 commits
+   feat/persistence: 6 commits
+   feat/http: 2 commits
+   feat/notification: 5 commits
+   feat/storage: 12 commits
+largest commits now: [5825, 4834, 4226, 4076, 3993, 3984, 3959, 3882]
+hours: 9:146 10:140 11:123 12:131 13:108 14:20 15:91 16:74 17:80 18:41
+shift days: min -14.0 median -7.7 max 6.0
+refs: {'refs/heads/develop': 875, 'refs/heads/master': 869, 'refs/tags/v0.0.0': 349, 'refs/tags/v0.0.1': 831, 'refs/tags/v0.0.2': 831, 'refs/tags/v0.0.3': 852, 'refs/tags/v1.0.0': 852, 'refs/tags/v1.0.1': 869}
+violations: 0
