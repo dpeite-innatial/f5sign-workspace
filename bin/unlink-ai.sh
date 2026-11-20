@@ -11,12 +11,23 @@ REPOS=(f5sign-backend f5sign-dashboard f5sign-docs f5sign-infra f5sign-signer)
 
 unlink_from() {  # <checkout-dir> <label>
   local dst="$1" label="$2"
+  # The process-doc links sync-ai.sh made from the store's docs/ (see there).
+  local doc_paths=() entry
+  if [ -d "$ROOT/ai/$repo/docs" ]; then
+    for entry in "$ROOT/ai/$repo/docs"/*; do
+      [ -e "$entry" ] || continue
+      doc_paths+=("docs/$(basename "$entry")")
+    done
+  fi
   local tracked=()
-  mapfile -t tracked < <(git -C "$dst" ls-files .claude CLAUDE.md 2>/dev/null || true)
+  mapfile -t tracked < <(git -C "$dst" ls-files .claude CLAUDE.md "${doc_paths[@]}" 2>/dev/null || true)
   if [ "${#tracked[@]}" -gt 0 ]; then
     printf '%s\0' "${tracked[@]}" | xargs -0 -r git -C "$dst" update-index --no-skip-worktree
   fi
   rm -rf "$dst/.claude" "$dst/CLAUDE.md"
+  for entry in "${doc_paths[@]}"; do
+    if [ -L "$dst/$entry" ]; then rm -f "$dst/$entry"; fi
+  done
   if [ "${#tracked[@]}" -gt 0 ]; then
     git -C "$dst" checkout -- "${tracked[@]}" 2>/dev/null || true
   fi

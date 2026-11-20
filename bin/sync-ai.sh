@@ -55,11 +55,34 @@ sync_into() {  # <checkout-dir> <store-dir> <label>
     done
   fi
 
+  # docs/ : the process docs (tasks, handoffs, backlog) that live in the store, not in
+  # the delivered repo. Each top-level entry of "$src/docs" becomes one symlink at the
+  # same path under "$dst/docs", so the skills and the sibling repos' sessions keep
+  # reading `docs/tasks/…`. Only these entries are linked: the rest of the checkout's
+  # docs/ (ADRs, ddd, architecture) is tracked and delivered, and stays untouched.
+  local doc_paths=()
+  if [ -d "$src/docs" ]; then
+    for entry in "$src/docs"/*; do
+      [ -e "$entry" ] || continue
+      name="docs/$(basename "$entry")"
+      doc_paths+=("$name")
+      rel_link "$(realpath "$entry")" "$dst/$name"
+    done
+    # Ignore the links in this repo's shared exclude file (one per repo, worktrees
+    # included), so they never show as untracked once history no longer carries them.
+    local exclude
+    exclude="$(git -C "$dst" rev-parse --path-format=absolute --git-common-dir)/info/exclude"
+    mkdir -p "$(dirname "$exclude")"; touch "$exclude"
+    for name in "${doc_paths[@]}"; do
+      grep -qxF "/$name" "$exclude" || printf '/%s\n' "$name" >> "$exclude"
+    done
+  fi
+
   # Silenciar en git los paths IA aún trackeados (no commitea; reversible).
   # skip-worktree is per-index and a worktree has its own index, so this has to run
   # once per checkout -- setting it on the main clone does nothing for a worktree.
   local tracked=()
-  mapfile -t tracked < <(git -C "$dst" ls-files .claude CLAUDE.md 2>/dev/null || true)
+  mapfile -t tracked < <(git -C "$dst" ls-files .claude CLAUDE.md "${doc_paths[@]}" 2>/dev/null || true)
   if [ "${#tracked[@]}" -gt 0 ]; then
     printf '%s\0' "${tracked[@]}" | xargs -0 -r git -C "$dst" update-index --skip-worktree
   fi
