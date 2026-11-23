@@ -438,3 +438,10 @@ the messages, or regenerate them with `tools/msg_inputs.py` and Sonnet using `ms
 - **No pusheado.**
 - Pendiente: el push y la lista "Después del push". Las referencias ghcr del historial (`ghcr.io/factorcinco/…`)
   ya cuadran con la org.
+
+### 2026-11-23: push hecho
+- Pusheados develop `f3e822ad`, master `21027e23` y los 6 tags a `Factorcinco/f5sign-backend`; upstream configurado.
+- Imágenes: el push de develop lanza `:develop`. Los tags NO lanzan el workflow (GitHub omite los eventos si se
+  pushean más de 3 tags a la vez): `:v1.0.1`/`:latest` hay que lanzarlos a mano (Run workflow sobre el tag v1.0.1).
+- Infra: rama local `chore/backend-image-factorcinco` (`3d2c74e`), sin pushear: compose prod, `BACKEND_REGISTRY`
+  y deploy.md pasan a `ghcr.io/factorcinco`. Mergear y desplegar solo cuando el paquete nuevo tenga `:v1.0.1`.
