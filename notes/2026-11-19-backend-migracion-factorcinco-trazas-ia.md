@@ -426,3 +426,16 @@ the messages, or regenerate them with `tools/msg_inputs.py` and Sonnet using `ms
 - La imagen `f5sign/backend:dev-rewrite` queda (es la de la validación).
 - Checkout `f5sign-backend` en `develop` = origin `beb58847`, limpio.
 - **Nadie debe pushear al repo personal**, o habrá que rehacer desde `work` con lo nuevo.
+
+## 2026-11-23: checkout local pasado al historial nuevo (sin push)
+
+- Repo destino: `git@github.com:factor5-it/f5sign-backend.git` (org factor5-it, no Factorcinco). Antes del corte, el
+  personal seguía en develop `beb58847`, sin cambios desde el día 20.
+- Copia de seguridad previa: `backups/f5sign-backend-local-2026-11-23.bundle` (`--all`, incluido el stash).
+- `f5sign-backend/` en el sitio: develop `f3e822ad`, master `21027e23`, 6 tags; árbol idéntico a `final3.git`;
+  `origin` apunta a factor5-it; refs remotos y stash borrados; reflog expirado y gc hecho, así que el historial
+  antiguo ya no está en el `.git` local (solo en `backups/`). `sync-ai.sh` ejecutado: 0 paths con skip-worktree.
+- **No pusheado.** Con la clave SSH, factor5-it responde "Repository not found": el dueño tiene que dar acceso.
+- Pendiente: el push y la lista "Después del push". Las referencias ghcr del historial nuevo dicen
+  `ghcr.io/factorcinco/f5sign-backend` (`.github/workflows/build-image.yml`, comentario del `Dockerfile`), pero el
+  repo vive en factor5-it: hay que decidir qué registro se usa antes de que el CI publique.
