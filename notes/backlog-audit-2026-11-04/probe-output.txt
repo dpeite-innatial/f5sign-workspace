@@ -1,0 +1,17 @@
+PROBE control state: {"recipient":[{"first_opened_at":null,"outcome":"PENDING","full_name":null,"claimed_at":null}],"sessions":[]}
+PROBE control PUT auth: [200,"{\"warnings\":[]}"]
+PROBE control claim: [204,""]
+PROBE A before: {"recipient":[{"first_opened_at":null,"outcome":"PENDING","full_name":null,"claimed_at":null}],"sessions":[]}
+PROBE A machine send: [409,"{\"type\":\"about:blank\",\"title\":\"Conflict\",\"status\":409,\"code\":\"AUTH_NO_DESTINATION\",\"detail\":\"No destination is on file for this recipient, so a OTP_EMAIL code cannot be sent.\"}"]
+PROBE A after: {"recipient":[{"first_opened_at":"2026-11-04 11:33:40.858052+00","outcome":"PENDING","full_name":null,"claimed_at":null}],"sessions":[{"id":"de14a8ce-45d8-5817-8a0c-ba14a047db77","access_gate_passed_at":null}]}
+PROBE A PUT auth afterwards: [409,"{\"type\":\"about:blank\",\"title\":\"Conflict\",\"status\":409,\"code\":\"RECIPIENT_ALREADY_ENTERED\",\"detail\":\"Recipient 01a1a656-1115-7f89-8153-d0d4deadd323 has already opened their link; their gates can no longer change.\"}"]
+PROBE A claim email-only afterwards: [422,"{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"RECIPIENT_CANNOT_RECEIVE_METHOD\",\"detail\":\"OTP_SMS is declared on the access gate but this recipient has no usable mobile phone number (a landline cannot receive it), so the code would have nowhere to go. Supply one, or declare a method that needs none.\"}"]
+PROBE A claim with both afterwards: [204,""]
+PROBE A final: {"recipient":[{"first_opened_at":"2026-11-04 11:33:40.858052+00","outcome":"PENDING","full_name":"Jane Smith","claimed_at":"2026-11-04 11:33:40+00"}],"sessions":[{"id":"de14a8ce-45d8-5817-8a0c-ba14a047db77","access_gate_passed_at":null}]}
+PROBE B before: {"recipient":[{"first_opened_at":null,"outcome":"PENDING","full_name":null,"claimed_at":null}],"sessions":[]}
+PROBE B machine send: [200,"{\"minted\":true,\"code_expires_at\":\"2026-11-04T11:48:41+00:00\",\"next_resend_at\":\"2026-11-04T11:34:41+00:00\",\"act\":null}"]
+PROBE B after: {"recipient":[{"first_opened_at":"2026-11-04 11:33:41.14246+00","outcome":"PENDING","full_name":null,"claimed_at":null}],"sessions":[{"id":"a41f9aba-12c5-54a1-8f41-59516f16d419","access_gate_passed_at":null}]}
+PROBE B otp notifications: [{"purpose":"AUTH_OTP_ACCESS","has_code":true}]
+PROBE B slot unclaimed read: [{"full_name":null,"claimed_at":null,"email":"someone@acme.test"}]
+PROBE C machine submit: [401,"{\"type\":\"about:blank\",\"title\":\"Unauthorized\",\"status\":401,\"code\":\"AUTH_NO_OPEN_CHALLENGE\",\"detail\":\"No challenge is open for the ACCESS gate.\"}"]
+PROBE C after: {"recipient":[{"first_opened_at":"2026-11-04 11:33:41.404112+00","outcome":"PENDING","full_name":null,"claimed_at":null}],"sessions":[{"id":"75809f08-10ce-582a-9fa9-5e48269ef3d7","access_gate_passed_at":null}]}

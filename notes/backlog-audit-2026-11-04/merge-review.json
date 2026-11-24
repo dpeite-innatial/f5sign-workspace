@@ -1,0 +1,428 @@
+{
+ "M1": {
+  "group": "M1",
+  "ids": [
+   "BL-84",
+   "BL-133"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-133",
+  "sites": {
+   "BL-84": "../f5sign-infra/docker/rabbitmq/definitions.json: f5sign.events bindings (App.Envelope/Session/SignatureExecution/Notification/EvidenceAudit .Event.#, none for IdentityAccess); src/F5Sign/Foundation/Serialization/EventTypeNaming.php::routingKeyForClass, used by EventRelay (AmqpStamp at the publish line); config/packages/messenger.yaml queue.events.unroutable reader only under when@test",
+   "BL-133": "same: IdentityAccess Contract/Event/{ApiClientRegistered,ApiKeyIssued} (plus TenantProvisioned, TenantSmsNotificationsChanged) routed to f5sign.events.unroutable -> queue.events.unroutable"
+  },
+  "still_there": {
+   "BL-84": true,
+   "BL-133": true
+  },
+  "separating_fact": "None on the code: one defect (IdentityAccess facts have no binding and fall to queue.events.unroutable) and one generator (relay publishes everything, bindings are hand-kept). The rows differ only in the disposition: BL-84 leaves bind-a-queue vs filter-at-relay open, BL-133 already rejects the queue and says the binding lands with a consumer.",
+  "must_carry": "The disposition BL-133 reached (no queue until a consumer exists, binding in the same change as that consumer; no Reactor consumes IdentityAccess events) AND BL-84's filter-at-relay option and its category-(d) argument; the BL-32 registry-vs-bindings completeness check as the durable fix, with the exempt-set-is-everything-unremembered flaw (authoring rule 5); the 39-message measurement; the infra README mirror heading ('do not add a binding to drain it'); that all four IdentityAccess event types are affected, not three/two as the rows say.",
+  "note": "Two stale facts: both rows undercount (IdentityAccess has 4 event types now). BL-84 says bindings cover four BCs; EvidenceAudit now has queue.evidenceaudit.events bound, i.e. BL-32 has been point-patched a fourth time (messenger.yaml comment cites BL-32, BL-133). No registry-vs-bindings check exists (MessengerEventQueuesConfigTest only pins the two queue lists to each other). The survivor must resolve the BL-84 'bind' option against BL-133's 'not a queue' stance rather than paste both. BL-32 itself stays separate."
+ },
+ "M2": {
+  "group": "M2",
+  "ids": [
+   "BL-303",
+   "BL-351"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-303",
+  "sites": {
+   "BL-303": "Envelope/Infrastructure/Persistence/Doctrine/DbalEnvelopeRepository.php: types map 'created_at'/'sent_at' => 'datetime_immutable'; Storage/.../DbalCustodyRepository.php: 'obligation_conservation_until' => 'datetime_immutable'; type is Foundation/Persistence/Doctrine/Type/UtcDateTimeImmutableType.php (parent format Y-m-d H:i:s)",
+   "BL-351": "same repository: 'ready_to_seal_at','settings_expires_at' => 'datetime_immutable'; Session/.../DbalSigningSessionRepository.php: 'refresh_grace_until','soft_locked_until', auth_attempt 'attempted_at' => 'datetime_immutable'; closed_at/agreed_at are bound 'string' via the file's instant() helper"
+  },
+  "still_there": {
+   "BL-303": true,
+   "BL-351": true
+  },
+  "separating_fact": "Same mechanism (datetime_immutable bind floors to the second; instant() in DbalEnvelopeRepository is the existing per-column escape). Differences are only in the forcing reader: BL-303 columns mirror a fact time (row time can precede its own fact, observed), BL-351 columns are boundaries that agree with each other today and are latent.",
+  "must_carry": "A per-column census with each column's forcing reader (BL-303: compare a row time with a fact time / order within a second; BL-351: a sub-second rule or boundary test); the four BL-303 sites incl. the SignatureExecution artifact created_at taking issuedAt and Storage conservation_until truncation; BL-351's DO-NOT-MOVE warning for credentials_retired_at / invitations_revoked_at (getTimestamp comparison against whole-second issued_at); step.activated_at/deadline_at move together (step_deadline_at_chk); the instant()-style binding as the way to move each; the 'not before forced' stance.",
+  "note": "Weak-to-moderate confirm. Fix shape is shared, but a person would move columns one at a time when a reader forces them, so the merged row is a census, not one change. If the owner wants a one-change fix, the only candidate is a global change to UtcDateTimeImmutableType, which neither row proposes and which is a contract decision. Notification.requested_at (BL-414/BL-479, group M3) is a third column family on the same mechanism (DbalNotificationRepository 'requested_at' => 'datetime_immutable'); the census row should list it or link to M3's survivor. UtcDateTimeImmutableType docblock still describes only the UTC concern, not the flooring."
+ },
+ "M3": {
+  "group": "M3",
+  "ids": [
+   "BL-414",
+   "BL-479"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-414",
+  "sites": {
+   "BL-414": "Notification/Application/UseCase/CancelPendingInvitationsUseCase.php: toTheSecond(...) >= toTheSecond($command->requestedBefore); callers OnRecipientCorrectedCancelInvitations and OnRecipientNotificationChannelsChangedCancelInvitations pass requestedBefore: $event->occurredAt",
+   "BL-479": "Notification/Infrastructure/Persistence/DbalNotificationHistory.php: ORDER BY n.requested_at, n.id and keyset '(n.requested_at, n.id) > (:after_at, :after_id)'"
+  },
+  "still_there": {
+   "BL-414": true,
+   "BL-479": true
+  },
+  "separating_fact": "None: both are the one column notification.notification.requested_at (TIMESTAMPTZ NOT NULL) written by DbalNotificationRepository with 'requested_at' => 'datetime_immutable', so it keeps whole seconds. Storing it at full resolution (instant()-style bind) discharges both; the history tie then breaks by true time and the toTheSecond() workaround can go.",
+  "must_carry": "Both consequences (history order of two same-second notices falls to the random id; same-second older invitation stays PENDING and is sent beside the new one); the alternative fix for BL-414 (key the cancellation on the invitation's cause) and the fact that the invitation revocation is also compared to the second (getTimestamp, must stay per BL-351), so a precision fix alone does not close the link of that same-second invitation; the test gap (no case where the two instants share a second); the check of what the keyset cursor does with a tie (it binds the cursor instant as text, micros kept, so it is stable but wrong-order); the missing docblock note in the channel-change reactor; link to the M2 family.",
+  "note": "BL-479's 'check the column type' is already answered: the column is timestamptz, the loss is the DBAL bind. If storing micros, the redelivered-correction guard in the use case docblock (its own re-invitation reloads below its bound) must be re-argued, since requested_at would equal occurredAt exactly and the bound is >=. Delivery requested_at/settled_at (migration 20261015094057) are bound the same way."
+ },
+ "M4": {
+  "group": "M4",
+  "ids": [
+   "BL-344",
+   "BL-345"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-344",
+  "sites": {
+   "BL-344": "tests/bin/envelope_race_child.php: match($act) has commit, decline, void, correct, open, lockdoc, extend and no 'clocks'; tests/F5Sign/Envelope/Integration/EnvelopeRootLockRaceTest.php: no deadline case (open-vs-void cases exist at an_opening_after_a_held_close_records_nothing / a_close_after_a_held_opening_counts_it)",
+   "BL-345": "same two files; commit-vs-void cases exist (a_commit_held_before_a_void_is_counted_by_it) but none against ApplyEnvelopeClocksUseCase"
+  },
+  "still_there": {
+   "BL-344": true,
+   "BL-345": true
+  },
+  "separating_fact": "None: identical missing harness (one 'clocks' act in the child, wired to ApplyEnvelopeClocksUseCase, plus race() cases in the same test class). The only difference is the foreground act (open vs commit), i.e. two test methods per order.",
+  "must_carry": "Both scenarios and their asserted outcomes: opening recorded => release reason OPENED_NO_ACT and credential minted, or not recorded and gate refuses with no credential, never the mix; commit admitted before the deadline counts and is not released, reverse order refuses the commit; both orders in each; the lock-order claim (root, then every recipient row, TASK-049) being measured; the single-process stand-ins (RecipientOpeningWriteTest, GateRuleParityTest).",
+  "note": "Natural single change: the harness act is shared. Note the existing race tests use 'void' as the competing writer; the clocks act must go through ApplyEnvelopeClocksUseCase and likely needs the APP_FROZEN_NOW env the race() helper already supports to put 'now' past the deadline."
+ },
+ "M5": {
+  "group": "M5",
+  "ids": [
+   "BL-209",
+   "BL-388"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-209",
+  "sites": {
+   "BL-209": "tests/F5Sign/Acceptance/OpenApiSpecTest.php: only every_problem_coded_refusal_names_its_code_in_the_spec (global enum both ways) and every_problem_coded_refusal_is_named_by_an_operation_that_answers_it exist; no per-route check; target strings in controllers' #[OA\\Response] (MintSigningTokenController, CorrectRecipientController)",
+   "BL-388": "same OpenApiSpecTest::every_problem_coded_refusal_is_named_by_an_operation_that_answers_it concatenates all operations' responses into one string and preg_match's each carried code against it (any-operation); SendEnvelopeController / SignatureModesNeedAMarkException is the incident"
+  },
+  "still_there": {
+   "BL-209": true,
+   "BL-388": true
+  },
+  "separating_fact": "None. BL-388 is the same per-route reachability check as BL-209 viewed from the other direction (code emitted by route X, named only on route Y); it adds only the incident (SIGNATURE_MODES_NEED_A_MARK) and the observation that following the bus needs a PHPStan call graph, an ADR-level decision.",
+  "must_carry": "BL-209's design: per-route reachable-code set from collaborators followed transitively (including through the bus), red for reachable-but-unnamed, warning for named-but-unreachable, the 'enumerates at all' trigger (backticked UPPER_SNAKE), CorrectRecipientController as the discriminating fixture, the sabotage case of a code thrown two layers below; plus BL-388's call-graph-resolving-the-bus ADR-level decision and the TASK-054 SIGNATURE_MODES_NEED_A_MARK incident; note the existing any-operation census (added via is_a discovery) is the intermediate state BL-209's text does not mention.",
+  "note": "BL-209's opening says 'nothing gates it PER ROUTE' and describes only the yaml-enum gate; the any-operation gate now exists, so the sentence about the global half should be updated. Docs (TASK-042, ADR-0067, ADR-0074, TASK-043, TASK-051) cite BL-209 by id, so it is the right survivor id. BL-388 'fold pending' is exactly this fold."
+ },
+ "M6": {
+  "group": "M6",
+  "ids": [
+   "BL-180",
+   "BL-438"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-180",
+  "sites": {
+   "BL-180": "Envelope/Application/UseCase/Authoring/ResetRecipientAccessCodeUseCase.php::execute -> Envelope::resetRecipientAccessCode (Domain/Aggregate/Envelope.php) calls only guardAccessRecoverable, no declared-method question; Envelope/UI/Http/ResetRecipientAccessCodeController.php returns ['access_code'=>$code] 200",
+   "BL-438": "same endpoint POST .../recipients/{recipientId}/access-code, same unconditional hash write (Recipient::resetAccessCode)"
+  },
+  "still_there": {
+   "BL-180": true,
+   "BL-438": true
+  },
+  "separating_fact": "None: same route, same method, same missing declares() check. BL-438 is the TASK-064 review's rediscovery of BL-180 from the storage side (stray hash) and leaves open the decision BL-180 already makes (422).",
+  "must_carry": "BL-180's predicate over BOTH slots (access and signing declares(ACCESS_CODE), as in AddRecipientController::generatedCodeFor and ChangeRecipientAuthRequirementController, Envelope.php ~2070), the disagreeing-slots test (access OTP_EMAIL + signing ACCESS_CODE => 200), the 200 => 422 behaviour change and the auth-unlock redirect for clients, the OA response list, the aggregate docblock fix; plus BL-438's ADR-0083 section 2.4 link (gate-change mints a code only on introduction) and its rejected alternative 'accept the stray hash as harmless' with the reason (it also bumps generation, i.e. half-works as an unlock).",
+  "note": "After TASK-064 the declaration is editable until the recipient enters, so the predicate reads the declaration at reset time; a reset that precedes a later introduction of ACCESS_CODE is overwritten by ADR-0083 section 2.4's minted code. The reset-vs-declaration check shares the any-slot predicate with M7's BL-182; they are different surfaces (use case 422 vs request validation 201) and should stay separate rows."
+ },
+ "M7": {
+  "group": "M7",
+  "ids": [
+   "BL-182",
+   "BL-435"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-182",
+  "sites": {
+   "BL-182": "Envelope/UI/Http/Request/AddRecipientRequest.php::validateAccessCodeHasAGate: $declared = [$this->auth?->access_method, $this->auth?->signing_method]; in_array(ACCESS_CODE...)",
+   "BL-435": "same method, same line"
+  },
+  "still_there": {
+   "BL-182": true,
+   "BL-435": true
+  },
+  "separating_fact": "None: the same callback and the same two-slot read. BL-435 is the TASK-063 claims-check sighting of BL-182's defect; BL-182 is strictly richer (measurement, census, message wording, why one-member lists only).",
+  "must_carry": "BL-182 whole (singular 201 vs plural 422, the stale message naming only singular fields, the equivalence broken against AuthRequirementRequest's 'two spellings of one declaration', the one-member-list-only reach due to ADR-0054 section 2.2, build the AuthRequirement once and ask declares(), the census of ACCESS_CODE deciders, the not-a-defect third row, non-breaking); add from BL-435 only the TASK-063 provenance (callback not changed there; validateAccessIsDeclared reads both spellings).",
+  "note": "Census in BL-182 (four sites, no fifth) is now out of date: ChangeRecipientAuthRequirementController (~line 217) and Envelope.php (~2070) also decide on declares(ACCESS_CODE), both list-aware, and ChangeRecipientAuthRequirementRequest / ResetRecipientAccessCodeRequest carry access_code too; worth one grep before the fix to confirm none re-implements the singular read. BL-435 is a clean fold-in."
+ },
+ "M8": {
+  "group": "M8",
+  "ids": [
+   "BL-439",
+   "BL-472"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-472",
+  "sites": {
+   "BL-439": "Envelope/UI/Http/AddRecipientController, ResetRecipientAccessCodeController, ChangeRecipientAuthRequirementController: no headers->addCacheControlDirective('no-store') (access_code in body)",
+   "BL-472": "Session/UI/Http/StartSessionController, MintSigningTokenController, SendCopyOtpController, SubmitAuthResponseController, GetSigningSessionController and EvidenceAudit/UI/Http/DownloadSessionReceiptController: none sets no-store; copy routes do (OpenCopyController:179 etc.)"
+  },
+  "still_there": {
+   "BL-439": true,
+   "BL-472": true
+  },
+  "separating_fact": "Different BCs and audiences (integrator machine-key routes returning a plaintext access code vs recipient-facing credential/receipt routes), but the same one-line header and the same test shape (CopyRoutesAreNotStoredHttpTest is the model); no mechanism differs.",
+  "must_carry": "All 3 Envelope routes with a test per route, and the signing-side list: session open, session receipt, MintSigningTokenController, copy OTP send. ALSO add SubmitAuthResponseController: it mints access_credential/refresh_credential (OA text says so) and has no no-store, yet BL-472 does not list it (row gap). Keep the authoring-rule-3 sibling-divergence reason and the enumerating header test (extend CopyRoutesAreNotStoredHttpTest or a sibling for the signing side and a machine-key one). Phrase the row as 'every response that carries a credential or plaintext secret': a census, not a route list. Homes TASK-064 and TASK-070 §6 both cited.",
+  "note": "Only caveat: BL-439's routes sit behind machine-key auth, a different review path than the public signing routes, but one change/PR is realistic. No global listener exists today (rg no-store shows only per-controller calls), so an attribute/listener keyed on the route is an alternative design the merged row may mention."
+ },
+ "M9": {
+  "group": "M9",
+  "ids": [
+   "BL-55",
+   "BL-382"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-55",
+  "sites": {
+   "BL-55": "Caddyfile + Caddyfile.dev (f5sign-infra/docker/caddy): request_body { max_size 50MB }; #[MapRequestPayload] on every controller, e.g. Envelope/UI/Http/AddFieldController:119",
+   "BL-382": "Session/UI/Http/CommitSignatureController:379 #[MapRequestPayload], then BiometricCaptureShape::accepts($payload->biometric_data,...) at :402 after full decode; same 50MB Caddy cap"
+  },
+  "still_there": {
+   "BL-55": true,
+   "BL-382": true
+  },
+  "separating_fact": "BL-382 is the commit route as one instance of BL-55's missing per-route body cap; the only distinct elements are the attacker precondition (live session credential) and the commit-specific size (~137 KB image base64 plus strokes).",
+  "must_carry": "BL-55's measured ~13x body-to-peak-memory ratio and the prod OOM argument (php-fpm 1g, pm.max_children=5, two concurrent bodies exceed the cgroup; rate limiter exists now but only for OTP sends, so nothing throttles these routes: the 'not installed' phrase in BL-55 is stale); BL-382's per-route target for POST /api/v1/signing/commit (close to a valid commit's weight), its credential-gated low severity, and the alternative of a streaming check before decode. The cap table must exempt legit large routes (AddDocumentController uploads). Fix site is f5sign-infra (Caddy per-route request_body) plus optionally in-app check; a two-repo coordinated change per the root rules.",
+  "note": "A single per-route cap table discharges both; BL-382 is wholly subsumed once the commit entry exists. Still needs one explicit choice of number for commit, which the merged row must record."
+ },
+ "M10": {
+  "group": "M10",
+  "ids": [
+   "BL-413",
+   "BL-446"
+  ],
+  "verdict": "REJECT",
+  "survivor": null,
+  "sites": {
+   "BL-413": "Notification/Application/UseCase/NotifyRechanneledRecipientUseCase (via OnRecipientNotificationChannelsChanged) after Envelope Recipient::changeNotificationChannels:1679; no counter, versus Recipient::MAX_SMS_RESENDS=5 / smsResendsMade on the resend route",
+   "BL-446": "Notification/Application/UseCase/NotifyAddedContactUseCase (via OnRecipientContactAdded), triggered by Recipient correction that only adds an empty contact (Recipient.php ~1170); no limiter"
+  },
+  "still_there": {
+   "BL-413": true,
+   "BL-446": true
+  },
+  "separating_fact": "BL-413 is unbounded (a loop on the channel-change PUT re-invites per call), whereas BL-446 is bounded by construction: CorrectRecipientRequest says there is no way to clear a contact, so an addition fires at most once per contact per recipient (at most one SMS per recipient), making it near-theoretical.",
+  "must_carry": "If ever merged: both use cases, the differing bounds and the different triggers (BL-413 'when real traffic shows it', BL-446 'first SMS provider live or additions in volume'). Not worth it.",
+  "note": "Different use cases, different Envelope entry points and different forcing conditions. A shared per-recipient SMS-invitation allowance could cover both if one is built, but BL-446 alone probably never needs it; keep separate and consider downgrading BL-446."
+ },
+ "M11": {
+  "group": "M11",
+  "ids": [
+   "BL-183",
+   "BL-190"
+  ],
+  "verdict": "RESTRUCTURE",
+  "survivor": "BL-190",
+  "sites": {
+   "BL-183": "Session/Application/Query/RecipientAuthContextReader.php:90 closedLegOutcome: $context->recipient->legIsClosed() ? outcomeAsAdmitted()->value : null; RecipientEnvelopeContextView::recipientCouldPassTheGate; IssueAuthChallengeUseCase ~244-250 throws SigningSessionUnavailableException::legClosed(); GetAuthDescriptorController:305 closedLegAtTheGate()",
+   "BL-190": "RecipientAuthContext carries no role (only recipientMayDecline); IssueAuthChallengeUseCase/StartSessionUseCase/GetAuthDescriptorController never read Role; NotifyActivatedStepRecipientsUseCase:133 'Role-differentiated inclusion (signer vs CC)' still deferred"
+  },
+  "still_there": {
+   "BL-183": false,
+   "BL-190": true
+  },
+  "separating_fact": "BL-183's outcome half is already fixed on develop: the leg outcome now crosses as closedLegOutcome (ADR-0073/0074, TASK-050/051/068), gatePasses is false for a DELEGATED/SKIPPED leg (legIsClosed via outcome.isTerminal), so the OTP send answers LEG_CLOSED before minting and the descriptor publishes the outcome. The row is stale, not a merge candidate.",
+  "must_carry": "Close BL-183 as done (tense sweep: rg 'BL-183'; the row still says 'RecipientOutcome never crosses'; also note RecipientAuthContext carries closedLegOutcome, stepIsActive). Keep BL-190 open but re-premise it: ADR-0073 deliberately lets informational roles (VIEWER, REVIEWER, EDITOR; RoleStanding::INFORMATIONAL) pass the access gate to read their copy, so 'refuse before OTP' is no longer right for those; remaining defect is role-blind invitation and OTP/copy ('Vas a firmar') for non-signing roles, esp. CERTIFIED_DELIVERY/IN_PERSON_HOST and APPROVER. Keep the cross-repo f5sign-signer copy consequence, the Role::signs() = SIGNER-only trap (rule 5) and the forcing conditions. Remove its 'whoever fixes either should fix both' coupling.",
+  "note": "The BL-190 'fold pending' home suggests it was meant to fold into BL-183; folding is moot now since the shared seam (crossing a fact into RecipientAuthContext) already exists for the outcome and is not shared with role."
+ },
+ "M12": {
+  "group": "M12",
+  "ids": [
+   "BL-118",
+   "BL-224",
+   "BL-390"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-390",
+  "sites": {
+   "BL-118": "no email bounce ingestion anywhere; Notification/Domain/ValueObject/DeliveryStatus::DELIVERED has no writer (rg '::DELIVERED' finds no producer); EmailNotificationChannel hand-off only",
+   "BL-224": "notification.notification_delivery.provider_reference (Delivery, DbalNotificationRepository) with no status-callback route; Infrastructure/Sms/TwilioSmsTransport hand-off only",
+   "BL-390": "TwilioSmsTransport::PERMANENT_CODES + RecipientDeliveryState::DELIVERED unreachable; EvidenceAudit LimitationCode::DELIVERY_RECEIPT_NOT_RECORDED; no inbound webhook route"
+  },
+  "still_there": {
+   "BL-118": true,
+   "BL-224": true,
+   "BL-390": true
+  },
+  "separating_fact": "None that changes the work: all three are the single missing inbound delivery-receipt seam (a provider calling us, written onto Delivery/trace). Only the BL-224 sub-claim is stale: noDestinationFor no longer appears in the three listed use cases (now in RecipientNotificationChannels / InvitationChannels services), so its 'three dead SMS arms go live at once' warning is rotted.",
+  "must_carry": "Email side (async MTA bounce feed, TASK-025 note that only synchronous refusals are recoverable) and SMS side (Twilio status callback keyed on provider_reference); the route + signature verification + mapping onto Delivery and trace; the ordered-fallback consequence (ADR-0077 §2.6 only covers immediate refusal); the evidence consequence (retire LimitationCode::DELIVERY_RECEIPT_NOT_RECORDED, SENT can mean delivered, TASK-059 §3.5); the clarification that this is NOT outbound webhooks (ADR-0064) but Notification's inbound surface; ADR-0037 deferral. Drop or re-derive BL-224's stale census.",
+  "note": "Realistically email and SMS adapters may ship in separate changes (different providers), so the merged row should keep a per-channel checklist; still one seam and one decision record."
+ },
+ "M13": {
+  "group": "M13",
+  "ids": [
+   "BL-161",
+   "BL-482"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-161",
+  "sites": {
+   "BL-161": "Notification/Infrastructure/Channel/LogNotificationChannel::render, 'variables' => http_build_query($variables->toArray())",
+   "BL-482": "same method; the copy link is carried under the same 'link' variable (RecipientNotices:~91 $variables['link'] = $link)"
+  },
+  "still_there": {
+   "BL-161": true,
+   "BL-482": true
+  },
+  "separating_fact": "None: identical site and defect; BL-482 only adds one more secret (the copy link, TASK-071) that travels under the already-listed 'link' key.",
+  "must_carry": "Fix: redact Notification::SECRET_BEARING_VARIABLES (['link','code'], Notification.php:93) in render before composing the summary; this covers the copy link too since it uses key 'link', so state that. Keep the empty-exempted-set framing (authoring rule 5: DefaultChannelSelector never routes to LOG, though DeliveryChannel::LOG arms exist in OneTimeCodeDeliveryService:133, so an OTP code is reachable if ever selected) and BL-482's cheaper alternative (confirm LOG is never selected in production). Add a unit test with a closed key set of what the LOG summary may contain.",
+  "note": "Note SECRET_BEARING_VARIABLES is private const on the aggregate; the fix must expose it or move it, which is a small design point for the merged row."
+ },
+ "M14": {
+  "group": "M14",
+  "ids": [
+   "BL-394",
+   "BL-426"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-394",
+  "sites": {
+   "BL-394": "docs/adr/ADR-0064-outbound-integrator-webhooks.md (Proposed; catalog line 'envelope.recipient_delivery_failed' says a destination failed, never which); no src/F5Sign/Webhook tree",
+   "BL-426": "GET /api/v1/envelopes/{id}/recipients/{recipientId}/notifications (Notification/UI/Http, config/routes/api/notification.php) is the polling surface; same unbuilt webhook BC"
+  },
+  "still_there": {
+   "BL-394": true,
+   "BL-426": true
+  },
+  "separating_fact": "BL-394 is the catalog decision (which delivery facts enter ADR-0064's set), BL-426 is the integrator need that decision answers; both are forced by the same event (webhooks built) and decided in the same ADR section.",
+  "must_carry": "The ADR-0078 facts to place (invitation outcomes, per-destination refusals, channel changes), the 'never says which destination' gap in recipient_delivery_failed, and BL-426's requirement that the sender need not poll the notification history; if the decision excludes delivery facts from the set, the row must stay open on the polling requirement. Link TASK-056/TASK-058.",
+  "note": "Thin merge (two one-line rows, same trigger, same record), but it loses nothing."
+ },
+ "M15": {
+  "group": "M15",
+  "ids": [
+   "BL-217",
+   "BL-226"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-217",
+  "sites": {
+   "BL-217": "ADR-0064 §2.2/§7.1: no subscription filter exists; webhooks are unbuilt (no subscription code under src/F5Sign; only DeliverySent/RetryableHttpClientTrait hits)",
+   "BL-226": "same §2.2 subscription filter; axis data is src/F5Sign/Envelope/Contract/Event/EnvelopeCreated.php:senderId (ActorId 'client:<uuid>')"
+  },
+  "still_there": {
+   "BL-217": true,
+   "BL-226": true
+  },
+  "separating_fact": "BL-226 is the per-ApiClient instance of BL-217's general 'destination narrower than tenant' filter; only the predicate differs (client needs an envelope_id->client projection, per-envelope does not).",
+  "must_carry": "The filter-not-second-tier rule (no resolution order between levels); never key on ApiKey (revokedAt/rotation); never resolve from the event actor (2 of 11 census); deliver-on-missing-projection-row (no ordering, §2.8); the open decisions (projection vs other mechanism, backfill from Envelope read port vs deliver-on-unknown, whether it ships at all); 'no integrator has asked' as the forcing condition; per-envelope and per-client/department as the axes.",
+  "note": "Shipping BL-226's client filter would not discharge BL-217's per-envelope case, but a general subscription filter discharges both, and both are unbuilt design residue of the same ADR paragraph. Merge is real if the survivor is retitled around the filter and lists axes."
+ },
+ "M16": {
+  "group": "M16",
+  "ids": [
+   "BL-171",
+   "BL-49",
+   "BL-460"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-171",
+  "sites": {
+   "BL-171": "ADR-0033/ADR-0096 §2.10 carrier unbuilt: src/F5Sign/Foundation/Crypto/FieldCipher.php has no callers; the ledger of plaintext columns (phone, field.value, reported_*, signature_image, copy_access_attempt)",
+   "BL-49": "envelope.field.value written plaintext (TASK-044 D9); Pii classification only reaches SentryBeforeSend",
+   "BL-460": "src/F5Sign/Envelope/Domain/Entity/Recipient.php:recordAdmittedReservations (line ~2041), called from Envelope.php:~1381 at admission; the recipient reservations column"
+  },
+  "still_there": {
+   "BL-171": true,
+   "BL-49": true,
+   "BL-460": true
+  },
+  "separating_fact": "None of substance: BL-171 already lists field.value (BL-49) as one of its accreted plaintext additions, and BL-460 says outright that BL-171/ADR-0033 are its home. They differ only in which column and in each row's own decision record.",
+  "must_carry": "Per-column entries, each with its own fact: BL-49 = maintainer declined encipherment 2026-09-21 (TASK-044 D9), Pii classification covers only the Sentry path while raw arrays on CommitSignature::$filledFields and FieldView::$value stay unredacted; BL-460 = recipient.reservations is written at admission, so a commit that never completes keeps it, and it is also drawn into the stored PDF; note recipient.reservations is NOT in BL-171's current column list, so adding it is a real addition, and it is the BL-275(b) target. Expand/backfill/contract per column.",
+  "note": "Merge is a ledger append into an already ledger-shaped row, which is how BL-171 has grown; it loses nothing if the per-column facts are kept. The fix is a carrier plus a per-column backfill, so a person lands it carrier-first, column-by-column, under one row's home. BL-171 prose is partly stale: ADR-0096 now decides the carrier design and has built the log-only RecordedText for the decline reason."
+ },
+ "M17": {
+  "group": "M17",
+  "ids": [
+   "BL-29",
+   "BL-145"
+  ],
+  "verdict": "RESTRUCTURE",
+  "survivor": "BL-29",
+  "sites": {
+   "BL-29": "config/packages/sentry.yaml:80 before_send and :94 before_send_transaction = src/F5Sign/Foundation/Observability/Sentry/SentryBeforeSend.php, which calls SensitiveDataRedactor; the Monolog handler is deliberately not wired (sentry.yaml comment)",
+   "BL-145": "src/F5Sign/Foundation/Logging/RequestContextProcessor.php docblock 'allow-list has no enforcement behind it ... (BL-29)'; stderr log path with no redactor in config/packages/monolog.yaml"
+  },
+  "still_there": {
+   "BL-29": false,
+   "BL-145": true
+  },
+  "separating_fact": "BL-29's headline claim 'There is no before_send ... no egress sink routes through them' is false on develop: SentryBeforeSend is wired and is the redactor's caller, so BL-29 as written is stale. What remains for both rows is the same narrower thing, the Monolog/stderr log path (and any future OTel span/log processor) bypasses the redactor.",
+  "must_carry": "Rewrite BL-29 to its true residual: log path (RequestContextProcessor allow-list unenforced; Monolog not routed through SensitiveDataRedactor, ADR-0009 part 6 'logs'), plus OTel/span processors if adopted; keep 'closes when the LAST off-box sink calls the redactor'; fix the docblock in RequestContextProcessor and ADR-0009 Status/'residual' text that still say no owner/no Sentry. From BL-145: the cross-repo lesson that a control tested only against the dev shape of a secret redacts nothing in prod, and the first-log-line-with-a-credential forcing condition. Drop BL-145's TASK-028 trigger (TASK-028 is Done).",
+  "note": "Not a plain merge: first correct BL-29 (half-discharged more than stated), then fold BL-145 into it as the log-path residual. BL-145's 'giving BL-29 an owner' forcing condition is already met (SensitiveDataRedactor owns part 6), leaving only the log sink. If the maintainer wants the signer lesson kept, it can be a one-line carry."
+ },
+ "M18": {
+  "group": "M18",
+  "ids": [
+   "BL-130",
+   "BL-275"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-130",
+  "sites": {
+   "BL-130": "free-text members in append-only event payloads: reservations in Envelope/Contract/Event/RecipientCompleted.php, Session/Contract/Event/SignatureCommitted.php and SessionCompleted.php, SignatureExecution/Contract/Event/RecipientSigned.php; title in EnvelopeCreated.php; name in DocumentAddedToEnvelope.php; reason in EnvelopeVoided.php",
+   "BL-275": "same four reservations payload members (string $reservations, plain optionalString in each event); sibling SessionDeclined.php already uses Foundation\\RecordedText\\RecordedText"
+  },
+  "still_there": {
+   "BL-130": true,
+   "BL-275": true
+  },
+  "separating_fact": "BL-275 is the reservations subset of BL-130's six fields, and both are marked Folded into ADR-0096 with the same fix (RecordedText under erasable keyrings). The decline reason, one of BL-130's six, is already encrypted (SessionDeclined::$reason is RecordedText), so BL-130's count is stale.",
+  "must_carry": "Update BL-130 to the remaining members (reservations x4, title, name, void reason; decline reason done). Carry from BL-275: the maintainer's 2026-09-21 decision to keep plaintext for now, options (a) inline cipher / (b) take text out of payloads and keep a commitment (sys_commitment forbids rewriting) / (c) keep, the cost that every signature with reservations adds permanent plaintext, ADR-0069 making the event channel the only home of the text, and the revisit trigger (the Audit Trail three-state reservations ADR). Carry BL-130's exhaustive 23-fixture census and the 'PII-free by caller discipline' point.",
+  "note": "Both folded rows pointing at the same ADR-0096 realization; one realization discharges both. Ordering caveat: BL-275 option (b) overlaps BL-460's recipient.reservations column in M16, so cross-reference rather than merge."
+ },
+ "M19": {
+  "group": "M19",
+  "ids": [
+   "BL-160",
+   "BL-481"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-160",
+  "sites": {
+   "BL-160": "src/F5Sign/Notification/Domain/Aggregate/Notification.php:SECRET_BEARING_VARIABLES = ['link','code']; forgetSecretsOnceSettled() (line ~556) drops them once all deliveries are terminal",
+   "BL-481": "same constant and same method: the copy link is carried in the 'link' variable of the notification, dropped by the same settlement"
+  },
+  "still_there": {
+   "BL-160": true,
+   "BL-481": true
+  },
+  "separating_fact": "Only the secret differs: a 15-minute delivered code (BL-160) vs the copy link valid to the envelope's conservation ceiling (BL-481). Both are plaintext in notification.variables until settlement, the same residue BL-113 accepted for the invitation link, and both close only with the ADR-0033/0096 cipher.",
+  "must_carry": "Window = creation to settlement; mechanism = SECRET_BEARING_VARIABLES + forgetSecretsOnceSettled; the pointer-to-closed-BL-113 rationale; the code is dead in 15 min while the copy link is long-lived (so the residual is more serious for the link); BL-481's 'ten purposes', AC-16 and TASK-071 W1 provenance; and that a variable cipher would cover link and code together. Redirect 'ADR-0033' to the ADR-0096 §2.10 carrier decision where the other rows already do.",
+  "note": "Genuinely the same site; merge by widening BL-160 from 'a delivered code' to 'secret-bearing notification variables (code, signing link, copy link)'."
+ },
+ "M20": {
+  "group": "M20",
+  "ids": [
+   "BL-343",
+   "BL-339"
+  ],
+  "verdict": "CONFIRM",
+  "survivor": "BL-343",
+  "sites": {
+   "BL-343": "src/F5Sign/Envelope/Domain/Service/ReleaseReasons.php:reasonFor(), '$latest = $member->latestInvitation()' judged regardless of $at",
+   "BL-339": "same defect as first written (delivery-failure flag with no instant); closed and folded into BL-343"
+  },
+  "still_there": {
+   "BL-343": true,
+   "BL-339": true
+  },
+  "separating_fact": "None: BL-339 is closed and says it is the same finding as BL-343, restated with its fix. Not a come-back, just the original wording. (BL-339's 'failure flag' premise is itself outdated: since TASK-056 the snapshot carries instants, and BL-343 states the narrower residual.)",
+  "must_carry": "Nothing beyond BL-343 as is: store the instant of each invitation failure and resend and judge at $at (relates to BL-309); the minute-wide production gap; the flipping examples SENT_NO_RESPONSE->DELIVERY_FAILED, LINK_EXPIRED->SENT_NO_RESPONSE, MEMBER_NOT_REACHED in veto steps.",
+  "note": "Merging is just dropping the closed row; keep a pointer only if other documents cite BL-339."
+ },
+ "M21": {
+  "group": "M21",
+  "ids": [
+   "BL-159",
+   "BL-197"
+  ],
+  "verdict": "RESTRUCTURE",
+  "survivor": null,
+  "sites": {
+   "BL-159": "was SigningSession::consumeSigningChallengeFor(); that method no longer exists (rg finds no hits). Now SigningSession.php:consumeAnsweredSigningChallenge() called at ~1256 (SIGN) and ~1393 (DECLINE), spending only the challenge answered in the same unit and throwing AuthGateRefusedException::codeRequired() otherwise",
+   "BL-197": "same: signing code travels on the commit, decline and machine signature route; ADR-0075 Accepted (exercised) 2026-10-06, realized by TASK-052 on fix/signing-gate-on-the-act"
+  },
+  "still_there": {
+   "BL-159": false,
+   "BL-197": false
+  },
+  "separating_fact": "Both defects are discharged on develop (expiry half 2026-08-26, transfer half by TASK-052/ADR-0075; the waiting verified-and-unspent proof state no longer exists), so there is nothing to merge: both rows just close. BL-197's header says closed while its status cell says 'Open until fix/signing-gate-on-the-act'; BL-159 is still [open]; both are stale in the same way.",
+  "must_carry": "If anything survives, one line of provenance: the signer's empirical hit (verified 07:40:37, consumed 09:10:07) and the lesson that an audit finding parked for a week and a field report of the same defect are the same fact. Nothing else: both bars were sabotage-checked.",
+  "note": "Confirm the branch is merged (the 'turns Closed when that branch lands' condition): develop already contains the code and ADR-0075 reads Accepted, so close both and fix the status cells. No row should carry a live residual."
+ }
+}

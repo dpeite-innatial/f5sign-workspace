@@ -42,3 +42,6 @@
 f5sign-signer-deps/
 /f5sign-signer-decline/
 /rewrite/
+
+# Archived task-runner workspaces: kept on disk, not in the repo
+notes/task-runner-archive/

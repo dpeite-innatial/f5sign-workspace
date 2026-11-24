@@ -1,0 +1,596 @@
+{
+ "BL-14": {
+  "id": "BL-14",
+  "verdict": "KEEP_NARROWED",
+  "confidence": "high",
+  "harms_checked": [
+   {
+    "harm": "CAS loser leaves bytes locked in the retained zone because put() precedes the compare-and-swap",
+    "status": "gone",
+    "path": "src/F5Sign/SignatureExecution/Application/Service/DocumentSigner.php:apply, open(Obligation::fromTransient()) then appendDocumentArtifact then custodies->write; same order in MockSignUseCase. Custody::open refuses a conservation instant, and every src caller passes fromTransient"
+   },
+   {
+    "harm": "A re-put to a versioned and locked bucket creates a second locked version",
+    "status": "still_there",
+    "path": "src/F5Sign/Storage/Application/Service/CustodyObligationService.php:strengthen, bytes->copy under the plan's COMPLIANCE lock, then bytes->get, then custodies->save. No transaction: PromoteSignedDocumentsCommand::conserve runs on custodian.bus. A failure after the copy leaves the row unchanged, so the next sweep run mints a new PlacementId and copies again. Same-key overwrite is gone (ObjectKey includes the placement) but the row's outcome survives as a second locked object at a new key"
+   },
+   {
+    "harm": "Locked retained object that no row references",
+    "status": "still_there",
+    "path": "CustodyObligationService::strengthen comment, 'the copy above is already in the conserved container under a COMPLIANCE lock, and a placement row that never lands leaves it as ADR-0063 section 2.14's orphan'. The fuse is now the 30-day rolled lock, not five years"
+   },
+   {
+    "harm": "Nothing can reap an orphan (the recorded reaper fix cannot work)",
+    "status": "still_there",
+    "path": "Staging orphans are deletable but nothing deletes them: DocumentSigner comment 'no lifecycle rule runs it either ... the pending sweep's remedy is unbuilt'. write() runs inside the bus transaction, so a commit failure after it loses the custody row and leaves staged signed bytes unnamed. OrphanedByteReport is 'Kind D ... it changes nothing'; ADR-0063 2.0.1 question 3 says the remedy is 'deliberately still open'; PendingCustodySweep 'detects and does not remedy'. Detection is live: CustodianSchedule 'app:storage:report-orphans --fail-on-finding'"
+   },
+   {
+    "harm": "Staging zone is provisioned and referenced by nothing",
+    "status": "gone",
+    "path": "Harm gone by another route: PlacementPlan::unretained on f5sign-staging; ../f5sign-infra/docker/minio/init-buckets.sh fails if a default retention appears. But StorageZone::TEMP is still referenced by nothing, so ADR-0062 3.1 'StorageZone::TEMP acquires the purpose somebody provisioned it for' is false"
+   },
+   {
+    "harm": "Repo records something false: correcting ADR-0016 Risks and the model doc is part of this item",
+    "status": "still_there",
+    "path": "docs/LOAD-BEARING.md near 'still mints a fresh un-deletable WORM blob' and 'WORM object-store puts' states the old behaviour in the present tense. docs/ddd/envelope-domain-model.md:820 still lists 'Orphan-bytes cleanup ... (generic storage hygiene / reaper)' with no mention of staging, ADR-0061 or ADR-0062. ADR-0016 Risks has no reaper claim now, but its bullet 'upload→originals, seal→signed' is stale under the Status banner"
+   },
+   {
+    "harm": "Closure resting on ADR-0061 'dissolves' and ADR-0062 'resolves outright'",
+    "status": "unverifiable",
+    "path": "Both ADRs and ADR-0063 are Proposed, ADR-0061 with 'DO NOT PROMOTE ON THE STRENGTH OF A GREEN BUILD'. The ordering and transient open are built, so the original orphan's absence does not depend on status, but neither ADR can be cited as an accepted decision. The prod lock and credential behaviour was not probed per ADR-0061 Status"
+   }
+  ],
+  "guard_test": "CustodyTest::opening_with_a_conservation_instant_is_refused; DocumentSignerTest::it_opens_the_signed_custody_under_a_transient_obligation; UploadDocumentBytesUseCaseTest (transient assertion); CustodyObligationServiceTest::the_relocated_object_is_stamped_at_copy_time_with_the_rolled_lock. Not found: a test that a CAS refusal writes no bytes (DocumentSignerTest's fake never refuses; SignForRecipientUseCaseTest's conflict case asserts attempts and log in the part I read), and a test of strengthen failing between copy and save (CustodyObligationServiceTest has only the bin-window case).",
+  "doors_tried": "CAS loss in sign, seal and mock sign; redelivery (CAS refuses before write); upload; audit trail and receipt issuance (fromTransient); commit failure after write in the bus transaction; promotion crash between copy, digest read and save, then re-sweep; ConserveTrailsCommand reaches the same strengthen; infra default-retention check. Not traced: S3 semantics on the prod substrate, and whether another backlog row already owns the orphan remedy (the backlog was off limits).",
+  "finding": "The row's exact scenario, a CAS loser's locked object, is gone. Three things survive. (1) Promotion can leave a locked retained copy with no row, and a retried sweep adds another at a new key, with no test and no remedy. (2) No reaper exists for any unrecorded bytes: staged orphans stay indefinitely and are only reported. (3) The row makes correcting the record part of the item, and docs/LOAD-BEARING.md and docs/ddd/envelope-domain-model.md:820 still state the old mechanism.",
+  "pointer": "If the row is narrowed: 'BL-14 (narrowed): the CAS-loser orphan is gone. Open: CustodyObligationService::strengthen failing after bytes->copy leaves a COMPLIANCE-locked retained object with no row, and the next sweep copies again under a new placement; unrecorded bytes in staging or retained have detection (app:storage:report-orphans) and no remedy (ADR-0063 2.0.1 q3, ADR-0076 2.7); fix LOAD-BEARING and envelope-domain-model.md:820; remove or use StorageZone::TEMP.'"
+ },
+ "BL-42": {
+  "id": "BL-42",
+  "verdict": "CLOSE_WITH_POINTER",
+  "confidence": "medium",
+  "harms_checked": [
+   {
+    "harm": "FieldMDP field locking does not exist",
+    "status": "gone",
+    "path": "src/F5Sign/SignatureExecution/Application/Service/FormRevisionPlanner.php:plan, '$locked = array_map(... $fieldFill->name, $fill)'; assets/signature-execution/form_engine.py writes /Lock with /Action /Include. ADR-0085 (Accepted) 2.8"
+   },
+   {
+    "harm": "lock_config / locked_field_ids column unmodeled, deferred not dropped",
+    "status": "still_there",
+    "path": "ADR-0040 Decision 5 table: 'not modeled ... lands with the v2 locking work'; no lock_config in src or migrations. ADR-0085 never mentions lock_config and does not retire it; it derives the lock set. So the authored model is not decided dead, it has merely lost its motivating need"
+   },
+   {
+    "harm": "A sender cannot choose which fields a signature locks",
+    "status": "decided",
+    "path": "ADR-0085 2.8, 'over the data fields filled in that revision, none when nothing was filled'. Decided implicitly: the lock is derived and there is no authored input. No record says a sender-authored set is rejected"
+   },
+   {
+    "harm": "Lock not applied on some paths",
+    "status": "decided",
+    "path": "DocumentSigner::formOf, a foreign signature, XFA, unreadable bytes or bad geometry signs without drawing and without a lock; ADR-0085 2.6. No fill means no /Lock (form_engine 'if field[\"lock\"]')"
+   },
+   {
+    "harm": "The lock is actually enforced",
+    "status": "unverifiable",
+    "path": "ADR-0085 3.2, 'Neither DSS 6.4 nor 6.5.1 enforces FieldMDP, so no automated validator here proves the lock'; section 5 'Not enforced by any test here: that a viewer enforces the lock'. Presence of the /Lock is tested; enforcement is Adobe-only"
+   }
+  ],
+  "guard_test": "FormRevisionPlannerTest::every_signature_field_locks_what_the_revision_filled; FieldValuesDrawnSequentialTest::a_signers_values_are_locked_by_their_own_signature and ::an_approvers_values_are_locked_by_the_next_signature; FieldValuesDeliveryBarTest::each_signature_locks_the_values_filled_in_its_revision (named by ADR-0085 section 5; I read one assertion at FieldValuesDrawnSequentialTest, not all).",
+  "doors_tried": "Sequential signer, approver with no signature (locked by the next signature), seal draws too, not-preparable document, empty fill, multiple marks in one act share one lock. Did not run a viewer or verify enforcement, and did not review whether a created-but-unfilled field can be filled by a third party after a signature, since the row does not claim that.",
+  "finding": "Nothing is broken. The capability the row wanted landed in another shape, but no record says the authored lock_config is retired, and three surfaces still promise it in the future or present tense: ADR-0040 Decision 5 ('lands with the v2 locking work'), ADR-0041 ('BL-42's lock_config names fields') and docs/ddd/signature-execution-domain-model.md:237 ('FieldMDP preparation → the external f5sign/pdf-tools service (v2)').",
+  "pointer": "In ADR-0040 Decision 5's lock_config row: 'FieldMDP locking was delivered by ADR-0085 2.8 as a lock derived per revision, with no authored column. A sender-chosen lock set remains unmodeled and has no consumer. If one appears, locked_field_ids goes to a child table (ADR-0019 section 5), and ADR-0085 2.8 must be amended because it fixes the set as what the revision filled.' Repoint ADR-0041's BL-42 reference to this."
+ },
+ "BL-22": {
+  "id": "BL-22",
+  "verdict": "CLOSE_WITH_POINTER",
+  "confidence": "high",
+  "harms_checked": [
+   {
+    "harm": "The reservation has no legal path onto the signed PDF",
+    "status": "gone",
+    "path": "FormRevisionPlanner::fillOf, 'FieldType::RESERVATIONS === $field->type ? $owner->reservations : $field->value', drawn in the fill revision before DSS in DocumentSigner::apply"
+   },
+   {
+    "harm": "Captured at commit, mid-flow, so stamping would invalidate prior signatures",
+    "status": "gone",
+    "path": "Envelope::admitCommit, recordAdmittedReservations before the signing act; ADR-0085 2.9 (Accepted). The fill is an incremental revision and DrawnRevisionCheck verifies it. The delegated commit reaches the same admitCommit through AdmitRecipientAct"
+   },
+   {
+    "harm": "Circular ownership between TASK-016, TASK-017/018 and the dashboard",
+    "status": "decided",
+    "path": "ADR-0069 (Accepted) 2.1, 2.2, 2.6: a RESERVATIONS field says where and the recipient's record says what. TASK-067 built the drawing"
+   },
+   {
+    "harm": "An early seal closes the document before the reservation lands",
+    "status": "gone",
+    "path": "Envelope::isFinal, a pending owner of any field placed on the document holds it, 'Any field type counts'; RecipientOutcome::blocksAnEarlySeal covers PENDING, DELEGATED, SKIPPED"
+   },
+   {
+    "harm": "The reservation exists but does not reach the PDF: no RESERVATIONS field authored",
+    "status": "decided",
+    "path": "ADR-0069 2.6, 'With no field, nothing is drawn, and the text is still collected, logged and published'"
+   },
+   {
+    "harm": "The reservation does not reach the PDF: non-preparable document",
+    "status": "decided",
+    "path": "ADR-0085 2.6 signs without drawing. The only record is an error log line (PsrFieldDrawingLog::documentNotPreparable); I found no event or trail limitation for it in EvidenceAudit. The text survives in the trail and the receipt"
+   },
+   {
+    "harm": "Long text in a small box",
+    "status": "decided",
+    "path": "ADR-0085 2.7, full text in /V and appearance cut with '…' plus a warning log. ADR-0069 2.4 max_length is optional; the channel ceiling is 2000 characters, so visible truncation of dispute evidence is possible when the integrator sets no bound"
+   },
+   {
+    "harm": "It crosses into the dashboard's surface: the integrator must author the new type",
+    "status": "unverifiable",
+    "path": "ADR-0069 3.3, 'An integrator keeps a TEXT \"Reservas\" field ... The mitigation is the handoff'. The sibling repo was not read; ADR-0069's OFFREPO note says forDestinatario authored TEXT at that date"
+   }
+  ],
+  "guard_test": "FieldValuesDrawnSequentialTest (live; asserts /V equals 'Dos palets dañados' and that A's signature locks the reservations field); FormRevisionPlannerTest::a_reservations_field_draws_the_recipients_reservations; EnvelopeEarlySealRequestTest::a_pending_fill_only_contributor_holds_a_document_its_signers_are_done; PyHankoFormScriptTest::a_reservations_text_uses_the_same_appearance. Gaps: FieldValuesDrawnSingleSealTest and FieldValuesDeliveryBarTest pass reservations null, and the delegated test file uses reservations only as null, so those paths share the planner and admission without a test of their own.",
+  "doors_tried": "SEQUENTIAL_PADES signer, approver with no signature, SINGLE_SEAL via the mode-independent planner, delegated commit via admission, occurrence on an unseen document (ADR-0069 2.6 accepted), early seal, redelivery (a prepared field with a different value only logs drawnValueDiffers), non-preparable document, no field, overflow. Not rendered or viewed.",
+  "finding": "A decided mechanism exists, is accepted and is exercised, so the row's core is gone. Residual worth keeping: a document that cannot be prepared carries no reservation on the PDF and no durable record of the omission, only a log line.",
+  "pointer": "In ADR-0085 3.3: 'A document signed without drawing (2.6) carries no reservations on its PDF, and only an error log line says so; the trail and the receipt still state the text. If a carta de porte can arrive with a foreign signature or XFA, the trail needs a limitation naming the omission. ADR-0069 3.3's integrator risk (a TEXT \"Reservas\" field) stands until the integrator confirms the type.'"
+ },
+ "BL-146": {
+  "id": "BL-146",
+  "verdict": "CLOSE_WITH_POINTER",
+  "confidence": "high",
+  "harms_checked": [
+   {
+    "harm": "SigningSession::start records zero events and startIfAbsent does not drain, so no access fact exists",
+    "status": "gone",
+    "path": "SigningSession::open records SigningSessionStarted; DbalSigningSessionRepository::startIfAbsent drains on insert only"
+   },
+   {
+    "harm": "First opening cannot be reconstructed from the log",
+    "status": "gone",
+    "path": "TrailAssembler::authentication, firstFor(SigningSessionStarted::class, $id); TrailJson 'first_opened_at'. Written in the insert's unit, so it is the first open and not a backfill-dependent value"
+   },
+   {
+    "harm": "The evidence packet decision (TASK-014 open decision 12) is unmade",
+    "status": "decided",
+    "path": "ADR-0072 (Accepted) supersedes the audit-trail half of TASK-014 and its assembler states first_opened_at. But docs/tasks/TASK-014-evidence-audit-projector.md section 7 item 12 still says in the present tense 'There is no the recipient accessed the envelope fact' and 'records zero domain events', which is false"
+   },
+   {
+    "harm": "Later opens are not recorded",
+    "status": "decided",
+    "path": "LimitationCode::REOPENS_NOT_RECORDED, printed by trail.typ 'Las aperturas posteriores no se registran'; TASK-034 refused last_opened_at on cost. It is published as a limitation, and its stated home (the TASK-014 projector) is not started"
+   },
+   {
+    "harm": "Reading through the copy pair leaves no access fact",
+    "status": "decided",
+    "path": "TASK-070 'The copy access aggregate records no domain event ... a copy read leaves no fact on the log'. Recorded only in that task; ADR-0088 2.7 'What this does not decide' is silent. This is after the act, so it does not affect the first-open evidence the row asks for"
+   },
+   {
+    "harm": "Loser of a concurrent open or a reload pollutes the log",
+    "status": "gone",
+    "path": "startIfAbsent ON CONFLICT DO NOTHING drains only on insert"
+   }
+  ],
+  "guard_test": "ConcurrentSessionOpenTest (asserts one row and that the loser appends no fact); RecipientAccessTraceCrossingTest; TrailAssemblerTest golden comparison at factor5-completed.json (first_opened_at); TrailAssemblerTest REOPENS_NOT_RECORDED cases.",
+  "doors_tried": "Neutral open, declared gate open (fact with a null method), reload, second device, concurrent race, delegated open (startDelegated, MACHINE_KEY_ASSERTED), claimable slot not traced in detail, correction (the trace survives per Recipient docblock), refused opens record nothing, copy link. Not traced: IP or user agent on the open fact, which the row does not ask for.",
+  "finding": "The defect is gone. What survives is that the row's named home of truth, TASK-014 section 7 item 12, now states something false in the present tense, and the two later narrowings (reopens, copy reads) are recorded only as a trail limitation and a task note.",
+  "pointer": "Amend TASK-014 section 7 item 12: 'Resolved by TASK-034 and ADR-0072: SigningSessionStarted records the first open and the trail states it as first_opened_at. Reopens are not recorded (published as REOPENS_NOT_RECORDED; TASK-034 refused a per-open write). Copy reads leave no log fact (TASK-070). A later-open or copy-read record cannot be backfilled, so a need for either must be raised before the data matters.'"
+ },
+ "BL-185": {
+  "id": "BL-185",
+  "verdict": "CLOSE_WITH_POINTER",
+  "confidence": "medium",
+  "harms_checked": [
+   {
+    "harm": "The log cannot prove how an ungated recipient authenticated",
+    "status": "gone",
+    "path": "SigningSession::start passes DIRECT_LINK and the event carries accessMethodExecuted, in platform.event_log via startIfAbsent. The row's own note names this for the read model, and the trail now reads it too"
+   },
+   {
+    "harm": "The audit trail has no evidence of the neutral gate because its consumer is not built",
+    "status": "gone",
+    "path": "TrailAssembler::authentication, '$gates === [] && $atOpen ... DIRECT_LINK => LINK_POSSESSION_ONLY'; the receipt shares it through ReceiptAssembler. The fixture factor5-completed.json shows access_method_at_open DIRECT_LINK, gates [], tier LINK_POSSESSION_ONLY"
+   },
+   {
+    "harm": "No AUTH_GATE_PASSED on a neutral gate",
+    "status": "still_there",
+    "path": "Still true and pinned by SigningSessionAuthGateTest::a_neutral_ceremony_records_no_auth_milestone_at_all. It no longer costs evidence"
+   },
+   {
+    "harm": "The semantic call on what emitting that event would mean to readers",
+    "status": "decided",
+    "path": "Decided only in prose and by construction: src/F5Sign/Session/Contract/Event/AuthGatePassed.php gives two reasons not to synthesize one, and the trail was built on the absence. No ADR section records it; the rg over ADR-0072 for SigningSessionStarted and DIRECT_LINK returned nothing. That docblock still contradicts itself with 'that remains a real evidence gap (BL-185)'"
+   },
+   {
+    "harm": "A session started gated whose gate later opens: no pass fact and no DIRECT_LINK",
+    "status": "gone",
+    "path": "Envelope::changeRecipientAuthRequirement refuses after firstOpenedAt, RECIPIENT_ALREADY_ENTERED (ADR-0083, Accepted). recordRecipientOpening rereads the gate under the row lock and answers AUTH_REQUIREMENT_CHANGED on a stale read"
+   },
+   {
+    "harm": "Neutral access gate plus a pre-shared code on the signing gate",
+    "status": "decided",
+    "path": "TrailAssembler::authentication: gates is non-empty and no code is delivered, so the tier is None by the docblock 'Any other method has no tier'. The gate and method are still printed; outside the row's scope but it is the one neutral-open case with no tier"
+   }
+  ],
+  "guard_test": "TrailAssemblerTest golden comparison to factor5-completed.json (would redden if the LINK_POSSESSION_ONLY arm or atOpen were deleted, by reading the fixture; not sabotaged, read-only brief); SigningSessionAuthGateTest::an_open_access_gate_means_the_session_opens_already_passed and ::a_neutral_ceremony_records_no_auth_milestone_at_all; RecipientAccessTraceCrossingTest; OnSigningSessionStartedTest. No test names AssuranceTier::LINK_POSSESSION_ONLY directly except PublishedCodesTest's code list.",
+  "doors_tried": "Neutral open, reload (no second fact, and a re-mint is unlogged, covered by REOPENS_NOT_RECORDED), gate opened after first open (refused), gate opened before first open (DIRECT_LINK at open), stale gate read vs lock, machine-key recipient (refused on the link route, MACHINE_KEY_ASSERTED on the delegated route), relayed commit not traced, revoked session re-open not traced for facts.",
+  "finding": "The evidence gap is closed by the fact the row itself pointed to, and the trail reads it. No ADR records the decision not to emit AUTH_GATE_PASSED, and two live surfaces will read as an open gap once the row is gone: the AuthGatePassed docblock (with a dangling link) and TASK-034 section 7.",
+  "pointer": "Replace in src/F5Sign/Session/Contract/Event/AuthGatePassed.php, in place of 'that remains a real evidence gap (BL-185)': 'A neutral gate leaves no AUTH_GATE_PASSED by decision: the log proves that open through SigningSessionStarted's access_method_executed = DIRECT_LINK, and the trail reads it as LINK_POSSESSION_ONLY (TrailAssembler::authentication). Emitting this event for a neutral gate would change what OnAuthGatePassed and the trail read as a passed gate.' Mark TASK-034 section 7's BL-185 line as resolved the same way, and consider one sentence in ADR-0072 so the decision has an accepted home."
+ },
+ "BL-88": {
+  "id": "BL-88",
+  "verdict": "CLOSE",
+  "confidence": "high",
+  "harms_checked": [
+   {
+    "harm": "The mint accepts an unvalidated envelope/recipient pair",
+    "status": "gone",
+    "path": "src/F5Sign/Session/Application/Service/SigningTokenIssuance.php:issueFor, reads getContextForRecipient before the issuer; EnvelopeQueryAdapter throws EnvelopeNotFoundException for no envelope, other tenant, or recipient not on it"
+   },
+   {
+    "harm": "The headline ceremony test runs over rows that do not exist",
+    "status": "gone",
+    "path": "tests/F5Sign/Session/Acceptance/SigningCeremonyHttpTest.php:seedTheCeremonyEnvelope, seedSentEnvelope. The UUIDs stay constant but now name real rows"
+   },
+   {
+    "harm": "Ask: decide where the check belongs (controller or StartSessionUseCase)",
+    "status": "decided",
+    "path": "docs/adr/ADR-0058 (Accepted, exercised): an Application service between controller and port. The controller cannot import EnvelopeContract; see SigningTokenIssuance docblock"
+   },
+   {
+    "harm": "Other callers of the raw issuer port bypass the check",
+    "status": "gone",
+    "path": "SigningReadersRefuseUnsentEnvelopeTest::ISSUER_CALLERS census fails on an unclassified caller. The Notification reactors use the raw port but act on recipients named by their own events, each with its own guards"
+   },
+   {
+    "harm": "Read direction fails closed downstream (the row's note)",
+    "status": "gone",
+    "path": "still true; the mint now refuses first as well"
+   }
+  ],
+  "guard_test": "UnsentEnvelopeRefusedHttpTest::the_mint_is_not_found_for_a_recipient_who_is_not_on_the_envelope (asserts 404 over HTTP); SigningTokenIssuanceTest::an_envelope_the_scoped_read_cannot_see_is_not_found_and_mints_nothing",
+  "doors_tried": "Recipient not on the envelope; absent envelope; other tenant (reaches the same not-found through the scoped read); invalid UUID (422); no credential (401); draft envelope (409); unclaimed slot; signs_via MACHINE_KEY; dormant step; the raw-port reactors; CopyLinkIssuance, which has its own context read and refuses a null context.",
+  "finding": "Nothing survives from the row. Minting over a terminal envelope still succeeds, but that is published in the route's 409 text and decided at the open (ADR-0059), so it is not this row's defect. Not traced: I found no HTTP-level test that mints with another tenant's envelope on this route. That case rests on the port's contract and on RLS, plus the fake-based unit test. A grep shows the BL-97 row mentions BL-88; I did not read it, so sweep it for tense when closing.",
+  "pointer": ""
+ },
+ "BL-159": {
+  "id": "BL-159",
+  "verdict": "CLOSE",
+  "confidence": "high",
+  "harms_checked": [
+   {
+    "harm": "A verified proof outlives its expires_at",
+    "status": "gone",
+    "path": "SigningSession.php:answerSigningGate, liveChallengeFor uses AuthChallenge::isLive, otherwise challengeExpired"
+   },
+   {
+    "harm": "Transfer: party A proves on route 5 and party B commits",
+    "status": "gone",
+    "path": "SigningSession.php:submitAuthResponse, 'if ($gate === AuthGate::SIGNING) throw'; consumeAnsweredSigningChallenge accepts only $this->answeredOnThisAct, set in the same in-memory unit, so a persisted verified row grants nothing"
+   },
+   {
+    "harm": "The same transfer through the decline",
+    "status": "gone",
+    "path": "DeclineSignatureUseCase.php, signingGate->answer inside the unit; the challenge is per act"
+   },
+   {
+    "harm": "The same transfer through the machine signature route and the machine twin of route 5",
+    "status": "gone",
+    "path": "CommitDelegatedSignatureUseCase.php, '$signingGateDeclared = !$asserting && $auth->hasSigningGate()' then answer; SubmitAuthResponseUseCase.php refuses SIGNING with SIGNING_GATE_ANSWERED_ON_THE_ACT"
+   },
+   {
+    "harm": "Row's status: 'closes when fix/signing-gate-on-the-act lands'; ADR-0075 Proposed",
+    "status": "decided",
+    "path": "ADR-0075 Status is Accepted (exercised); merge 60098a57 is in develop's history"
+   }
+  ],
+  "guard_test": "SigningSessionGateOnTheActTest::a_proof_left_verified_by_an_earlier_request_grants_nothing_without_the_code, ::an_expired_code_is_refused_as_expired_and_charges_nothing; SigningGateOnTheActHttpTest::a_decline_behind_a_signing_gate_needs_its_own_code_and_a_second_holder_gets_nowhere (second holder over HTTP, route 5 answers 409)",
+  "doors_tried": "A second credential holder on commit and decline; a SIGN code spent on a decline; route 5 and its machine twin; a verified row left by an earlier request (fresh load); a rollback after a right code (the verification rolls back with it); ACCESS_CODE, whose challenge is opened by the act itself and has null expiry; a commit after the code's TTL.",
+  "finding": "The defect is gone: no proof waits between requests, so holding the session no longer lets anyone spend it. B now needs the code itself. Three things remain next to it, all outside this row. (1) A second link holder can still burn the shared attempt budget or retire the code with a resend; that is sabotage, not transfer, and ADR-0075 §7.7 and §7.5 discuss it. (2) BL-367 records the machine route trusting a human-opened session with no signing gate, by maintainer decision. (3) Commit coverage of the second-holder case is at unit level; the HTTP second-holder test drives only the decline. Tense sweep needed when closing: ADR-0049 §2.4 still says in the present tense 'The transfer half of BL-159 is NOT closed by either', and the TASK-052 Status still says 'not pushed, not merged'.",
+  "pointer": ""
+ },
+ "BL-168": {
+  "id": "BL-168",
+  "verdict": "KEEP_NARROWED",
+  "confidence": "high",
+  "harms_checked": [
+   {
+    "harm": "A live code at a disowned destination stays answerable after a correction: nothing invalidates the challenge",
+    "status": "still_there",
+    "path": "Recipient.php:correctContact touches nothing in Session; the only invalidate() callers are SigningSession.php:mintChallenge and retireTimedOutChallenge; Session has no RecipientCorrected subscriber"
+   },
+   {
+    "harm": "A third party holds both the link and the code after a correction of a declared channel's contact",
+    "status": "gone",
+    "path": "Recipient.php:correctContact, 'if ($revision->revokesFor($this->notificationChannels))' retires credentials and invitations; SubmitAuthResponseUseCase.php and IssueAuthChallengeUseCase.php refuse via revokesInvitationIssuedAt"
+   },
+   {
+    "harm": "The same third party when the corrected contact is NOT a declared channel: gate-only contact, or notification_channels [] where the integrator delivers the link",
+    "status": "still_there",
+    "path": "ContactRevision.php:revokesFor returns false, no anchor moves, so the link, any credential and the code all stay live for the TTL. CorrectedContactClosesTheLinkHttpTest::correcting_a_gate_only_email_leaves_the_link_and_sends_the_next_code_there pins the link staying open"
+   },
+   {
+    "harm": "Machine twin: a relayed answer carries tokenIssuedAt null, so no link anchor is asked",
+    "status": "still_there",
+    "path": "SendRecipientAuthOtpController.php, 'tokenIssuedAt: null'; a machine key holder can relay the old code. Same guard absence on the submit twin (read for the anchor call only, not walked end to end)"
+   },
+   {
+    "harm": "'The next issuance goes to the corrected address': an ensure during the live window sends nothing",
+    "status": "still_there",
+    "path": "SigningSession.php:ensureLiveChallenge returns the existing challenge; IssueAuthChallengeUseCase.php 'if ($minted)' guards delivery. A corrected recipient calling resend:false inside the TTL gets minted:false and no code, because it went to the old contact. The pinning test corrects before any code exists, so it cannot see this"
+   },
+   {
+    "harm": "Ask: raise the generation, record it on the challenge, refuse behind it",
+    "status": "still_there",
+    "path": "No generation column on the challenge in migrations or DbalSigningSessionRepository. correctContact does not bump the generation: RecipientView.php says 'A contact correction does not advance the generation'"
+   },
+   {
+    "harm": "Decided by an ADR?",
+    "status": "still_there",
+    "path": "ADR-0084 §2.10 lists it under 'What this does not decide'; TASK-065 §follow-ups: 'BL-168 / BL-152 stay open'. ADR-0060 is about credentials and links, not challenges"
+   }
+  ],
+  "guard_test": "none for the code's survival or death. CorrectedContactClosesTheLinkHttpTest::every_token_bearing_route_refuses_the_superseded_link pins only the link half",
+  "doors_tried": "Correction of a declared EMAIL channel with OTP_EMAIL (link dead, so a stale code is unusable by the old holder); a gate-only email; a gate-only phone with channels [EMAIL]; channels []; a signing-gate code per act, which has no generation check either; the machine send and submit twins; a resend versus an ensure by the corrected recipient. Copy pair: CopyAdmission checks the anchors, but I did not trace copy challenges across a correction.",
+  "finding": "Keep the row, narrowed. Closed: the row's worst case, a third party holding link and code, when the corrected contact is a declared notification channel, because the link and credentials are retired. Still broken, at a live 15-minute TTL: (a) when no declared channel covers the corrected contact, including notification_channels [] and gate-only contacts, the link and the old code both stay valid; (b) the code is never invalidated on any path; (c) a corrected recipient who only ensures inside the TTL receives nothing, which contradicts the row's 'next issuance goes to the corrected address' in that window. One design note for whoever fixes it: ADR-0060 §2.2 and §7.1 argue the correction must not rely on the generation for credential retirement. The row's generation mechanism and its deliberate lock-clearing coupling need re-reading against that, or an instant anchor compared to the challenge's issued_at could serve instead. Findings are from static reading; nothing was executed.",
+  "pointer": ""
+ },
+ "BL-183": {
+  "id": "BL-183",
+  "verdict": "CLOSE_WITH_POINTER",
+  "confidence": "medium",
+  "harms_checked": [
+   {
+    "harm": "A DELEGATED or SKIPPED signing-role leg gets a useless billable OTP on route 4 and its machine twin",
+    "status": "gone",
+    "path": "RecipientEnvelopeContextView.php:recipientCouldPassTheGate, '!$this->recipient->legIsClosed()'; RecipientView.php:legIsClosed uses outcome->isTerminal(), true for both; IssueAuthChallengeUseCase.php 'if (!$auth->gatePasses)' throws legClosed before any code"
+   },
+   {
+    "harm": "Invisible at the descriptor: outcome publishes null, meaning open",
+    "status": "gone",
+    "path": "GetAuthDescriptorController.php outcomeAtTheGate with closedLegAtTheGate; SessionStatus.php:closedLegName answers REVOKED for DELEGATED and SKIPPED"
+   },
+   {
+    "harm": "Open and the machine answer route still run for them",
+    "status": "gone",
+    "path": "StartSessionUseCase.php 'if (!$command->gatePasses)'; SubmitAuthResponseUseCase.php 'if (!$auth->gatePasses)'"
+   },
+   {
+    "harm": "Ask: cross the outcome into RecipientAuthContext",
+    "status": "gone",
+    "path": "RecipientAuthContext.php:$closedLegOutcome and $gatePasses; RecipientAuthContextReader.php"
+   },
+   {
+    "harm": "Same ceremony for an INFORMATIONAL role (VIEWER, REVIEWER, EDITOR) whose leg is DELEGATED or SKIPPED",
+    "status": "still_there",
+    "path": "recipientCouldPassTheGate, '|| $this->recipient->isInformational()' passes regardless of outcome, so a code is minted and route 6 then refuses (SigningSessionReader.php, 'RecipientOutcome::DELEGATED => throw'). Latent: nothing writes these outcomes"
+   },
+   {
+    "harm": "Constraint: the fix must show up as a disappearing OTP, never a changed destination",
+    "status": "unverifiable",
+    "path": "These recipients now get LEG_CLOSED and descriptor outcome REVOKED before the credential, not RECIPIENT_DELEGATED or STEP_NOT_ACTIVE from route 6. The row records only those two codes as routed to /unavailable; whether the signer routes LEG_CLOSED the same way cannot be shown from this repo"
+   },
+   {
+    "harm": "Population still empty; no owner; the first writer is the trigger",
+    "status": "still_there",
+    "path": "No assignment of RecipientOutcome::DELEGATED or SKIPPED in src: Recipient.php writes only COMPLETED, DECLINED, RELEASED. StepCompletionEvaluator.php throws EndingEvaluationException::unwrittenOutcome on them"
+   }
+  ],
+  "guard_test": "No test drives DELEGATED or SKIPPED through the pre-credential routes. The chain is pinned in pieces: RecipientOutcomeTest ('DELEGATED' => true for terminal), IssueAuthChallengeUseCaseTest (LEG_CLOSED and nothing sent, with RELEASED only), SessionStatusTest (outcomeAtTheGate with 'SKIPPED' gives REVOKED), SigningSessionReaderTest::closedOutcomes (route 6). A hydrated DELEGATED leg at route 4 is untested end to end, and GateRuleParityTest has no DELEGATED or SKIPPED line",
+  "doors_tried": "SIGNER or APPROVER with DELEGATED or SKIPPED on the descriptor, open, route 4, route 5 and both machine twins; informational roles; hasSigned (cannot apply to these outcomes); copy pair (CopyLinkEligibilityTest covers DELEGATED and SKIPPED, not walked further). The mint route SigningTokenIssuance has no leg check, but its token buys nothing because the gate is shut. All of this is by reading; nothing writes these states, so none can be produced through the API today.",
+  "finding": "The row's main harm is gone for signing roles, delivered by the gate rule (ADR-0073 §2.3, ADR-0074), not by a dedicated change. What survives: (1) the informational-role gap above, latent because the population is empty; (2) the destination change at the signer is unverified, so the owner should confirm LEG_CLOSED lands on /unavailable; (3) closing would orphan live forcing text. The RecipientOutcome::DELEGATED docblock tells the next author to read BL-183 and its body is now FALSE ('carries envelopeIsAlive ... nothing about the leg', 'asked for a one-time code, are charged'). ADR-0073 §2.6, TASK-050, and docs/ddd/envelope-domain-model.md name BL-183 as the home of the future writer, and ADR-0056 §3 and ADR-0066 still describe the outcome half as open. Those must be rewritten in the closing changeset.",
+  "pointer": "Replace the RecipientOutcome::DELEGATED docblock with: 'Nothing in src/ or any migration writes this case or SKIPPED; they arrive only by hydration. The first feature that writes one must: give them an answer in EndingEvaluationException::unwrittenOutcome / StepCompletionEvaluator (they fail closed today, ADR-0073 §2.6); decide whether an informational role in these outcomes passes the gate (recipientCouldPassTheGate admits it regardless, so it would be sent a code route 6 then refuses); name them in SessionStatus::closedLegName, where they read REVOKED today; add an end-to-end test of a delegated leg at the OTP send asserting nothing is sent; and keep the destination unchanged: route 6 stays RECIPIENT_DELEGATED / STEP_NOT_ACTIVE and the signer must land LEG_CLOSED on /unavailable.' Repoint the BL-183 links in ADR-0073, TASK-050 and envelope-domain-model.md at that docblock."
+ },
+ "BL-205": {
+  "id": "BL-205",
+  "verdict": "KEEP_NARROWED",
+  "confidence": "medium",
+  "harms_checked": [
+   {
+    "harm": "No route can amend a slot's gate; 422 for ever",
+    "status": "gone",
+    "path": "config/routes/api/envelope.php:change_recipient_auth_requirement; ChangeRecipientAuthRequirementUseCase.php skips the destination guard for an unclaimed slot; ClaimRecipientUseCase.php re-runs destinations->guard on the stored declaration"
+   },
+   {
+    "harm": "void() is the only exit, in the ordinary path",
+    "status": "gone",
+    "path": "RecipientAuthRequirementStoriesHttpTest::s1_a_stranded_slot_is_narrowed_claimed_entered_and_signed; ADR-0083 Status Accepted, §3.1 note 'BL-205, by contrast, is resolved'; merge 76c70285"
+   },
+   {
+    "harm": "Row's premise: 'an unclaimed slot cannot have opened one', so the PUT is always available",
+    "status": "still_there",
+    "path": "IssueAuthChallengeUseCase.php: for a machine caller, recordRecipientOpening runs before 'noDestination', and no slot guard exists on that path. OpeningFacts::ofGateArrival(null, ...) has opens true; Envelope.php:recordOpening has no isUnclaimedSlot term; Envelope.php:guardRecipientAuthChangeable then throws alreadyEntered"
+   },
+   {
+    "harm": "The stranded state returns after a machine call on the slot",
+    "status": "still_there",
+    "path": "POST /envelopes/{id}/recipients/{slot}/auth/otp/send with no phone: first_opened_at is committed by its own transaction, then OTP_NOT_DELIVERABLE. Then PUT answers 409 RECIPIENT_ALREADY_ENTERED, claim answers 422, correction answers 409. Same stamp from machine_auth_submit (SubmitAuthResponseUseCase.php). ADR-0083 §2.8 accepts this window closing on a failed call but never considers a slot"
+   },
+   {
+    "harm": "Same machine door on a slot authored WITH a contact: a real code goes to a party the system records as unnamed",
+    "status": "still_there",
+    "path": "IssueAuthChallengeUseCase.php has no isUnclaimedSlot check, unlike SigningTokenIssuance.php and the Notification reactors. CommitDelegatedSignatureUseCase refuses the act, RECIPIENT_SLOT_NOT_CLAIMED, so no signature follows"
+   },
+   {
+    "harm": "Escape: claim naming a phone the integrator controls puts the wrong party in the evidence",
+    "status": "still_there",
+    "path": "Possible by the row's own 2026-10-20 note; no guard can see it. Now unnecessary on the ordinary path, but it is the only non-void exit from the re-stranded state above"
+   },
+   {
+    "harm": "Credential-retirement question raised by option (a)",
+    "status": "decided",
+    "path": "ADR-0083 §1 and the §2.8 cut: first_opened_at is null only before any session exists; §3 note for delegated commits"
+   },
+   {
+    "harm": "Candidates (b) and (c)",
+    "status": "decided",
+    "path": "Widened (a) chosen by ADR-0083, so (b) and (c) fall away"
+   }
+  ],
+  "guard_test": "Repair path: RecipientAuthRequirementStoriesHttpTest::s1_a_stranded_slot_is_narrowed_claimed_entered_and_signed, ChangeRecipientAuthRequirementHttpTest::a_stranded_slot_is_repaired_and_then_claimed_with_an_email_only. Re-stranding path: none; MachineTwinsRecordTheOpeningHttpTest does not mention claimable, and IssueAuthChallengeUseCaseTest does not either",
+  "doors_tried": "PUT on a slot, then claim, then open, then commit; PUT after the machine send and the machine submit twins; correction and resend on the slot (refused, correctly); signing-token mint on the slot (refused); delegated commit on the slot (refused); step-deadline passed on the slot (PUT refused as leg closed, though a slot on an activated step may be released as UNCLAIMED).",
+  "finding": "The ordinary path is fixed and tested, but the row's resolution rests on 'an unclaimed slot cannot have opened one', and that is false on the machine surface. One machine key call to the OTP send or answer twin on an unclaimed slot stamps first_opened_at, even when the call then fails with no destination. After that the gate cannot be amended and the claim cannot pass, so the row's original deadlock is back with void() or the wrong-phone claim as the way out; a step deadline may also release the slot. It takes an integrator driving the machine ceremony on a slot it has not claimed, so it is narrow, and only a machine key can do it. The fix is a slot refusal on both twins before recordRecipientOpening (also closes the code-to-unnamed-party door), or exempting unclaimed slots from the alreadyEntered guard. Found by static reading, not executed; a single HTTP test would confirm it. Everything else in the row can be closed.",
+  "pointer": ""
+ },
+ "BL-176": {
+  "id": "BL-176",
+  "verdict": "KEEP_NARROWED",
+  "confidence": "high",
+  "harms_checked": [
+   {
+    "harm": "CLAIMABLE slot versus ADR-0054 §2.3: a decision is owed before code",
+    "status": "decided",
+    "path": "docs/adr/ADR-0057 §2.13 (Status Accepted, exercised), body states 'deferred, not skipped'; TASK-036 §4 D6"
+   },
+   {
+    "harm": "Authoring skips the guard only on the declaration, never on 'no contact yet' (would reopen BL-162)",
+    "status": "gone",
+    "path": "AddRecipientUseCase::execute, 'if (!$command->declaredClaimable)'"
+   },
+   {
+    "harm": "The claim re-runs the guard entire, before the mutation, on merged contacts",
+    "status": "gone",
+    "path": "ClaimRecipientUseCase::execute, '$command->email ?? $recipient->email()'"
+   },
+   {
+    "harm": "ADR-0083 gate change defers only for an unclaimed slot; a claimed one is checked",
+    "status": "gone",
+    "path": "ChangeRecipientAuthRequirementUseCase::execute, 'if (!$recipient->isUnclaimedSlot())'"
+   },
+   {
+    "harm": "Premise of the deferral: the failure surfaces at the claim, 'strictly earlier' than at the gate, so an unclaimed slot must never reach a gate or an act",
+    "status": "still_there",
+    "path": "IssueAuthChallengeUseCase::issue (machine branch), SubmitAuthResponseUseCase ($machineTenant branch), CommitDelegatedSignatureUseCase::commitInsideTheUnit: no isUnclaimedSlot anywhere on these three paths. Unclaimed is asked in Session only by SigningTokenIssuance and CopyLinkEligibility"
+   },
+   {
+    "harm": "AUTH_NO_DESTINATION on a slot with a deferred delivered method (the failure BL-162/§2.3 exist to prevent)",
+    "status": "still_there",
+    "path": "IssueAuthChallengeUseCase::issue, 'OtpNotDeliverableException::noDestination' reached after recordRecipientOpening and startIfAbsent on POST /envelopes/{id}/recipients/{recipientId}/auth/otp/send"
+   },
+   {
+    "harm": "Tell the factor5_dashboard_sf gateway that the backend accepts the declaration",
+    "status": "unverifiable",
+    "path": "docs/frontend-handoff/TASK-036-claimable-recipient-slot.md, the 201 / 422 pair is documented; nothing in this repo shows it was received or their refusal lifted"
+   }
+  ],
+  "guard_test": "Authoring and claim are pinned: AddRecipientUseCaseTest::the_declaration_defers_the_destination_guard_and_nothing_else_does (both arms), ClaimRecipientUseCaseTest::a_claim_that_cannot_satisfy_a_later_declared_method_is_refused_naming_it, ChangeRecipientAuthRequirementUseCaseTest::an_unclaimed_slot_defers_the_destination_check_and_a_claimed_one_does_not. The machine doors have none: UnclaimedSlotRefusedHttpTest covers only the mint, and TASK-033 §6 bar 20 ('the signature route refuses a claimable slot') has no test (no slot case in DelegatedSignatureHttpTest).",
+  "doors_tried": "POST recipients (claimable and not); claim incl. replay, landline, slot authored with contact; PUT recipients/{id}/auth on unclaimed and claimed; corrections (refused on a slot); resend (refused); mint (refused); copy-link mint (refused); activation fan-out (skipped); machine_auth_otp_send, machine_auth_submit, commit_delegated_signature (NOT refused). Read Envelope::recordOpening, decideAdmission, EnvelopeEndingEvaluator::admit, Recipient::admit: none asks the slot question.",
+  "finding": "The decision and the authoring/claim path are sound, but the deferral rests on 'an unclaimed slot reaches no gate', and the machine surface walks past that. Walk 1, step active, slot declaring OTP_EMAIL with no contact: machine key POST .../auth/otp/send passes gatePasses and the step check, recordRecipientOpening writes first_opened_at, startIfAbsent inserts the session, then 409 AUTH_NO_DESTINATION. That breaks ADR-0057 §2.4 ('no session row was ever created') and stamps the opening that ADR-0083 §2.1 uses to close gate edits, so the integrator's probe appears to freeze the slot's gates (BL-205's rescue); I read ADR-0083's rule, not guardRecipientAuthChangeable's body. Walk 2, slot authored WITH an email (published as allowed): the same call mails a code to a party the system records as unnamed, the machine submit passes the access gate, and the relayed commit is admitted. Walk 3, slot with signsVia MACHINE_KEY (ADR-0055 §2.3 says compatible): POST .../signature with an assertion runs startDelegated and commits for nobody. ADR-0055 §2.3 and TASK-033 §3.5 say this route refuses the slot, and CommitDelegatedSignatureController's #[OA] string publishes 409 RECIPIENT_SLOT_NOT_CLAIMED, but no code path on that route throws it. Static reading only: no test was run, as the brief requires. Not traced: whether another backlog row already tracks this (BACKLOG not read; ADR-0057 §2.5 cites BL-195 for the guard's placement only).",
+  "pointer": "Row text to keep: 'The contradiction is decided (option a). Open: an unclaimed slot is refused at the mint and the copy link but not at machine_auth_otp_send, machine_auth_submit or commit_delegated_signature; the last publishes RECIPIENT_SLOT_NOT_CLAIMED and never throws it (TASK-033 §6 bar 20 has no test). Also unconfirmed: the factor5_dashboard_sf gateway lifting its refusal.'"
+ },
+ "BL-162": {
+  "id": "BL-162",
+  "verdict": "CLOSE",
+  "confidence": "high",
+  "harms_checked": [
+   {
+    "harm": "OTP_EMAIL with email null authors and sends cleanly on an ordinary recipient",
+    "status": "gone",
+    "path": "AddRecipientUseCase::execute calling DeclaredMethodDestinations::guard, before the row lock"
+   },
+   {
+    "harm": "Guard must be per method, every member of both gates, not 'requires an email'",
+    "status": "gone",
+    "path": "DeclaredMethodDestinations::guardSlot over access and signing; AuthMethod::requiredDestination"
+   },
+   {
+    "harm": "OTP_SMS needs a phone that can receive text (landline refused)",
+    "status": "gone",
+    "path": "DeclaredMethodDestinations::isSatisfied, 'SmsPhoneVerdict::NOT_A_MOBILE'"
+   },
+   {
+    "harm": "A later write reopens it: correction to a landline, gate replacement on a named recipient",
+    "status": "gone",
+    "path": "CorrectRecipientUseCase and ChangeRecipientAuthRequirementUseCase each call guard on the post-write contacts"
+   },
+   {
+    "harm": "Out-of-band token flow reaches 409 AUTH_NO_DESTINATION for an ordinary recipient",
+    "status": "gone",
+    "path": "No write path leaves an ordinary recipient unreachable: the four guard callers are the only writers, Envelope::addRecipient has one caller, and a correction cannot remove a contact (Recipient::correctContact). The 409 stays as a runtime guard"
+   }
+  ],
+  "guard_test": "AddRecipientUseCaseTest::the_declaration_defers_the_destination_guard_and_nothing_else_does arm B; DeclaredMethodDestinationsTest::a_later_member_with_nowhere_to_deliver_is_refused_even_when_the_head_is_fine; ChangeRecipientAuthRequirementUseCaseTest::an_unreachable_member_is_refused_head_or_later; ClaimRecipientUseCaseTest::a_claim_replacing_the_slots_mobile_with_a_landline_is_refused; CorrectRecipientUseCaseTest (file uses the guard, method not read individually).",
+  "doors_tried": "Add, correct, claim, PUT gates, signing-token mint, machine otp send, blank or whitespace contact on the claim (ClaimRecipientRequest NotBlank with trim plus Assert\\Email), addRecipient's callers. AddRecipientRequest and CorrectRecipientRequest constraints were not read line by line; the guard's own docblock relies on the edge's Assert\\Email.",
+  "finding": "Nothing survives for an ordinary recipient. AUTH_NO_DESTINATION is still reachable only through a declared unclaimed slot on the machine twin, which is BL-176's finding and not this row's defect.",
+  "pointer": ""
+ },
+ "BL-204": {
+  "id": "BL-204",
+  "verdict": "KEEP_NARROWED",
+  "confidence": "medium",
+  "harms_checked": [
+   {
+    "harm": "RecipientClaimed must carry no clear identity today",
+    "status": "gone",
+    "path": "RecipientClaimed::toPayload, closed key set; ADR-0057 §2.14"
+   },
+   {
+    "harm": "Facts in clear before encryption lands, for the five free-text members",
+    "status": "decided",
+    "path": "ADR-0096 §2.1 clean slate and §2.6 self-describing member (Status Accepted, realization partial); RecordedText docblock"
+   },
+   {
+    "harm": "Guard (b) refuses an absent field, so old facts cannot be rehydrated",
+    "status": "gone",
+    "path": "ADR-0096 row for ADR-0032 supersedes decision 1's redacted wire and decision 8's sentinel; RecipientClaimed::fromPayload accepts the payload and nothing refuses it"
+   },
+   {
+    "harm": "Decision 7 says the introduction event carries the ciphered identity, ADR-0057 §2.14 ships none: claims logged without it are permanently unrepairable (ADR-0031 forbids a rewrite)",
+    "status": "still_there",
+    "path": "ADR-0096 'Decisions 5 and 7 stand'; ADR-0096's ADR-0031 row moves to Path A 'for free text' only; §2.1's clean slate says 'never forms for these five'; ADR-0072 §3.2 'A ciphered identity on the introduction fact ... is not in this record'"
+   },
+   {
+    "harm": "Ordering: nothing requires the identity decision before the first real-data deployment",
+    "status": "still_there",
+    "path": "ADR-0096 §2.12 item 3 orders only 'The other four members' before real data; identity is on no list"
+   },
+   {
+    "harm": "Trigger: whoever starts TASK-014 must decide",
+    "status": "still_there",
+    "path": "docs/tasks/TASK-014 Status 'NOT started'; ADR-0057 §2.14 note 'filed at BL-204, triggered by whoever starts TASK-014'; ADR-0032 decision 7 note 'tracked as BL-204'"
+   }
+  ],
+  "guard_test": "RecipientClaimedTest::its_payload_key_set_is_closed pins the absence of identity on the wire. Nothing pins the decision: ADR-0096's census (§2.2) is not built and, as specified, reads members that exist, so it cannot see an absent one.",
+  "doors_tried": "Read ADR-0032 decisions 1, 7, 8; ADR-0096 §1.1 to §2.2, §2.6, §2.12, §7.4, §7.6 and its relationship table; ADR-0057 §2.14; ADR-0072 §3.2; TrailAssembler's RecipientClaimed use (log gives claim time and gate, identity comes from the row). Redelivery does not apply. Not read: ADR-0096 §2.8 to §2.11 in full (grep for identity, RecipientClaimed and decision 7 found nothing on an identity in the log).",
+  "finding": "ADR-0096 does answer decision 8's sub-decision as written for clear text and removes the refusal mechanism. It does not answer this row's own case: an identity ABSENT from a fact that decision 7, still standing, says should carry it. A claim is not one of the five members, so the clean slate does not cover it, and §2.6 distinguishes clear from encrypted, not absent. So the row's question stays unanswered: either retire decision 7 for RecipientClaimed and accept ROW_CURRENT identity as final, or require identity on the fact before the first real-data deployment, after which it is unrepairable. ADR-0096's claim of an answer is what a closer would cite, and it reads broader than its sections. Medium confidence because a maintainer may read the row's ask as limited to decision 8; the event's contents are not decided by any accepted section.",
+  "pointer": "Row text to keep: 'Decision 8's clear-text half is answered by ADR-0096 §2.1, §2.6. Open: ADR-0032 decision 7 still stands while RecipientClaimed carries no identity. Decide before the first deployment with real data, because each claim logged then lacks it for good: retire decision 7 for this event, or add the encrypted identity first.' If the row closes anyway, these live pointers must be swept: ADR-0032 decision 7 note and decision 8 'OPEN SUB-DECISION', ADR-0057 §2.14 note, src/F5Sign/Foundation/RecordedText/RecordedText.php."
+ },
+ "BL-308": {
+  "id": "BL-308",
+  "verdict": "CLOSE_WITH_POINTER",
+  "confidence": "high",
+  "harms_checked": [
+   {
+    "harm": "Decline consumes no signing challenge while the commit does",
+    "status": "gone",
+    "path": "DeclineSignatureUseCase::declineInsideTheUnit, 'if ($signingGateDeclared)' then SigningGateOnTheAct::answer; SigningSession::decline, consumeAnsweredSigningChallenge(SigningAct::DECLINE)"
+   },
+   {
+    "harm": "ADR-0070 §2.4 heading versus body",
+    "status": "decided",
+    "path": "ADR-0075 (Accepted, exercised) §2.1, §2.2; ADR-0070 Status field records the amendment. The §2.4 body text itself is unedited"
+   },
+   {
+    "harm": "A proof from another act or an earlier request stands in",
+    "status": "gone",
+    "path": "SigningSession::$answeredOnThisAct is never persisted; consumeAnsweredSigningChallenge, '$challenge->act() !== $act'; liveChallengeFor is per act"
+   },
+   {
+    "harm": "Link holder under (access open, signing gate declared) closes the leg",
+    "status": "gone",
+    "path": "AUTH_CODE_REQUIRED before admission; the code goes to the recipient's own contact"
+   },
+   {
+    "harm": "Link holder under (access open, NO signing gate) closes the leg, attributed to the recipient; under AT_LEAST it also counts as having acted",
+    "status": "still_there",
+    "path": "ADR-0075 §2.1 'When hasSigningGate() is false the act asks for nothing'. A signature on the same recipient asks exactly the same, so the row's 'less than a signature' no longer holds; SessionDeclined records accessMethod DIRECT_LINK"
+   },
+   {
+    "harm": "Lockout and guessing shared with signing",
+    "status": "decided",
+    "path": "ADR-0075 §2.7, §3.3 (a holder can still trigger messages and lock out; neither admits an act)"
+   }
+  ],
+  "guard_test": "SigningGateOnTheActHttpTest::a_decline_behind_a_signing_gate_needs_its_own_code_and_a_second_holder_gets_nowhere; DeclineSignatureUseCaseTest::every_role_that_may_decline_is_asked_the_signing_gate (closed map over Role::cases) and ::a_decline_with_no_code_rolls_back_and_saves_nothing.",
+  "doors_tried": "POST /signing/decline (SESSION_CREDENTIAL, the only caller of AdmitRecipientAct::decline); no machine decline route exists (ADR-0075 §2.9, BL-282); no copy route declares an act; route 5 refuses the signing gate; a SIGN code on a decline (test); ACCESS_CODE act-opened challenge; retry after a decline; roles SIGNER, APPROVER, CERTIFIED_DELIVERY; mirrored() fails loudly so a declared gate cannot read as empty; retired credential re-checked under the lock.",
+  "finding": "The defect is gone and the row's ask is met. One residual is by design: a recipient declaring no signing gate over a link-only access gate can be declined by anyone holding the link. It is symmetric with signing, but a decline by a blocking recipient voids for everyone, and no record states that consequence for the neutral pair; ADR-0075 only says the act asks for nothing. Stale surface: an ADR-0073 list of what it leaves out still names 'a decline's weaker gate (BL-308)'.",
+  "pointer": "Keep beside ADR-0075 §2.1 or §3.3: 'A recipient declaring no signing gate over a link-only access gate can be declined, as signed, by whoever holds the link; for a blocking recipient that ends the envelope. A sender who wants the link not to suffice declares a gate.' Tense sweep at closure: ADR-0073's list entry \"a decline's weaker gate (BL-308)\" and TASK-048's 'still Open' line (the latter is historical)."
+ }
+}

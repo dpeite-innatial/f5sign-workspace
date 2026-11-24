@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Descargas tras firmar — propuestas</title>
+<style>
+  /* Tokens copied from f5sign-signer/tailwind.config.ts (light + dark). */
+  :root {
+    --accent-50: #f3f3f2; --accent-500: #57534e; --accent-600: #1d1d1b; --accent-700: #000;
+    --corporate-50: #fdf2f3; --corporate-600: #9c1623;
+    --success-50: #f0fdf4; --success-600: #166534;
+    --warning-50: #fffbeb; --warning-600: #b45309;
+    --danger-50: #fef2f2; --danger-600: #b91c1c;
+    --app-bg: #f8fafc; --surface: #fff; --muted: #f1f5f9;
+    --text-primary: #0f172a; --text-secondary: #64748b; --text-disabled: #94a3b8;
+    --border-default: #e2e8f0; --border-strong: #cbd5e1; --on-fill: #fff;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --accent-50: #2a2a2d; --accent-500: #a8a29e; --accent-600: #f5f5f4; --accent-700: #fff;
+    --corporate-50: #2c1417; --corporate-600: #f08a95;
+    --success-50: #10281a; --success-600: #4ade80;
+    --warning-50: #2a2010; --warning-600: #fbbf24;
+    --danger-50: #2d1416; --danger-600: #f87171;
+    --app-bg: #0f1115; --surface: #181b20; --muted: #23272e;
+    --text-primary: #eef1f5; --text-secondary: #9aa3af; --text-disabled: #5f6773;
+    --border-default: #2f343c; --border-strong: #4a515c; --on-fill: #111113;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #e5e7eb; color: var(--text-primary);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  :root[data-theme="dark"] body { background: #050607; }
+  .page-head { max-width: 1240px; margin: 0 auto; padding: 24px 16px 8px; display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .page-head h1 { font-size: 18px; margin: 0; color: #111; }
+  :root[data-theme="dark"] .page-head h1 { color: #eee; }
+  .page-head p { margin: 4px 0 0; font-size: 13px; color: #555; }
+  :root[data-theme="dark"] .page-head p { color: #aaa; }
+  .toggle { border: 1px solid #999; background: transparent; border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; color: inherit; }
+  .proposal { max-width: 1240px; margin: 24px auto 40px; padding: 0 16px; }
+  .proposal > h2 { font-size: 16px; margin: 0 0 4px; color: #111; }
+  :root[data-theme="dark"] .proposal > h2 { color: #eee; }
+  .proposal > p { margin: 0 0 16px; font-size: 13px; color: #555; max-width: 760px; line-height: 1.5; }
+  :root[data-theme="dark"] .proposal > p { color: #aaa; }
+  .frames { display: flex; gap: 24px; flex-wrap: wrap; }
+  .frame-label { font-size: 12px; color: #666; margin: 0 0 6px; }
+
+  /* Phone frame with the signer's chrome (header + footer). */
+  .phone {
+    width: 390px; max-width: 100%; height: 760px; overflow: hidden; display: flex; flex-direction: column;
+    background: var(--app-bg); border-radius: 28px; border: 8px solid #111; box-shadow: 0 20px 40px -20px rgba(0,0,0,.4);
+  }
+  .hdr { height: 56px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--border-default); }
+  .logo { font-weight: 800; font-style: italic; letter-spacing: -.5px; font-size: 22px; }
+  .logo b { color: var(--corporate-600); }
+  .hdr-btns { display: flex; gap: 8px; }
+  .hdr-btns span { width: 36px; height: 36px; border: 1px solid var(--border-default); border-radius: 8px; }
+  main { flex: 1; overflow: auto; padding: 24px 16px; }
+  .ftr { flex: none; text-align: center; font-size: 11px; color: var(--text-secondary); padding: 10px; border-top: 1px solid var(--border-default); }
+
+  .center { text-align: center; }
+  .icon-circle { width: 72px; height: 72px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; }
+  .icon-circle svg { width: 36px; height: 36px; }
+  h3.title { font-size: 20px; margin: 16px 0 4px; font-weight: 650; }
+  .sub { font-size: 14px; color: var(--text-secondary); margin: 0; line-height: 1.45; }
+  .muted-line { font-size: 12px; color: var(--text-secondary); }
+
+  /* ---------- Proposal A: file list ---------- */
+  .list { margin-top: 24px; background: var(--surface); border: 1px solid var(--border-default); border-radius: 16px; overflow: hidden; }
+  .list-head { padding: 12px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); border-bottom: 1px solid var(--border-default); display: flex; justify-content: space-between; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; min-height: 64px; border-bottom: 1px solid var(--border-default); text-decoration: none; color: inherit; }
+  .row:last-child { border-bottom: 0; }
+  .row:hover { background: var(--muted); }
+  .file-tile { width: 40px; height: 48px; flex: none; border-radius: 6px; background: var(--muted); border: 1px solid var(--border-default); position: relative; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px; }
+  .file-tile::before { content: ""; position: absolute; top: -1px; right: -1px; width: 12px; height: 12px; background: var(--surface); border-left: 1px solid var(--border-default); border-bottom: 1px solid var(--border-default); border-bottom-left-radius: 4px; }
+  .file-tile em { font-style: normal; font-size: 9px; font-weight: 700; color: var(--on-fill); background: var(--corporate-600); border-radius: 3px; padding: 1px 4px; }
+  .file-tile.seal em { background: var(--accent-600); }
+  .row-text { flex: 1; min-width: 0; }
+  .row-name { font-size: 14px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .chip.ok { background: var(--success-50); color: var(--success-600); }
+  .chip.wait { background: var(--warning-50); color: var(--warning-600); }
+  .dl { width: 40px; height: 40px; flex: none; border-radius: 999px; border: 1px solid var(--border-default); display: inline-flex; align-items: center; justify-content: center; color: var(--accent-600); }
+  .dl svg { width: 18px; height: 18px; }
+  .dl.sq { border-radius: 8px; width: 34px; height: 34px; }
+  .dl.sq svg { width: 16px; height: 16px; }
+  .dl.sq.off { color: var(--text-disabled); }
+  .dl.sq.done { color: var(--success-600); background: var(--success-50); border-color: transparent; }
+  .row-err { font-size: 12px; color: var(--danger-600); margin-top: 2px; }
+  .row.disabled { opacity: .55; pointer-events: none; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; border-radius: 10px; font: inherit; font-size: 14px; font-weight: 550; cursor: pointer; }
+  .btn.primary { background: var(--accent-600); color: var(--on-fill); border: 0; }
+  .btn.ghost { background: transparent; color: var(--text-primary); border: 1px solid var(--border-default); }
+  .btn svg { width: 18px; height: 18px; }
+  .stack { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+  .spinner { width: 18px; height: 18px; border-radius: 999px; border: 2px solid var(--border-strong); border-top-color: var(--accent-600); animation: spin 0.9s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner, .shimmer { animation: none !important; } }
+  .shimmer { background: linear-gradient(90deg, var(--muted) 0%, var(--border-default) 50%, var(--muted) 100%); background-size: 200% 100%; animation: sh 1.4s linear infinite; border-radius: 6px; }
+  @keyframes sh { to { background-position: -200% 0; } }
+  .note { margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--muted); font-size: 13px; color: var(--text-secondary); display: flex; gap: 10px; align-items: flex-start; line-height: 1.45; }
+
+  /* ---------- Proposal B: the signed record ---------- */
+  .record { margin-top: 8px; background: var(--surface); border: 1px solid var(--border-default); border-radius: 18px; overflow: hidden; box-shadow: 0 1px 2px rgba(15,23,42,.05), 0 18px 40px -24px rgba(15,23,42,.35); }
+  .record-top { padding: 20px 18px 16px; border-bottom: 1px dashed var(--border-strong); position: relative; }
+  .record-top::before, .record-top::after { content: ""; position: absolute; bottom: -9px; width: 18px; height: 18px; border-radius: 999px; background: var(--app-bg); border: 1px solid var(--border-default); }
+  .record-top::before { left: -10px; } .record-top::after { right: -10px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; }
+  .badge.ok { background: var(--success-50); color: var(--success-600); }
+  .badge.wait { background: var(--warning-50); color: var(--warning-600); }
+  .badge svg { width: 14px; height: 14px; }
+  .record h3 { font-size: 18px; margin: 12px 0 2px; font-weight: 650; }
+  .facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 14px 0 0; font-size: 13px; }
+  .facts dt { color: var(--text-secondary); } .facts dd { margin: 0; font-weight: 500; }
+  .record-docs { padding: 8px 6px; }
+  .doc-line { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; color: inherit; text-decoration: none; }
+  .doc-line:hover { background: var(--muted); }
+  .doc-ico { width: 36px; height: 36px; border-radius: 10px; background: var(--corporate-50); color: var(--corporate-600); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .doc-ico.seal { background: var(--accent-50); color: var(--accent-600); }
+  .doc-ico svg { width: 20px; height: 20px; }
+  .link { font-size: 13px; font-weight: 600; color: var(--accent-600); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+  .record-foot { padding: 14px 18px 18px; border-top: 1px solid var(--border-default); }
+  .seal-line { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--text-secondary); margin-top: 12px; }
+  .seal-line svg { width: 16px; height: 16px; flex: none; }
+  .record-foot .seal-line { justify-content: center; text-align: center; }
+</style>
+</head>
+<body>
+
+<!-- Inline icons, reused below. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0 4.5-4.5M12 15l-4.5-4.5M5 19h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-badge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+  <symbol id="i-seal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="5"/><path d="m9.5 13.5-1.5 7 4-2 4 2-1.5-7"/><path d="m10.2 9 1.3 1.3 2.4-2.6"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+</svg>
+
+<header class="page-head">
+  <div>
+    <h1>Descargas tras firmar — dos propuestas</h1>
+    <p>Para <code>/done</code> y <code>/c/:link</code>. Colores y tipografía de la plataforma (tokens de <code>tailwind.config.ts</code>). Móvil 390 px; cada propuesta con «copia lista» y «preparando».</p>
+  </div>
+  <button class="toggle" type="button" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">Tema claro / oscuro</button>
+</header>
+
+<!-- ======================================================= C ======================================================= -->
+<section class="proposal">
+  <h2>C · Elegida: cabecera de A + tarjeta de B</h2>
+  <p>El icono y el título de A, que es el idioma de las demás pantallas de estado (<code>StatusScreen</code>). Debajo, la tarjeta de B con el sobre, los datos y lo que te llevas. Mientras se prepara, los ficheros se ven con su nombre y un indicador, como en A, en lugar del esqueleto; sus enlaces de descarga quedan desactivados hasta que la copia esté lista. Título y textos según el rol (firmante o aprobador) y según la copia y el sobre. Cada fichero avisa en su fila si su descarga falla, y marca ✓ unos segundos tras descargarse. Cuando la copia pasa de «preparando» a «lista», se anuncia al lector de pantalla y el foco va al primer botón de descarga. El estado se dice una sola vez, abajo en el pie de la tarjeta, y nombra lo que falte: la copia y el justificante, o solo el justificante si llega unos segundos después.</p>
+  <div class="frames">
+    <div>
+      <p class="frame-label">Copia lista · un documento</p>
+      <div class="phone">
+        <div class="hdr"><span class="logo"><b>F5</b>SIGN</span><span class="hdr-btns"><span></span><span></span></span></div>
+        <main>
+          <div class="center">
+            <span class="icon-circle" style="background:var(--success-50);color:var(--success-600)"><svg><use href="#i-badge"/></svg></span>
+            <h3 class="title">Firma completada</h3>
+            <p class="sub">Tu copia ya lleva tu firma.</p>
+          </div>
+          <div class="record" style="margin-top:20px">
+            <div class="record-top">
+              <h3 style="margin-top:0">Carta de Porte — Transportes Prueba</h3>
+              <dl class="facts">
+                <dt>Firmado</dt><dd>27 oct 2026, 11:02</dd>
+                <dt>Firmante</dt><dd>Cristina R.</dd>
+                <dt>Remitente</dt><dd>Transportes Prueba, S.L.</dd>
+              </dl>
+            </div>
+            <div class="record-docs">
+              <a class="doc-line" href="#">
+                <span class="doc-ico"><svg><use href="#i-doc"/></svg></span>
+                <span class="row-text"><div class="row-name">Carta de Porte.pdf</div></span>
+                <span class="dl sq" aria-label="Descargar"><svg><use href="#i-down"/></svg></span>
+              </a>
+              <a class="doc-line" href="#">
+                <span class="doc-ico seal"><svg><use href="#i-seal"/></svg></span>
+                <span class="row-text"><div class="row-name">Justificante de firma</div></span>
+                <span class="dl sq" aria-label="Descargar"><svg><use href="#i-down"/></svg></span>
+              </a>
+            </div>
+            <div class="record-foot">
+              <button class="btn primary" type="button"><svg><use href="#i-down"/></svg>Descargar mi copia</button>
+              <div class="seal-line"><svg><use href="#i-lock"/></svg>Documento sellado electrónicamente.</div>
+            </div>
+          </div>
+        </main>
+        <div class="ftr">Tecnología de F5Sign · Información legal</div>
+      </div>
+    </div>
+
+    <div>
+      <p class="frame-label">Preparando la copia (APPLYING)</p>
+      <div class="phone">
+        <div class="hdr"><span class="logo"><b>F5</b>SIGN</span><span class="hdr-btns"><span></span><span></span></span></div>
+        <main>
+          <div class="center">
+            <span class="icon-circle" style="background:var(--success-50);color:var(--success-600)"><svg><use href="#i-badge"/></svg></span>
+            <h3 class="title">Firma completada</h3>
+            <p class="sub">Tu firma está registrada. Estamos añadiéndola al documento.</p>
+          </div>
+          <div class="record" style="margin-top:20px">
+            <div class="record-top">
+              <h3 style="margin-top:0">Carta de Porte — Transportes Prueba</h3>
+              <dl class="facts">
+                <dt>Firmado</dt><dd>27 oct 2026, 11:02</dd>
+                <dt>Firmante</dt><dd>Cristina R.</dd>
+                <dt>Remitente</dt><dd>Transportes Prueba, S.L.</dd>
+              </dl>
+            </div>
+            <div class="record-docs">
+              <div class="doc-line" style="opacity:.6">
+                <span class="doc-ico"><svg><use href="#i-doc"/></svg></span>
+                <span class="row-text"><div class="row-name">Carta de Porte.pdf</div></span>
+                <span class="dl sq off" aria-label="Descargar"><svg><use href="#i-down"/></svg></span>
+              </div>
+              <div class="doc-line" style="opacity:.6">
+                <span class="doc-ico seal"><svg><use href="#i-seal"/></svg></span>
+                <span class="row-text"><div class="row-name">Justificante de firma</div></span>
+                <span class="dl sq off" aria-label="Descargar"><svg><use href="#i-down"/></svg></span>
+              </div>
+            </div>
+            <div class="record-foot">
+              <button class="btn primary" type="button" disabled style="opacity:.5"><span class="spinner" style="border-top-color:var(--on-fill)"></span>Preparando tu copia…</button>
+              <div class="seal-line"><svg><use href="#i-clock"/></svg>Suele tardar unos segundos. Puedes esperar aquí.</div>
+            </div>
+          </div>
+        </main>
+        <div class="ftr">Tecnología de F5Sign · Información legal</div>
+      </div>
+    </div>
+    <div>
+      <p class="frame-label">Aprobador · un fichero descargado, otro con error</p>
+      <div class="phone">
+        <div class="hdr"><span class="logo"><b>F5</b>SIGN</span><span class="hdr-btns"><span></span><span></span></span></div>
+        <main>
+          <div class="center">
+            <span class="icon-circle" style="background:var(--success-50);color:var(--success-600)"><svg><use href="#i-badge"/></svg></span>
+            <h3 class="title">Aprobación registrada</h3>
+            <p class="sub">Tu copia ya lleva tu aprobación. Faltan otros participantes.</p>
+          </div>
+          <div class="record" style="margin-top:20px">
+            <div class="record-top">
+              <h3 style="margin-top:0">Contrato marco — Logística Norte</h3>
+              <dl class="facts">
+                <dt>Aprobado</dt><dd>27 oct 2026, 12:40</dd>
+                <dt>Aprobador</dt><dd>Luis M.</dd>
+                <dt>Remitente</dt><dd>Logística Norte, S.A.</dd>
+              </dl>
+            </div>
+            <div class="record-docs">
+              <a class="doc-line" href="#">
+                <span class="doc-ico"><svg><use href="#i-doc"/></svg></span>
+                <span class="row-text"><div class="row-name">Contrato marco.pdf</div></span>
+                <span class="dl sq done" aria-label="Descargado"><svg><use href="#i-check"/></svg></span>
+              </a>
+              <a class="doc-line" href="#">
+                <span class="doc-ico"><svg><use href="#i-doc"/></svg></span>
+                <span class="row-text"><div class="row-name">Anexo de tarifas.pdf</div><div class="row-err" role="alert">No se ha podido descargar. Inténtalo de nuevo.</div></span>
+                <span class="dl sq" aria-label="Descargar Anexo de tarifas.pdf"><svg><use href="#i-down"/></svg></span>
+              </a>
+              <a class="doc-line" href="#">
+                <span class="doc-ico seal"><svg><use href="#i-seal"/></svg></span>
+                <span class="row-text"><div class="row-name">Justificante de aprobación</div></span>
+                <span class="dl sq" aria-label="Descargar Justificante de aprobación"><svg><use href="#i-down"/></svg></span>
+              </a>
+            </div>
+            <div class="record-foot">
+              <div class="seal-line" style="margin-top:0"><svg><use href="#i-lock"/></svg>Documento firmado electrónicamente.</div>
+            </div>
+          </div>
+        </main>
+        <div class="ftr">Tecnología de F5Sign · Información legal</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= A ======================================================= -->
+<section class="proposal">
+  <h2>A · Lista de ficheros</h2>
+  <p>Cada documento es una fila con su miniatura de PDF, nombre, páginas y estado, y un botón redondo de descarga a la derecha (toda la fila es pulsable). El justificante va en su propia fila, con un icono distinto (sello) para que se lea como «la prueba de lo que hiciste», no como otro documento. Con varios documentos aparece «Descargar todo». Mientras se prepara la copia, las filas se ven pero sin descarga, con un chip «Preparando».</p>
+  <div class="frames">
+    <div>
+      <p class="frame-label">Copia lista · dos documentos</p>
+      <div class="phone">
+        <div class="hdr"><span class="logo"><b>F5</b>SIGN</span><span class="hdr-btns"><span></span><span></span></span></div>
+        <main>
+          <div class="center">
+            <span class="icon-circle" style="background:var(--success-50);color:var(--success-600)"><svg><use href="#i-badge"/></svg></span>
+            <h3 class="title">Firma completada</h3>
+            <p class="sub">Carta de Porte — Transportes Prueba</p>
+            <p class="muted-line" style="margin-top:4px">Firmado el 27 oct 2026, 11:02</p>
+          </div>
+
+          <div class="list">
+            <div class="list-head"><span>Tu copia firmada</span><span>2 documentos</span></div>
+            <a class="row" href="#">
+              <span class="file-tile"><em>PDF</em></span>
+              <span class="row-text">
+                <div class="row-name">Carta de Porte.pdf</div>
+                <div class="row-meta">3 páginas · <span class="chip ok"><svg width="12" height="12"><use href="#i-check"/></svg>Con tu firma</span></div>
+              </span>
+              <span class="dl" aria-label="Descargar"><svg><use href="#i-down"/></svg></span>
+            </a>
+            <a class="row" href="#">
+              <span class="file-tile"><em>PDF</em></span>
+              <span class="row-text">
+                <div class="row-name">Anexo I — Condiciones generales.pdf</div>
+                <div class="row-meta">1 página · <span class="chip ok"><svg width="12" height="12"><use href="#i-check"/></svg>Con tu firma</span></div>
+              </span>
+              <span class="dl" aria-label="Descargar"><svg><use href="#i-down"/></svg></span>
+            </a>
+          </div>
+
+          <div class="list">
+            <a class="row" href="#">
+              <span class="file-tile seal"><em>PDF</em></span>
+              <span class="row-text">
+                <div class="row-name">Justificante de firma</div>
+                <div class="row-meta">Sellado por F5Sign · prueba de tu acto</div>
+              </span>
+              <span class="dl" aria-label="Descargar"><svg><use href="#i-down"/></svg></span>
+            </a>
+          </div>
+
+          <div class="stack">
+            <button class="btn primary" type="button"><svg><use href="#i-down"/></svg>Descargar todo</button>
+            <button class="btn ghost" type="button">Cerrar</button>
+          </div>
+        </main>
+        <div class="ftr">Tecnología de F5Sign · Información legal</div>
+      </div>
+    </div>
+
+    <div>
+      <p class="frame-label">Preparando la copia (APPLYING)</p>
+      <div class="phone">
+        <div class="hdr"><span class="logo"><b>F5</b>SIGN</span><span class="hdr-btns"><span></span><span></span></span></div>
+        <main>
+          <div class="center">
+            <span class="icon-circle" style="background:var(--success-50);color:var(--success-600)"><svg><use href="#i-badge"/></svg></span>
+            <h3 class="title">Firma completada</h3>
+            <p class="sub">Carta de Porte — Transportes Prueba</p>
+          </div>
+
+          <div class="list">
+            <div class="list-head"><span>Tu copia firmada</span><span>2 documentos</span></div>
+            <div class="row disabled">
+              <span class="file-tile"><em>PDF</em></span>
+              <span class="row-text">
+                <div class="row-name">Carta de Porte.pdf</div>
+                <div class="row-meta"><span class="chip wait"><span class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>Añadiendo tu firma</span></div>
+              </span>
+              <span class="dl"><svg><use href="#i-down"/></svg></span>
+            </div>
+            <div class="row disabled">
+              <span class="file-tile"><em>PDF</em></span>
+              <span class="row-text">
+                <div class="row-name">Anexo I — Condiciones generales.pdf</div>
+                <div class="row-meta"><span class="chip wait"><span class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>Añadiendo tu firma</span></div>
+              </span>
+              <span class="dl"><svg><use href="#i-down"/></svg></span>
+            </div>
+          </div>
+
+          <div class="list">
+            <div class="row disabled">
+              <span class="file-tile seal"><em>PDF</em></span>
+              <span class="row-text">
+                <div class="row-name">Justificante de firma</div>
+                <div class="row-meta"><span class="chip wait"><span class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>Preparando</span></div>
+              </span>
+              <span class="dl"><svg><use href="#i-down"/></svg></span>
+            </div>
+          </div>
+
+          <div class="note"><svg width="18" height="18" style="flex:none;margin-top:1px"><use href="#i-clock"/></svg><span>Estamos preparando tu copia firmada. Las descargas se activarán aquí en cuanto esté lista.</span></div>
+        </main>
+        <div class="ftr">Tecnología de F5Sign · Información legal</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= B ======================================================= -->
+<section class="proposal">
+  <h2>B · Resguardo de la firma</h2>
+  <p>Toda la pantalla es una sola tarjeta tipo resguardo: arriba lo que pasó (estado, sobre, quién, cuándo), un corte troquelado, y abajo lo que te llevas. Los documentos son líneas ligeras con «Descargar» como enlace, y el justificante cierra la tarjeta con su sello. Más sobria y «de documento oficial»; con un solo documento hay un único botón principal. Mientras se prepara, el sello del estado cambia a «Preparando tu copia» y las líneas se ven como esqueletos.</p>
+  <div class="frames">
+    <div>
+      <p class="frame-label">Copia lista · un documento</p>
+      <div class="phone">
+        <div class="hdr"><span class="logo"><b>F5</b>SIGN</span><span class="hdr-btns"><span></span><span></span></span></div>
+        <main>
+          <div class="record">
+            <div class="record-top">
+              <span class="badge ok"><svg><use href="#i-check"/></svg>Firma completada</span>
+              <h3>Carta de Porte — Transportes Prueba</h3>
+              <p class="sub" style="font-size:13px">Tu copia ya lleva tu firma.</p>
+              <dl class="facts">
+                <dt>Firmado</dt><dd>27 oct 2026, 11:02</dd>
+                <dt>Firmante</dt><dd>Cristina R.</dd>
+                <dt>Remitente</dt><dd>Transportes Prueba, S.L.</dd>
+              </dl>
+            </div>
+            <div class="record-docs">
+              <a class="doc-line" href="#">
+                <span class="doc-ico"><svg><use href="#i-doc"/></svg></span>
+                <span class="row-text"><div class="row-name">Carta de Porte.pdf</div><div class="row-meta">3 páginas · PDF</div></span>
+                <span class="link">Descargar</span>
+              </a>
+              <a class="doc-line" href="#">
+                <span class="doc-ico seal"><svg><use href="#i-seal"/></svg></span>
+                <span class="row-text"><div class="row-name">Justificante de firma</div><div class="row-meta">Sellado · prueba de tu acto</div></span>
+                <span class="link">Descargar</span>
+              </a>
+            </div>
+            <div class="record-foot">
+              <button class="btn primary" type="button"><svg><use href="#i-down"/></svg>Descargar mi copia</button>
+              <div class="seal-line"><svg><use href="#i-lock"/></svg>Documento sellado electrónicamente. Guárdalo: es tu copia.</div>
+            </div>
+          </div>
+          <div class="stack"><button class="btn ghost" type="button">Cerrar</button></div>
+        </main>
+        <div class="ftr">Tecnología de F5Sign · Información legal</div>
+      </div>
+    </div>
+
+    <div>
+      <p class="frame-label">Preparando la copia (APPLYING)</p>
+      <div class="phone">
+        <div class="hdr"><span class="logo"><b>F5</b>SIGN</span><span class="hdr-btns"><span></span><span></span></span></div>
+        <main>
+          <div class="record">
+            <div class="record-top">
+              <span class="badge wait"><span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>Preparando tu copia</span>
+              <h3>Carta de Porte — Transportes Prueba</h3>
+              <p class="sub" style="font-size:13px">Tu firma está registrada. Estamos añadiéndola al documento.</p>
+              <dl class="facts">
+                <dt>Firmado</dt><dd>27 oct 2026, 11:02</dd>
+                <dt>Firmante</dt><dd>Cristina R.</dd>
+                <dt>Remitente</dt><dd>Transportes Prueba, S.L.</dd>
+              </dl>
+            </div>
+            <div class="record-docs">
+              <div class="doc-line">
+                <span class="doc-ico"><svg><use href="#i-doc"/></svg></span>
+                <span class="row-text"><div class="shimmer" style="height:12px;width:70%"></div><div class="shimmer" style="height:10px;width:40%;margin-top:6px"></div></span>
+              </div>
+              <div class="doc-line">
+                <span class="doc-ico seal"><svg><use href="#i-seal"/></svg></span>
+                <span class="row-text"><div class="shimmer" style="height:12px;width:55%"></div><div class="shimmer" style="height:10px;width:35%;margin-top:6px"></div></span>
+              </div>
+            </div>
+            <div class="record-foot">
+              <button class="btn primary" type="button" disabled style="opacity:.5"><span class="spinner" style="border-top-color:var(--on-fill)"></span>Preparando…</button>
+              <div class="seal-line"><svg><use href="#i-clock"/></svg>Suele tardar unos segundos. Puedes esperar aquí.</div>
+            </div>
+          </div>
+        </main>
+        <div class="ftr">Tecnología de F5Sign · Información legal</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

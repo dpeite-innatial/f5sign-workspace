@@ -1,0 +1,158 @@
+<?php
+
+declare(strict_types=1);
+
+namespace F5Sign\Tests\Session\Acceptance;
+
+use Doctrine\DBAL\Connection;
+use F5Sign\Tests\Support\ProvisionsApiClients;
+use F5Sign\Tests\Support\ProvisionsTenants;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Test;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
+
+#[CoversNothing]
+final class UnclaimedSlotMachineProbeHttpTest extends WebTestCase
+{
+    use ProvisionsApiClients;
+    use ProvisionsTenants;
+
+    private const TENANT = '7a7a7a7a-7a7a-4a7a-8a7a-7a7a7a7a7a7a';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->provisionTenant(self::TENANT);
+        $this->provisionApiClient(self::TENANT);
+    }
+
+    /** CONTROL: identical slot, no machine call. The gate change and the claim both work. */
+    #[Test]
+    public function control_without_the_machine_call_the_slot_is_editable_and_claimable(): void
+    {
+        $client = self::createClient();
+        $client->disableReboot();
+        [$e, $r] = $this->slot($client, ['claimable' => true, 'notification_channels' => [], 'auth' => ['access_methods' => ['OTP_EMAIL', 'OTP_SMS']]]);
+
+        $this->report('control state', $this->state($r));
+        [$s, $b] = $this->call($client, 'PUT', "/api/v1/envelopes/$e/recipients/$r/auth", ['auth' => ['access_methods' => ['OTP_EMAIL']]]);
+        $this->report('control PUT auth', [$s, $b]);
+        self::assertSame(200, $s, $b);
+        [$s, $b] = $this->call($client, 'POST', "/api/v1/envelopes/$e/recipients/$r/claim", ['full_name' => 'Jane Smith', 'email' => 'jane@acme.test']);
+        $this->report('control claim', [$s, $b]);
+        self::assertSame(204, $s, $b);
+    }
+
+    /** No contact: the send fails, what did it leave behind, and can the slot still be repaired? */
+    #[Test]
+    public function machine_send_on_a_contactless_slot(): void
+    {
+        $client = self::createClient();
+        $client->disableReboot();
+        [$e, $r] = $this->slot($client, ['claimable' => true, 'notification_channels' => [], 'auth' => ['access_methods' => ['OTP_EMAIL', 'OTP_SMS']]]);
+
+        $before = $this->state($r);
+        [$s, $b] = $this->call($client, 'POST', "/api/v1/envelopes/$e/recipients/$r/auth/otp/send", ['resend' => false]);
+        $after = $this->state($r);
+        $this->report('A before', $before);
+        $this->report('A machine send', [$s, $b]);
+        $this->report('A after', $after);
+
+        [$s2, $b2] = $this->call($client, 'PUT', "/api/v1/envelopes/$e/recipients/$r/auth", ['auth' => ['access_methods' => ['OTP_EMAIL']]]);
+        $this->report('A PUT auth afterwards', [$s2, $b2]);
+        [$s3, $b3] = $this->call($client, 'POST', "/api/v1/envelopes/$e/recipients/$r/claim", ['full_name' => 'Jane Smith', 'email' => 'jane@acme.test']);
+        $this->report('A claim email-only afterwards', [$s3, $b3]);
+        [$s4, $b4] = $this->call($client, 'POST', "/api/v1/envelopes/$e/recipients/$r/claim", ['full_name' => 'Jane Smith', 'email' => 'jane@acme.test', 'phone' => '+34600123456']);
+        $this->report('A claim with both afterwards', [$s4, $b4]);
+        $this->report('A final', $this->state($r));
+        self::addToAssertionCount(1);
+    }
+
+    /** With a contact: does a code go to a party the system records as unnamed? */
+    #[Test]
+    public function machine_send_on_a_slot_authored_with_a_contact(): void
+    {
+        $client = self::createClient();
+        $client->disableReboot();
+        [$e, $r] = $this->slot($client, ['claimable' => true, 'email' => 'someone@acme.test', 'notification_channels' => [], 'auth' => ['access_method' => 'OTP_EMAIL']]);
+
+        $this->report('B before', $this->state($r));
+        [$s, $b] = $this->call($client, 'POST', "/api/v1/envelopes/$e/recipients/$r/auth/otp/send", ['resend' => false]);
+        $this->report('B machine send', [$s, $b]);
+        $this->report('B after', $this->state($r));
+        $this->report('B otp notifications', $this->rows(
+            "SELECT n.purpose, (n.variables->>'code') IS NOT NULL AS has_code FROM notification.notification n WHERE n.subject_ref = :e AND n.purpose LIKE 'AUTH_OTP%'",
+            ['e' => $e],
+        ));
+                $this->report('B slot unclaimed read', $this->rows('SELECT full_name, claimed_at, email FROM envelope.recipient WHERE id = :r', ['r' => $r]));
+        self::addToAssertionCount(1);
+    }
+
+    /** The submit twin, on a contactless slot. */
+    #[Test]
+    public function machine_submit_on_a_slot(): void
+    {
+        $client = self::createClient();
+        $client->disableReboot();
+        [$e, $r] = $this->slot($client, ['claimable' => true, 'notification_channels' => [], 'auth' => ['access_methods' => ['OTP_EMAIL', 'OTP_SMS']]]);
+
+        [$s, $b] = $this->call($client, 'POST', "/api/v1/envelopes/$e/recipients/$r/auth", ['code' => '424242']);
+        $this->report('C machine submit', [$s, $b]);
+        $this->report('C after', $this->state($r));
+        self::addToAssertionCount(1);
+    }
+
+    /** @return array{0:string,1:string} */
+    private function slot(KernelBrowser $client, array $recipient): array
+    {
+        [, $b] = $this->call($client, 'POST', '/api/v1/envelopes', ['title' => 'Carta', 'workflow_type' => 'SIGN_ORDERED']);
+        $e = json_decode($b, true)['id'];
+        [, $b] = $this->call($client, 'POST', "/api/v1/envelopes/$e/documents", ['name' => 'c.pdf', 'display_name' => 'C', 'mime_type' => 'application/pdf']);
+        $d = json_decode($b, true)['id'];
+        $pdf = new UploadedFile(dirname(__DIR__, 3) . '/Fixtures/pdf/sample.pdf', 'c.pdf', 'application/pdf', null, true);
+        $client->request('POST', "/api/v1/envelopes/$e/documents/$d/content", server: $this->apiClientFor(self::TENANT)->machineHeaders('dispatcher-7'), files: ['file' => $pdf]);
+        self::assertSame(204, $client->getResponse()->getStatusCode(), (string) $client->getResponse()->getContent());
+        $this->call($client, 'POST', "/api/v1/envelopes/$e/steps", ['ordinal' => 1]);
+        [$s, $b] = $this->call($client, 'POST', "/api/v1/envelopes/$e/recipients", ['step_ordinal' => 1, 'role' => 'SIGNER', ...$recipient]);
+        self::assertSame(201, $s, $b);
+        $r = json_decode($b, true)['id'];
+        [$s, $b] = $this->call($client, 'POST', "/api/v1/envelopes/$e/document-assignments", ['assignments' => [['recipient_id' => $r, 'document_id' => $d, 'sign' => false, 'view' => true]]]);
+        self::assertSame(204, $s, $b);
+        [$s, $b] = $this->call($client, 'POST', "/api/v1/envelopes/$e/send", null);
+        self::assertSame(204, $s, $b);
+
+        return [$e, $r];
+    }
+
+    /** @return array{0:int,1:string} */
+    private function call(KernelBrowser $client, string $m, string $uri, ?array $payload): array
+    {
+        $client->request($m, $uri, server: [...$this->apiClientFor(self::TENANT)->machineHeaders('dispatcher-7'), 'CONTENT_TYPE' => 'application/json'], content: $payload === null ? null : (string) json_encode($payload));
+
+        return [$client->getResponse()->getStatusCode(), (string) $client->getResponse()->getContent()];
+    }
+
+    private function state(string $r): array
+    {
+        return [
+            'recipient' => $this->rows('SELECT first_opened_at, outcome, full_name, claimed_at FROM envelope.recipient WHERE id = :r', ['r' => $r]),
+            'sessions' => $this->rows('SELECT id, access_gate_passed_at FROM session.signing_session WHERE recipient_id = :r', ['r' => $r]),
+        ];
+    }
+
+    private function rows(string $sql, array $p): array
+    {
+        $c = self::getContainer()->get('doctrine.dbal.default_connection');
+        self::assertInstanceOf(Connection::class, $c);
+        $c->executeStatement("SELECT set_config('app.current_tenant_id', ?, false)", [self::TENANT]);
+
+        return $c->fetchAllAssociative($sql, $p);
+    }
+
+    private function report(string $what, mixed $v): void
+    {
+        fwrite(STDERR, 'PROBE ' . $what . ': ' . json_encode($v) . "\n");
+    }
+}

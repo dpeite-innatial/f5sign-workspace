@@ -1,0 +1,855 @@
+{
+ "BL-82": {
+  "id": "BL-82",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "ApiKeyId still in Foundation/Identity (yes); not moved to IdentityAccess/Contract/Type (no such dir); ApiClientId also in Foundation; decision between move and document not completed: the docblock gives a partial rationale and admits it does not meet the full placement test.",
+  "evidence": "src/F5Sign/Foundation/Identity/ApiKeyId.php docblock: 'the other half -- being referenced by every context -- does not apply'; src/F5Sign/IdentityAccess/Contract has only Event and Query dirs.",
+  "remains": ""
+ },
+ "BL-76": {
+  "id": "BL-76",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "IdentityQuery absent from src (only the ddd doc table declares it); Notification has no sender resolution; Envelope::$senderId still ActorId.",
+  "evidence": "rg IdentityQuery src -> none; docs/ddd/identity-access-domain-model.md:660 '| IdentityQuery | IdentityAccess\\Contract | ◯'; IdentityAccess/Contract/Query holds only TenantNames, TenantSmsNotifications; Envelope.php 'private ActorId $senderId'.",
+  "remains": ""
+ },
+ "BL-154": {
+  "id": "BL-154",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "Policy fallback is now mentioned in f5sign-infra docs/operations/rabbitmq.md in one sentence, but no procedure or command (no set_policy anywhere in infra). rabbit-check-dlx and rabbit-recreate-event-queues exist. The ask (write the policy route where an operator looks) is only nominally met.",
+  "evidence": "f5sign-infra/docs/operations/rabbitmq.md: 'the way out is to declare it as a RabbitMQ *policy*, which does apply to live queues.'; rg set_policy f5sign-infra -> none.",
+  "remains": "A runbook with the actual rabbitmqctl set_policy command for queue.*.events x-dead-letter-exchange, in infra."
+ },
+ "BL-205": {
+  "id": "BL-205",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "Stranded-slot defect: PUT .../recipients/{rid}/auth (ADR-0083) exists on develop (feat/gates-editable-before-entry is ancestor of HEAD); acceptance test narrows gate by PUT, claims 204, passes gate, commits 200. Decision a/b/c made (widened a). Residual escape (claim with a phone the integrator controls) is noted in the row as now unnecessary.",
+  "evidence": "tests/F5Sign/Acceptance/RecipientAuthRequirementStoriesHttpTest.php s1_a_stranded_slot_is_narrowed_claimed_entered_and_signed: send($client,'PUT',authRoute(...),['auth'=>['access_methods'=>['OTP_EMAIL']]],200) then claim 204 then commit 200; config/routes/api/envelope.php header lists /recipients/{recipientId}/auth.",
+  "remains": ""
+ },
+ "BL-9": {
+  "id": "BL-9",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "low",
+  "claims_checked": "Count of escaped mutants needs an Infection run; tests for EventLogCommitment and EventRelay exist and EventLog code changed since (cacb8b05, 2026-10-26), so the 2026-07-17 measurement may be stale.",
+  "evidence": "tests/F5Sign/Foundation/**/EventLogCommitmentTest.php, EventRelayTest.php present; no run possible read-only.",
+  "remains": ""
+ },
+ "BL-70": {
+  "id": "BL-70",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "Premise 'zero RateLimiter, component not installed' is false now: rate_limiter configured in config/packages/rate_limiter.yaml and used by FailOpenOtpSendLimiter on both OTP send routes. The row's real concern remains: no limiter on API-key probing or the general request path; no edge rate limiting in the infra Caddyfile (its 'rate limits' text is about ACME staging).",
+  "evidence": "rg -l RateLimiter src -> only Session/Infrastructure/RateLimit/FailOpenOtpSendLimiter.php plus Envelope docblocks; Caddyfile: 'with very high rate limits, so a badly pointed DNS' (ACME).",
+  "remains": "Abuse control on credential probing and the general edge/request path."
+ },
+ "BL-224": {
+  "id": "BL-224",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "DELIVERED still unreachable; no inbound SMS status-callback seam; provider_reference persisted for a future callback. The census claim is stale: noDestinationFor now has one call site (RecipientNotificationChannels), not three use cases matching SMS directly. Core ask (a row/seam for SMS receipts) still open.",
+  "evidence": "src/F5Sign/Notification/Application/Service/RecipientNotificationChannels.php:48 'throw UnroutableChannelException::noDestinationFor($channel)'; Domain/ValueObject/DeliveryChannel.php:65-72 'None does, so DELIVERED is...'; TwilioSmsTransport.php:229 'future status callback'.",
+  "remains": ""
+ },
+ "BL-30": {
+  "id": "BL-30",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "medium",
+  "claims_checked": "Low-frequency nondeterminism needing a soak run; the test still exists; no soak harness in repo.",
+  "evidence": "tests/F5Sign/SignatureExecution/Integration/SequentialPadesLoopTest.php; rg soak -> none.",
+  "remains": ""
+ },
+ "BL-69": {
+  "id": "BL-69",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "addDocument and addRecipient still do no existing-id check and overwrite; ADR-0014 Layer 3 Idempotency-Key unbuilt (only docblocks in 3 controllers and a request name it).",
+  "evidence": "Envelope.php addDocument: guardDraft() then '$this->documents[$documentId->toString()] = $document;' ; addRecipient: guardDraft + step check then Recipient::create; rg Idempotency-Key src -> docblocks only.",
+  "remains": ""
+ },
+ "BL-183": {
+  "id": "BL-183",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Outcome half now crosses: RecipientAuthContext carries gatePasses and closedLegOutcome; recipientCouldPassTheGate uses !legIsClosed(), and legIsClosed() is outcome->isTerminal() which is true for DELEGATED/SKIPPED/RELEASED. IssueAuthChallengeUseCase, SubmitAuthResponseUseCase and StartSessionUseCase refuse on !gatePasses before a code is minted or sent. The row's 'outcome half untouched' is stale. I did not locate a test pinning DELEGATED at the OTP send.",
+  "evidence": "IssueAuthChallengeUseCase: 'if (!$auth->gatePasses) { throw $auth->envelopeIsAlive ? SigningSessionUnavailableException::legClosed() : ...'; RecipientView::legIsClosed 'return $this->admittedAct !== null || $this->outcome->isTerminal()'; RecipientOutcome::isTerminal includes DELEGATED, SKIPPED.",
+  "remains": ""
+ },
+ "BL-208": {
+  "id": "BL-208",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "ClaimRecipientRequest has no access_code; ACCESS_CODE destination still null so the guard is silent; the claim route does not publish the claim-then-reset flow. ADR-0083 narrowed but did not close it, as the row says.",
+  "evidence": "rg access_code src/F5Sign/Envelope/UI/Http/Request/ClaimRecipientRequest.php -> none; ClaimRecipientController has no ACCESS_CODE mention.",
+  "remains": ""
+ },
+ "BL-324": {
+  "id": "BL-324",
+  "verdict": "PARTIAL",
+  "confidence": "high",
+  "claims_checked": "Receipts loop failure branch is now tested (a_tenant_whose_receipts_cannot_be_read_fails_the_run_and_the_next_tenant_is_kept via receiptsFailingOnTheFirstRead). The trails loop's per-tenant catch around trails->unconserved() is still untested: a_trail_that_cannot_be_kept uses an orphan trail (ceiling read), not a throwing unconserved().",
+  "evidence": "ConserveTrailsCommand::conserveTrails 'catch (Throwable $e) { $failed[] = sprintf(\"tenant %s: %s\"...' ; ConserveTrailsCommandTest has only receiptsFailingOnTheFirstRead() as a failing-read fake.",
+  "remains": "A test where the trail repository's unconserved() throws for one tenant."
+ },
+ "BL-142": {
+  "id": "BL-142",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "decline is now built (POST /signing/decline in signing.php, under the signing-gate act per ADR-0075). The other four (PATCH fields, POST evidence, POST complete, review-ack) still have no backend route and are not classified in ADR-0049/ADR-0075; signer still marks /complete @backendStatus pending.",
+  "evidence": "config/routes/api/signing.php: $v1->add('decline','/signing/decline'); no fields/evidence/complete/review-ack routes; rg review-ack|PATCH in ADR-0049, ADR-0075 -> none.",
+  "remains": "ADR-0049 §2.3 amendment classifying the four unbuilt routes (stated answer: session credential)."
+ },
+ "BL-59": {
+  "id": "BL-59",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Owed signer notice/cutover done: f5sign-signer types.ts publishes occurrences: FieldOccurrence[], HANDOFF-fields-occurrences.md exists in signer docs, no remaining field.document_id or .placement reads in signer app; version decision answered 'no bump'. Dashboard consumer not verifiable (unreachable).",
+  "evidence": "f5sign-signer/app/composables/api/types.ts 'occurrences: FieldOccurrence[]'; rg 'field\\.document_id|\\.placement' f5sign-signer/app -> none.",
+  "remains": ""
+ },
+ "BL-18": {
+  "id": "BL-18",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "(a) deadlock dissolved: TRUE, EnvelopeContextView::signingAssignmentsFor() filters assignments by ->signs with no fan-out default, Envelope::ensureEverySignerIsAssigned() exists and returns early only when not SEQUENTIAL_PADES. (b) infra .env.prod.example still WORKER_REPLICAS=1 with no warning comment: TRUE (line 485 under '# --- Worker scaling ---', docker-compose.prod.yml replicas: ${WORKER_REPLICAS:-1}); nothing in either repo warns about scaling: still true. (c) latent bite for BL-14 (CAS-loss WORM orphan): no longer true, see BL-14 (bytes now written after CAS). (d) latent bite for BL-17 lock-across-DSS: DocumentSigner::apply still runs DSS inside the bus transaction ('NOT YET: still inside the bus transaction').",
+  "evidence": "../f5sign-infra/.env.prod.example:485 'WORKER_REPLICAS=1'; DocumentSigner.php apply(): custodies->open(Obligation::fromTransient()), appendDocumentArtifact(expectedTipId), then custodies->write() 'NOT YET: still inside the bus transaction'",
+  "remains": "The row names two bite conditions; one (BL-14) is gone. The lock-across-DSS half and the missing scaling warning remain; the row text should be cut down to BL-17 only."
+ },
+ "BL-156": {
+  "id": "BL-156",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Backend: StartSessionController returns 200 with credential members ABSENT (not null) when behind a declared gate; status is read off the session (terminalOutcome() ?? AUTH_PASSED/AUTH_PENDING) and access_grant_expires_at is present-and-null. Handoff docs exist (frontend-handoff/TASK-021-two-gate-signer-auth.md, 2026-08-19-session-status-and-grant-expiry.md). Signer: useSessionStore returns early when neither credential is present ('backend responde 200 con AUTH_PENDING y SIN miembros de credencial') and session.global.ts routes on credential presence. Ask (signer routes credential ABSENCE to auth screen) is implemented.",
+  "evidence": "StartSessionController: 'if ($refresh === null) { return new JsonResponse($body, Response::HTTP_OK); }'; ../f5sign-signer/app/stores/useSessionStore.ts: 'if (!next.access_credential && !next.refresh_credential) return'",
+  "remains": ""
+ },
+ "BL-409": {
+  "id": "BL-409",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "medium",
+  "claims_checked": "Row records a one-off Infection run (335 escapes / 329 uncovered on 32 files) and asks to re-run on develop for per-file counts, then kill or classify escapes. Needs an Infection run (docker/lane), not possible read-only. Nothing in tree shows the per-file triage was done; the ask is outstanding.",
+  "evidence": "No static evidence; requires make wt-backend-infection on Envelope.php, Recipient.php, EnvelopeCommandAdapter, DbalEnvelopeRepository.",
+  "remains": "Whole ask: per-file Infection counts and triage."
+ },
+ "BL-181": {
+  "id": "BL-181",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "Ask (2) published enum of the catalog: DONE, components.schemas.ProblemCode enum in config/packages/nelmio_api_doc.yaml with the status-fallback and INVALID_* families described. Ask (3) lintable norm: DONE, OpenApiSpecTest::every_problem_coded_refusal_names_its_code_in_the_spec asserts the ProblemCoded implementors' codes equal the published enum in BOTH directions. Ask (1) code on each 4xx/5xx of sender routes: partly. Many routes now list codes in the 422/409 descriptions (e.g. ChangeRecipientNotificationChannelsController), but 167 bare ref:'#/components/responses/...' entries remain (of ~317 OA\\Response), e.g. CreateEnvelopeController 400/401/422/500 and SendEnvelopeController 400/401/404 are bare. The row's '98 of 149 bare' premise is outdated in count but not eliminated.",
+  "evidence": "nelmio_api_doc.yaml ProblemCode: 'OpenApiSpecTest asserts it equals the set of codes the ProblemCoded implementors actually carry, in BOTH directions'; CreateEnvelopeController: 'new OA\\Response(response: 422, ref: \\'#/components/responses/UnprocessableEntity\\')'",
+  "remains": "Per-route code documentation on sender routes still bare for many 4xx/5xx (ask 1)."
+ },
+ "BL-14": {
+  "id": "BL-14",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Defect: signed bytes put to COMPLIANCE zone before the CAS that may reject them. Now DocumentSigner::apply opens custody under Obligation::fromTransient(), runs appendDocumentArtifact(expectedTipId) (the CAS) first and only then custodies->write(); Obligation, PlacementPlan, ObjectKey and UploadDocumentBytesUseCase docblocks say this closes BL-14. ADR-0062 stage-then-promote supersedes ADR-0016's byte-path. The 'TEMP zone referenced by nothing' observation is still literally true (StorageZone::TEMP used nowhere else) but is moot after the redesign. Residual: rejected transient bytes have no running sweep (DocumentSigner comment: 'pending sweep's remedy is unbuilt'), a different, lesser gap not the WORM orphan. ADR-0016 Risks section carries no false reaper claim.",
+  "evidence": "DocumentSigner.php: 'Obligation::fromTransient()' ... 'appendDocumentArtifact(... expectedTipId: $document->tipArtifactId)' ... '$this->custodies->write($custodyId, $bytes, $mimeType);'; Obligation.php: 'This is what closes BL-14's WORM orphan'",
+  "remains": ""
+ },
+ "BL-109": {
+  "id": "BL-109",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "CLAUDE.md Current state now names IdentityAccess among populated BC trees (plus KeyManagement, Storage, EvidenceAudit); absent-env-var list now includes IDENTITY_DATABASE_URL, PROVISIONING_DATABASE_URL and no longer names SIGNING_TOKEN_SECRET (lists SESSION_CREDENTIAL_SECRET etc.). Store/symlink decision no longer blocking: file is edited in the ai store.",
+  "evidence": "CLAUDE.md: 'populated BC trees (Envelope, Session, SignatureExecution, Notification, IdentityAccess, Storage, KeyManagement)'; rule 4 (A) list with 'IDENTITY_DATABASE_URL, PROVISIONING_DATABASE_URL'",
+  "remains": ""
+ },
+ "BL-273": {
+  "id": "BL-273",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "framework.yaml sets trusted_proxies from SYMFONY_TRUSTED_PROXIES and trusted_headers only x-forwarded-for / x-forwarded-proto; .env commits SYMFONY_TRUSTED_PROXIES= empty; ObservedClientAddressTest exists, boots kernel per case, sends X-Forwarded-For and a hostile X-Forwarded-Host.",
+  "evidence": "config/packages/framework.yaml:9-10; .env:56 'SYMFONY_TRUSTED_PROXIES='; tests/F5Sign/Session/Integration/ObservedClientAddressTest.php requestUnder()",
+  "remains": ""
+ },
+ "BL-403": {
+  "id": "BL-403",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "claims_checked": "DeliveryRetriesExhaustedListener still logs ['exception' => $e] at error level; no test or redaction asserts a DBAL exception with a bound value renders without it (the listener test only asserts the exception is present then unsets it). The confirmation the row asks for (log a DBAL exception, read the line) is not in the tree. Whether a leak actually occurs needs a live run.",
+  "evidence": "DeliveryRetriesExhaustedListener: '$this->logger->error(..., [...$ids, \\'exception\\' => $e])'; DeliveryRetriesExhaustedListenerTest only 'assertInstanceOf(Throwable::class, $context[\\'exception\\'])'",
+  "remains": "Whole ask: confirm or refute leak."
+ },
+ "BL-179": {
+  "id": "BL-179",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "Migration Version20260820000003 (TEXT to ordered jsonb) still has no test: no tests reference it and it exposes no upStatements()/downStatements(). The row's claim 'nothing in the suite can run a migration over a fixture it wrote first' is no longer true generally: ResendIntervalPerChannelMigrationTest, SmsResendCountMigrationTest, NotificationChannelsMigrationTest, EndingDataMigrationTest, SignatureSettingMigrationTest seed rows, replay the migration's public upStatements()/downStatements() and assert (a replay-statements pattern, not migrate-to-N/N+1). So the harness exists in a form, but bar 8 for this migration is still unmet.",
+  "evidence": "tests/F5Sign/Integration/ResendIntervalPerChannelMigrationTest.php 'replays Version20261021095351::upStatements()'; migrations/Version20260820000003.php has only up()/down()",
+  "remains": "Applying that replay pattern (expose statements, seed TEXT rows, replay, assert) to Version20260820000003; row's 'nothing does that today' wording is stale."
+ },
+ "BL-444": {
+  "id": "BL-444",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "Class docblock of Version20261021095351 no longer says 'never resent, NULL'; it says a delegated/unclaimed row keeps 'whatever the row held (NULL, or a stamp from a resend made before the recipient reached that state), never read'. ",
+  "evidence": "migrations/Version20261021095351.php docblock: '`[]`, delegated, unclaimed slot — whatever the row held ..., never read: their refusals fire before the interval is checked.'",
+  "remains": ""
+ },
+ "BL-162": {
+  "id": "BL-162",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "AddRecipientUseCase calls DeclaredMethodDestinations::guard(authRequirement, email, phone) at authoring time; guardMethod uses AuthMethod::requiredDestination() per method (not per channel) and throws RecipientCannotReceiveMethodException (422 RECIPIENT_CANNOT_RECEIVE_METHOD), plus OTP_SMS country check; same guard on claim and change-requirement paths. OTP_EMAIL with email null is refused at authoring.",
+  "evidence": "AddRecipientUseCase.php:67 '$this->destinations->guard($command->authRequirement, $command->email, $command->phone);'; DeclaredMethodDestinations::guardMethod 'throw RecipientCannotReceiveMethodException::forSlot($slot, $method, $required)'",
+  "remains": ""
+ },
+ "BL-288": {
+  "id": "BL-288",
+  "verdict": "OBSOLETE",
+  "confidence": "medium",
+  "claims_checked": "Premise: terminal session has no re-entry for read-only access. Session-credential renewal still gives nothing for a terminal session, but ADR-0088 added a separate read-only COPY_LINK/COPY_READ pair that reads after the session is terminal (CopyDocumentReader/CopyContentsReader). A decliner is deliberately served no documents (CopyLinkEligibility::declined returns []) but reads their own receipt; ADR-0073 2.15 already made decliner read nothing post-close. So the 'broader read-only re-mint question' for COMPLETED/signers is answered by the copy path rather than by re-minting a session credential.",
+  "evidence": "CopyDocumentReader::documentsServedTo: '|| CopyLinkEligibility::declined($context->recipient)' returns []; CLAUDE.md Session section: Authn::COPY_LINK / COPY_READ 'read-only', 'no renewal'",
+  "remains": ""
+ },
+ "BL-258": {
+  "id": "BL-258",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "git worktree list shows no worktree under the main checkout (only sibling f5sign-backend-* dirs); worktrees/ is an empty directory (ls -la: no entries), git status is clean (no '?? worktrees/'), so no foreign tree, no 14k files, no commit hazard. The .gitignore still lacks a worktrees entry, but nothing remains to ignore.",
+  "evidence": "git worktree list (4 entries, none inside f5sign-backend); ls -la worktrees: only . and ..; gitStatus clean",
+  "remains": ""
+ },
+ "BL-134": {
+  "id": "BL-134",
+  "verdict": "OBSOLETE",
+  "confidence": "medium",
+  "claims_checked": "Premise: task-runner Phase 3 launches doctrine-guard, contract-check, task-validate in parallel and they sabotage sources. Now: task-runner SKILL still launches gates in one message but doctrine-guard, contract-check-backend and task-validate-backend SKILL.md contain no sabotage/revert-guard steps; the three gate runners lack Edit; Infection is deferred to a separate Phase 3b; only task-validate runs tests on the lane; a brief needing sabotage must use general-purpose, restore, and prove an empty git diff. The mechanism described (gates mutually corrupting by sabotage in parallel) was redesigned.",
+  "evidence": ".claude/skills/task-runner/SKILL.md: 'Only task-validate runs tests on the lane in this phase' and 'The three gates and security-audit-runner don't have Edit'; grep sabotag in the three gate SKILL.md files: no hits",
+  "remains": ""
+ },
+ "BL-476": {
+  "id": "BL-476",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "var absent from .env (only a comment at .env:28), dev value in .env.dev:113 and .env.test:79: true. Infra prod template/compose: merged (39c3d7a 'Merge feat/copy-read-credential-secret'); docker-compose.prod.yml:121 requires it with ':?', .env.prod.example:77 lists it. Root AI store pattern (A) list: includes COPY_READ_CREDENTIAL_SECRET (ai/f5sign-backend/CLAUDE.md, rule 4 (A) list).",
+  "evidence": "../f5sign-infra/docker-compose.prod.yml: COPY_READ_CREDENTIAL_SECRET: ${COPY_READ_CREDENTIAL_SECRET:?falta ...}; ../ai/f5sign-backend/CLAUDE.md rule 4 (A) lists it",
+  "remains": ""
+ },
+ "BL-319": {
+  "id": "BL-319",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Structural fix asked: separate vhost for tests (infra's). Done: .env.test:37 MESSENGER_TRANSPORT_DSN_AMQP=amqp://.../f5sign_test; infra docker-compose.override.yml sets RABBITMQ_TEST_VHOST f5sign_test, docker/rabbitmq/render-definitions.sh, wt compose too; commit a125763 in infra. The one-off 501 leftover messages were a past measurement. tests/README still says worker-down first (now only partly needed; cosmetic).",
+  "evidence": "../f5sign-infra/docker-compose.override.yml: RABBITMQ_TEST_VHOST: ${RABBITMQ_TEST_VHOST:-f5sign_test}; .env.test: .../f5sign_test",
+  "remains": ""
+ },
+ "BL-11": {
+  "id": "BL-11",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "guardDraft call sites are now six (addDocument, uploadDocumentBytes, addStep, addRecipient, assignDocument, addField); 'assignSigning' no longer exists. Each has an acceptance test asserting 409 CONFLICT on a sent envelope (EnvelopeHttpTest adding_a_document/step/recipient, uploading_document_bytes, declaring_a_document_assignment ...; AddFieldHttpTest::adding_a_field_to_a_sent_envelope_is_a_conflict). send() own non-draft check: sending_an_already_sent_envelope_is_a_conflict exists. Did not sabotage-verify that each hits the guard rather than an earlier check.",
+  "evidence": "tests/F5Sign/Envelope/Acceptance/EnvelopeHttpTest.php assertNotDraftConflict(); AddFieldHttpTest.php:297",
+  "remains": ""
+ },
+ "BL-173": {
+  "id": "BL-173",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "Row is closed with the text describing the pre-TASK-031 state. The email===null continue is gone: NotifyActivatedStepRecipientsUseCase resolves channels and, when unsentKind !== null, records recordInvitationNotSent(...) before continue, so an unreachable recipient is recorded, not silently skipped. channel-selection merged to develop (2cc11f80).",
+  "evidence": "src/F5Sign/Notification/Application/UseCase/NotifyActivatedStepRecipientsUseCase.php: $this->envelopeFacts->recordInvitationNotSent($envelope->id, $recipient->id, $unsentKind, ...)",
+  "remains": ""
+ },
+ "BL-146": {
+  "id": "BL-146",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "Claim: opening a session emits no fact. Now false: SigningSession::start() records SigningSessionStarted (TASK-034), startIfAbsent drains it only on the insert (first open), consumed by Envelope OnSigningSessionStarted; EvidenceAudit TrailAssembler references it.",
+  "evidence": "src/F5Sign/Session/Domain/Aggregate/SigningSession.php: $session->record(new SigningSessionStarted(...)); src/F5Sign/Session/Contract/Event/SigningSessionStarted.php",
+  "remains": ""
+ },
+ "BL-228": {
+  "id": "BL-228",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "Row closed with text pre-TASK-031. Envelope::resendInvitation no longer asks for an email; it takes ResolvedNotificationChannels $reach and refuses via unsentKind/channelNotDeclared/signsByDelegation; codes RECIPIENT_HAS_NO_REACHABLE_CHANNEL and RECIPIENT_NOTIFIED_BY_INTEGRATOR exist in RecipientNotResendableException.",
+  "evidence": "src/F5Sign/Envelope/Domain/Aggregate/Envelope.php resendInvitation(..., ResolvedNotificationChannels $reach, ...); RecipientNotResendableException.php:155,169",
+  "remains": ""
+ },
+ "BL-115": {
+  "id": "BL-115",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "Success clears lockout whole: SigningSession::clearLockout() zeroes failedAttempts, consumedSoftWindows, softLockedUntil, lockoutGeneration after a correct pass. Cumulative failure total projected on sender read model: not built (no failure-count in Envelope read model or Session Contract; rg found none). Decision remains 'taken knowingly'.",
+  "evidence": "src/F5Sign/Session/Domain/Aggregate/SigningSession.php clearLockout(): $this->failedAttempts = 0; $this->consumedSoftWindows = 0;",
+  "remains": ""
+ },
+ "BL-301": {
+  "id": "BL-301",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "DssHttpAdapter::send() now wraps the 2xx body read in decoded(): toArray(false) catches TransportExceptionInterface|DecodingExceptionInterface -> DssUnavailableException; 4xx unreadable body handled in rejectionMessage() (stays DssInvalidRequestException). Unit test file DssHttpAdapterTest exists.",
+  "evidence": "src/F5Sign/SignatureExecution/Infrastructure/Pdf/DssHttpAdapter.php decoded(): catch (TransportExceptionInterface | DecodingExceptionInterface $e) { throw new DssUnavailableException(...)",
+  "remains": ""
+ },
+ "BL-211": {
+  "id": "BL-211",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Ask: convention change so branches don't hand-mint colliding versions. Done: migrations after 20260925000001 must be generated (VersionYmdHis from doctrine:migrations:generate); MigrationVersionTest refuses hand-numbered ones and class/file mismatch; CLAUDE.md says never name by hand. A residual: no check across local refs for same class name, and silent no-op on volumes that ran the old string is operational (reset), not code; test docblock itself admits it only makes collision unlikely.",
+  "evidence": "tests/F5Sign/Foundation/Unit/Architecture/MigrationVersionTest.php LAST_HAND_NUMBERED = '20260925000001'",
+  "remains": ""
+ },
+ "BL-406": {
+  "id": "BL-406",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "Both relay queries (relayBatch and drainPreviousEpoch) now ORDER BY event_log.sys_transaction_id (qualified, numeric xid8) instead of the text alias; no other sys_transaction_id::text selects; EventRelayTransactionIdOrderTest exists; fix commit is ancestor of HEAD.",
+  "evidence": "src/F5Sign/Foundation/EventLog/EventRelay.php:347 and :481 'ORDER BY event_log.sys_transaction_id, sys_global_position'",
+  "remains": ""
+ },
+ "BL-392": {
+  "id": "BL-392",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "Session learns no delivery outcome: no Session code consumes Notification DeliveryFailed/DeliverySent/NotificationFailed (those are consumed only by Envelope); Session calls OneTimeCodeDelivery::request only as a fire-and-forget DB-write command after commit; deptrac deliberately denies Session the NotificationContract events. No signer-visible 'code not delivered' state.",
+  "evidence": "src/F5Sign/Session/Application/UseCase/IssueAuthChallengeUseCase.php:523 $this->delivery->request(new OneTimeCodeRequest(...)); OneTimeCodeDelivery docblock 'may not observe what Notification did'",
+  "remains": ""
+ },
+ "BL-270": {
+  "id": "BL-270",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "FieldType::acceptsValidation() still returns TEXT || DATE with the same docblock ('a date arrives as typed characters that a length or a pattern can legitimately constrain'). FieldAnswerEvaluator validates DATE only as an ISO calendar date and applies no max_length/pattern to DATE (its own comment says so), so an authored rule on DATE is still accepted and never enforced. The validator part ('built as planned') is true; the narrowing of the authoring contract was not done.",
+  "evidence": "src/F5Sign/Envelope/Contract/Type/FieldType.php: return $this === self::TEXT || $this === self::DATE; FieldAnswerEvaluator.php FieldType::DATE => self::isCalendarDate($value)",
+  "remains": ""
+ },
+ "BL-141": {
+  "id": "BL-141",
+  "verdict": "OBSOLETE",
+  "confidence": "low",
+  "claims_checked": "Premise: every instruction in the repo says 'reference.php dirty -> revert' as a bare gesture. Searched ai/, root and backend CLAUDE.md, docs: no such instruction exists any more (only 2 handoff notes and ADR-0052/TASK-045 mention the file). config/reference.php is tracked and was regenerated in commits with component landings (800fddca, Sentry 63595f33). Whether to add a 'revert only if unrelated' line is flagged as the owner's call and was not written; the misfire hazard may still exist as habit but its written cause is gone.",
+  "evidence": "rg 'reference\\.php' ../ai CLAUDE.md -> no hits; git log -- config/reference.php shows committed regenerations",
+  "remains": "If the owner still wants the reason recorded as a rule, that was never decided"
+ },
+ "BL-112": {
+  "id": "BL-112",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Owed: a make target running the static checks in a worktree. make wt-backend src=<path> -> scripts/wt-validate.sh backend, default WT_GATES='lint arch phpstan test' (+infection opt-in), steps run separately so 300s timeout no longer kills; wt-backend-test/infection/sf exist; main-checkout targets print a warning (Makefile ~579). Warning half landed. Did not run it; storage tests/MinIO now handled (minio in lane DEPS).",
+  "evidence": "../f5sign-infra/scripts/wt-validate.sh: GATES=\"${WT_GATES:-lint arch phpstan test}\"; Makefile wt-backend target",
+  "remains": ""
+ },
+ "BL-12": {
+  "id": "BL-12",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "(1) AssignSigningController has zero test refs: FALSE, tests/F5Sign/Envelope/Unit/UI/Http/AssignSigningControllerTest.php exists (final class AssignSigningControllerTest, maps the pair to the command, malformed placements 400, refused rect 422) and EnvelopeHttpTest hits '/signing-assignments' over HTTP. (2) CAS-conflict path of the cross-BC write ACL exercised only at domain level: still true, ArtifactChainConflictException/ArtifactAlreadyAppendedException are asserted only in tests/.../Unit/Domain/Entity/DocumentArtifactChainTest.php and Unit/Domain/Aggregate/EnvelopeSealedChainTest.php (plus mocks in SignatureExecution use-case tests); no test in Envelope Integration (EnvelopeCommandAdapterTest, EnvelopeConcurrentAppendTest, DbalDocumentArtifactChainsTest) references either exception.",
+  "evidence": "rg ArtifactChainConflict tests/F5Sign/Envelope -> only Unit/Domain tests; AssignSigningControllerTest.php present",
+  "remains": "CAS-conflict through EnvelopeCommandAdapter seam is untested; the controller half of the row is stale (controller now has a unit test and an HTTP acceptance hit)."
+ },
+ "BL-381": {
+  "id": "BL-381",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "static_lambda is on (.php-cs-fixer.dist.php 'static_lambda' => true); static_private_method is not configured anywhere in the fixer config (only @PER-CS2.0:risky and php_unit_test_case_static_method_calls); no PHPStan rule guards it. The row is a deferred hardening with a trigger that has not fired.",
+  "evidence": ".php-cs-fixer.dist.php:101 'static_lambda' => true; rg static_private_method -> no hit",
+  "remains": ""
+ },
+ "BL-103": {
+  "id": "BL-103",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "No dedicated task/ADR for tenant-supplied notification copy (only mentions in TASK-024 section 'Tenant-supplied copy is not in this chain', TASK-027, ADR-0037/0038); no token allow-list per (channel,purpose) exists in src/F5Sign/Notification or Foundation/Templating (rg allow-list -> none); IncompleteRenderedMessageException still thrown on unresolved slot; identity.tenant exists. Words still not tenant-editable, so the hazard is latent as the row says.",
+  "evidence": "src/F5Sign/Notification/Application/Exception/IncompleteRenderedMessageException.php; docs/tasks/TASK-024 item 5",
+  "remains": ""
+ },
+ "BL-42": {
+  "id": "BL-42",
+  "verdict": "OBSOLETE",
+  "confidence": "medium",
+  "claims_checked": "lock_config/locked_field_ids is not modeled anywhere (rg lock_config|locked_field_ids in src, migrations, config -> none; only ADR-0040 text). But the FieldMDP capability it was deferred for has since landed by a different shape: ADR-0085 / TASK-067 FormRevisionPlanner derives each signature field's /Lock from the values filled in that revision ($locked = array_map(... $fieldFill->name ...)), checked by DrawnRevisionCheck LOCK, with no stored collection or child table. The premise (a stored lock set naming sibling rows needing a child table) no longer applies; a sender-authored lock set remains unbuilt but is not asked for by the row.",
+  "evidence": "FormRevisionPlanner.php:182 $locked = array_map(static fn(FieldFill $fieldFill): string => $fieldFill->name, $fill); new SignatureFieldDefinition(..., $locked)",
+  "remains": ""
+ },
+ "BL-450": {
+  "id": "BL-450",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "DSS still pinned at 6.4 in infra: docker/eu-dss/Dockerfile ARG DSS_DEMOS_TAG=6.4, docker-compose.yml image ${STACK_NS}/eu-dss:6.4, docker-compose.prod.yml ghcr.io/factorcinco/f5sign-eu-dss:6.4, Makefile builds :6.4; PageBox docblock still says formulas measured against DSS 6.4. No upgrade done.",
+  "evidence": "../f5sign-infra/docker/eu-dss/Dockerfile: ARG DSS_DEMOS_TAG=6.4",
+  "remains": ""
+ },
+ "BL-461": {
+  "id": "BL-461",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "(a) FIXED: PageBox::of throws PageGeometryException (not MALFORMED_OUTPUT), DocumentSigner::formOf catches it -> NotPreparableReason::UNSUPPORTED_GEOMETRY, signed without drawing (PyHankoFormEngine comment: 'its PageGeometryException is not turned into a malformed output'). (b) mostly open: SignForRecipientUseCase returns before DSS only when the committed signature image was cleared (recipients who sent an image); otherwise a redelivery re-runs form engine+DSS on the tip and only then is refused by ArtifactAlreadyAppendedException (result discarded, nothing persisted); the use case docblock says BL-311 closed 'only for that case'. (c) FIXED: DrawnRevisionCheck now refuses fields and signature fields not asked for (UNTOUCHED loops over drawn->fields and drawn->signatureFieldLocks). (d) OPEN: FormEngineFailedException::LOCK docblock still 'A signature field locks other fields than the ones asked for' while the check also fires for null/absent lock and unexpected lock on a lock-less field; FormEngineFailure::REQUEST_INVALID docblock still 'The engine exited 2' while PyHankoFormEngine::run throws it on a client-side JsonException. (e) no test drives foreign-signature/XFA documents through DocumentSigner with the real script: DocumentSignerTest uses FakePdfFormEngine; PyHankoFormScriptTest only covers inspect().",
+  "evidence": "DocumentSigner.php: catch (PageGeometryException) { return NotPreparableReason::UNSUPPORTED_GEOMETRY; }; DrawnRevisionCheck.php: self::outputMismatch(UNTOUCHED) for extra fields; FormEngineFailedException.php: /** A signature field locks other fields than the ones asked for. */",
+  "remains": "(b) redelivery without a committed image still re-runs engine+DSS; (d) both docblocks narrower than behaviour; (e) no end-to-end case through the real script for AC-16a/b."
+ },
+ "BL-17": {
+  "id": "BL-17",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "Claim 'lock_timeout/statement_timeout appear nowhere in src/config/infra' is now false for lock_timeout: DbalEnvelopeRepository::boundTheLockWait does SET LOCAL lock_timeout = '5s' (ADR-0073 2.1) with EnvelopeLockTimeoutException, so waiters on the envelope root lock are bounded; DSS HTTP timeout is configured (DSS_TIMEOUT_SECONDS). statement_timeout / idle_in_transaction_session_timeout / transaction_timeout appear nowhere in src, config, migrations or infra. The defect itself persists: signing still makes DSS calls inside one DB transaction across N documents (SignForRecipientUseCase loop under the command transaction; ADR-0073 admits 'A signing makes DSS calls inside one database transaction ... a separate task, already under study, will' change it); holder-side window has no database bound.",
+  "evidence": "DbalEnvelopeRepository.php:580 $this->connection->executeStatement(\"SET LOCAL lock_timeout = '5s'\"); rg statement_timeout -> none",
+  "remains": "No cap on the holder's transaction (statement/idle-in-transaction timeout) nor on total window across N documents x DSS latency."
+ },
+ "BL-320": {
+  "id": "BL-320",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "make dss-wait-tl runs wait-for-tl.sh in eu-dss; the script only polls find ... -iname '*lotl*xml' -size +0c in the tsl-loader cache dir and exits when a file exists; no HTTP probe of the service. Also used by the smoke target (wait-for-tl.sh 5).",
+  "evidence": "../f5sign-infra/docker/eu-dss/scripts/wait-for-tl.sh: has_lotl() { find \"$CACHE_DIR\" -maxdepth 1 -type f -iname '*lotl*xml' -size +0c ...}",
+  "remains": ""
+ },
+ "BL-96": {
+  "id": "BL-96",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "Principal ctor private, public ?TenantId $tenant, factories scoped() and machine() both take non-nullable TenantId; no other construction (rg new Principal only inside class) so tenantOrFail failure branch is unreachable. Call sites have grown from three to seven (MintCopyLink, CommitDelegatedSignature, MintSigningToken, SendRecipientAuthOtp, SubmitRecipientAuthResponse, CreateEnvelope, plus listener). MissingTenantScopeException still extends RuntimeException (not DomainException/Http), so would be 500. Principal docblock now records the nullability as deliberate widening ('while the Rule 4 system context is still owed'), but the row's ask (decide/narrow or accept) is not closed and the guard is still dead.",
+  "evidence": "Principal.php:78 public ?TenantId $tenant; :211 return $this->tenant ?? throw MissingTenantScopeException::forOperation($operation); MissingTenantScopeException extends RuntimeException",
+  "remains": ""
+ },
+ "BL-383": {
+  "id": "BL-383",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "Recipient reads are ordered 'ORDER BY step_ordinal ASC, id ASC' (DbalEnvelopeRepository:709, DoctrineEnvelopeReadRepository:492), so the suspected missing tie-breaker is wrong: there is a total order, but the tie-break is a UUIDv7 id whose same-millisecond tail is random (UuidGenerator::v7 docblock: 'Ordered, not monotonic ... must never be read as a sequence'), so recipients created in the same ms and step come back in arbitrary order relative to creation. RecipientAuthHttpTest::the_presentation_mode_is_declared_at_authoring_and_read_back builds an email=>selection map from the response and assertSame()s it against an array in creation order (key order matters with ===), so it still depends on that order. Nothing was changed in the tests or the read; flake cause now identifiable from code but unfixed.",
+  "evidence": "UuidGenerator.php: $bytes = $timeBytes . random_bytes(10); RecipientAuthHttpTest assertSame(['chooses@example.com' => ..., 'escalates@example.com' => ...], $modes)",
+  "remains": ""
+ },
+ "BL-135": {
+  "id": "BL-135",
+  "verdict": "OBSOLETE",
+  "confidence": "medium",
+  "claims_checked": "Premise: worktree route uses ad-hoc container at 128M so infection dies; recipe in task-runner skill guards one command. Row itself later corrected that the lane already bound php.ini. Now: infra has wt-backend-infection (Makefile:2093) and docker-compose.wt.backend.yml mounts zz-wt-infection.ini (memory_limit 1536M, comment says it exists for infection relaunching phpunit as a child process), which addresses the child-process/512M-not--1 sub-finding; task-runner SKILL.md has only one remaining docker run (a mkdir helper, line ~110) and no phpunit/migration 128M recipes. CLAUDE.md now restricts ad-hoc containers to static re-checks with explicit -d memory_limit=-1 and memory-limit warning. The defect described no longer exists as a gap.",
+  "evidence": "../f5sign-infra/docker-compose.wt.backend.yml:262 'Above the memory_limit of zz-wt-infection.ini (1536M)'; .claude/skills/task-runner/SKILL.md:110 only mkdir docker run",
+  "remains": ""
+ },
+ "BL-122": {
+  "id": "BL-122",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "DbalTenantNotificationDefaults::localeFor still `is_string($locale) && trim($locale) !== '' ? Locale::of($locale) : null` with no normalization; Locale::of only rejects blank and stores verbatim; migration Version20260817000002 creates tenant_default(locale TEXT NOT NULL) with no CHECK (locale = btrim(locale)); no src writer of notification.tenant_default (hand insertion remains the only writer). Deliberate deferral unchanged.",
+  "evidence": "DbalTenantNotificationDefaults.php:67; Locale.php of(): if (trim($value) === '') throw ...; return new self($value)",
+  "remains": ""
+ },
+ "BL-469": {
+  "id": "BL-469",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "receipt.typ DECLARED_NONE sentence no longer says 'El destinatario declaró no formular reservas'; it reads 'La parte declaró no formular reservas. Si firmó como destinatario en la entrega, ...' (the trail's wording), so the first destinatario clash is gone; the second use is qualified by 'en la entrega'. Receipt wording chosen before first production issuance as asked.",
+  "evidence": "assets/evidence-audit/receipt.typ:237 [La parte declaró no formular reservas. Si firmó como destinatario en la entrega, la Ley 15/2009 (art. 60.1) ...]",
+  "remains": ""
+ },
+ "BL-234": {
+  "id": "BL-234",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "Site (2) FIXED: UploadDocumentBytesUseCase docblock says 'The object-store round trip no longer sits inside a transaction' and the bus transaction middleware is not drawn for it. Site (1) OPEN: RevokeEnvelopeSessionsUseCase still loops foreach ($this->sessions->findByEnvelope(...)) in one transaction with no limit; no cap on recipients per envelope found (rg for max recipients -> none). Remedies from ADR-0031: no statement_timeout/idle_in_transaction_session_timeout anywhere in src/config/migrations/infra, no advisory-lock writer scheme, no production monitoring of long transactions (only a dev/test pg_stat_activity count in infra Makefile and wt-validate.sh); EventRelay docblock still records the stall as accepted cost. Signing still holds DSS calls in a transaction (ADR-0073 admits it).",
+  "evidence": "RevokeEnvelopeSessionsUseCase.php:74 foreach ($this->sessions->findByEnvelope($command->tenantId, $envelopeRef) as $session); UploadDocumentBytesUseCase docblock: 'The object-store round trip no longer sits inside a transaction'",
+  "remains": "Monitoring + time ceiling (the row's first-priority remedies) unbuilt; revocation fan-out unbounded; signing-with-DSS-in-transaction stall remains."
+ },
+ "BL-341": {
+  "id": "BL-341",
+  "verdict": "PARTIAL",
+  "confidence": "high",
+  "claims_checked": "Signer handoff TASK-050-signer-step-policy-and-what-a-recipient-reads.md names RECIPIENT_VETOED once and MEMBER_NOT_REACHED once, plus the veto rule (line ~23: 'en un paso con veto, el rechazo lo termina (RECIPIENT_VETOED)'). Integrator handoff TASK-050-integrator-step-policy-and-close-now.md describes the veto field and names MEMBER_NOT_REACHED (end_cause line ~114) but has 0 occurrences of RECIPIENT_VETOED.",
+  "evidence": "grep -c RECIPIENT_VETOED: integrator 0, signer 1; grep -c MEMBER_NOT_REACHED: integrator 2, signer 1",
+  "remains": "The integrator handoff still lacks the RECIPIENT_VETOED end cause (the decline-by-vetoer path); the row closes only when both handoffs carry both causes."
+ },
+ "BL-172": {
+  "id": "BL-172",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "Phone published whole in EnvelopeJsonPresenter (done); components.schemas.Recipient has phone entry (done); EnvelopeHttpTest asserts phone in clear and a closed key set including 'phone' (done); frontend handoff TASK-023 updated to say phone is returned whole (done). Landed branch merged on develop.",
+  "evidence": "EnvelopeJsonPresenter.php: `'phone' => $recipient->phone,`; nelmio_api_doc.yaml: `phone: { type: string, example: '+34600123456', nullable: true }`; EnvelopeHttpTest: assertSame('+34600123456', $recipients[0]['phone'], 'in the clear, like the address beside it')"
+ },
+ "BL-43": {
+  "id": "BL-43",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Enum FieldType has 12 cases (the 11 plus RESERVATIONS); nelmio Field.type/SigningField.type carry them; the only dissenter, docs/ddd/envelope-domain-model.md, keeps the 9-member list as design record under a dated banner saying the enum has twelve and to enumerate from Contract\\Type\\FieldType. The 'closes at the enum mint' trigger fired long ago.",
+  "evidence": "FieldType.php: 12 `case` lines incl. INITIALS, EUDI_WALLET, RADIO, ATTACHMENT, RESERVATIONS; envelope-domain-model.md line 90 '2026-09-21 — the enum has twelve members'"
+ },
+ "BL-22": {
+  "id": "BL-22",
+  "verdict": "OBSOLETE",
+  "confidence": "medium",
+  "claims_checked": "Premise was that reservations have no legal path onto the signed PDF (TASK-016<->017/018 circular, stamping after a signature invalid). Now the reservations are recorded at the admission on the recipient (recordAdmittedReservations), a RESERVATIONS field type places them, and Signature Execution writes a fill revision (read-only AcroForm fields) BEFORE each signature in both modes, with the signature field /Lock covering them (ADR-0085, TASK-067). No {{Reservas_*}} placeholder mechanism remains; the decided mechanism differs from all three options listed.",
+  "evidence": "FormRevisionPlanner.php: `FieldType::TEXT, FieldType::DATE, FieldType::RESERVATIONS => FormFieldKind::TEXT` and `FieldType::RESERVATIONS === $field->type ? $owner->reservations : $field->value`"
+ },
+ "BL-185": {
+  "id": "BL-185",
+  "verdict": "OBSOLETE",
+  "confidence": "medium",
+  "claims_checked": "Code claim still true: SigningSession::start() under an open gate stamps accessGatePassedAt/DIRECT_LINK and records only SigningSessionStarted, no AuthGatePassed (AuthGatePassed is recorded only at lines ~809 and ~2010, i.e. declared gate / signing gate). But the consequence claimed, 'no evidence in the permanent log' and 'consumer is the not-yet-built projector', is stale: SigningSessionStarted (in the log) carries accessMethodExecuted=DIRECT_LINK and the built audit trail uses it: TrailAssembler maps no gates + DIRECT_LINK at open to AssuranceTier::LINK_POSSESSION_ONLY and TrailJson emits access_method_at_open. The semantic decision of emitting AUTH_GATE_PASSED for an open gate was not taken, but the evidence gap it was meant to close is covered by another fact.",
+  "evidence": "TrailAssembler.php:286 `$gates === [] && $atOpen->isSomeAnd(... === ExecutedAuthMethod::DIRECT_LINK) => ... LINK_POSSESSION_ONLY`; TrailJson.php:101 'access_method_at_open'"
+ },
+ "BL-480": {
+  "id": "BL-480",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "Production async_events lists queue.session.events; when@test async_events_amqp lists envelope, signatureexecution, notification, evidenceaudit but not session; MessengerEventQueuesConfigTest asserts only array_diff(roundTrip, production) === [] (containment) and that evidenceaudit is in production.",
+  "evidence": "config/packages/messenger.yaml async_events_amqp queues (no queue.session.events); MessengerEventQueuesConfigTest: `assertSame([], array_values(array_diff($roundTrip, $production)))`"
+ },
+ "BL-236": {
+  "id": "BL-236",
+  "verdict": "PARTIAL",
+  "confidence": "high",
+  "claims_checked": "PHPStan paths now include migrations (migrations, src, phpstan, tests) - done for that gate. php-cs-fixer finder is still src, tests, phpstan only (config, migrations, public not covered). Deptrac is ./src only (the row says that is likely right). No gate reads config/ or public/, and composer lint is only php-cs-fixer dry-run, so a syntax error in config/ still passes lint/arch/phpstan.",
+  "evidence": "phpstan.dist.neon paths: `- migrations - src - phpstan - tests`; .php-cs-fixer.dist.php ->in([__DIR__.'/src', '/tests', '/phpstan'])",
+  "remains": "config/ (and public/) not scanned by any static gate; migrations/ and config/ not in php-cs-fixer's finder (PSR-12/@see convention unenforced there); CLAUDE.md ad-hoc re-check recommendation unchanged."
+ },
+ "BL-437": {
+  "id": "BL-437",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "Editing gates is cut at first_opened_at (Envelope.php refuses when recipient->firstOpenedAt() !== null; ADR-0083 accepted, TASK-064 landed). None of the listed what-it-would-take items is built: no declaration-revision admission check, no retirement of live challenges on gate change post-open.",
+  "evidence": "Envelope.php:2129 `if ($recipient->firstOpenedAt() !== null) {`; grep of BL-437 only in TASK-064"
+ },
+ "BL-302": {
+  "id": "BL-302",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "AuditTrailSources now loops per document, digests the bytes (PrefixDigests::of) and reads back signatures, then unsets the bytes before the next read; TrailSources receives digests and read-backs, not bytes. Docblock states one document's bytes held at a time.",
+  "evidence": "AuditTrailSources.php: `$finalDigests[$documentId] = $bytes->map(... PrefixDigests::of($read, $lengths)); ... unset($bytes);`"
+ },
+ "BL-204": {
+  "id": "BL-204",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Row asks for a decision on ADR-0032 decision 8's open sub-decision (pre-cipher facts). ADR-0096 (Accepted, partial realization) supersedes decision 8 in part and 2.6 decides the form: a member describes itself, a JSON string is text written in clear, readers accept it; RecordedText::WrittenInClear docblock says it 'answers the open sub-decision of ADR-0032 decision 8 (BL-204)'. RecipientClaimed still carries no identity (closed key set, access_gate_was_open added) which is consistent with the row's 'shipped is correct'. Whether TASK-014/identity later joins RecipientClaimed is now ADR-0096 territory, not this window.",
+  "evidence": "RecordedText.php docblock: 'answers the open sub-decision of ADR-0032 decision 8 (`BL-204`)'; ADR-0096 §2.6 'The clear form serves a later member'"
+ },
+ "BL-114": {
+  "id": "BL-114",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "ADR-0045 §2 still states 'Every credential F5Sign issues to a holder outside its trust boundary' follows the 43-char grammar and §2.4 pins CRC trailer; grep finds no statement that human-typed delivered codes (ADR-0049 §2.8, 6 digits) are outside the family. No code in src mints a delivered code through IssuedCredential (Foundation/Credential used only for tokens/links). The reconciling statement the row asks for is absent.",
+  "evidence": "ADR-0045 line ~85 'Every credential F5Sign issues to a holder outside its trust boundary is a single opaque ASCII token matching one published grammar'; no 'one-time'/'typed' scoping text in the ADR"
+ },
+ "BL-88": {
+  "id": "BL-88",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "Mint path now validates the pair: SigningTokenIssuance::issueFor calls getContextForRecipient (throws EnvelopeNotFoundException for a missing envelope, tenant-scoped) and refuses an unsent envelope; controller documents a 404 'No such envelope ... or that recipient is not on it'. SigningCeremonyHttpTest now seeds a real sent envelope (SeedsSentEnvelopes, seedTheCeremonyEnvelope) with a docblock noting the earlier defect.",
+  "evidence": "SigningTokenIssuance.php: `$context = $this->envelopes->getContextForRecipient(new GetEnvelopeContextForRecipient(...))` and `if ($context->sentAt === null) throw SigningTokenNotIssuableException::envelopeNotYetSent`; SigningCeremonyHttpTest uses `use SeedsSentEnvelopes;`"
+ },
+ "BL-279": {
+  "id": "BL-279",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "rate_limiter.yaml defines only otp_email_*, otp_sms_* and otp_machine_* policies; the limiter is referenced only by DeliveredCodePolicy, IssueAuthChallengeUseCase, IssueCopyChallengeUseCase, ClearOtpSendLimitsUseCase; CommitSignatureController, CommitDelegatedSignatureController and their use cases reference no limiter.",
+  "evidence": "grep RateLimiter|OtpSendLimiter over Session/UI/Http/*Commit* returns nothing; rate_limiter.yaml policy keys all otp_*"
+ },
+ "BL-452": {
+  "id": "BL-452",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "FormRevisionPlanner::kindOf returns null for RADIO (not drawn); TASK-067 section records it as a deferral.",
+  "evidence": "FormRevisionPlanner.php:73 `FieldType::SIGNATURE, FieldType::INITIALS, FieldType::RADIO, FieldType::ATTACHMENT, ... => null`"
+ },
+ "BL-227": {
+  "id": "BL-227",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Phone-only correction on a recipient whose declared channels need an email spends a correction and mails nothing: now refused before spending (CorrectRecipientUseCase calls NotificationChannelsGuard::guardContacts on merged contacts before the aggregate call). Branch feat/channel-selection is an ancestor of develop. Ask (refusal belongs before the budget is spent) done in the use case, not in Envelope::correctRecipientContact as the row suggested. Residual cases (provider-refused contact, SMS switched off) still spend a correction, but are documented as a different case.",
+  "evidence": "CorrectRecipientUseCase.php: $this->notificationChannels->guardContacts($recipient->notificationChannels(), $command->email ?? $recipient->email(), ...); NotifyCorrectedRecipientUseCase comment 'Since 2026-10-13 CorrectRecipientUseCase refuses ... (BL-227)'; guardContacts throws RecipientCannotReceiveMethodException::forNotificationChannel"
+ },
+ "BL-235": {
+  "id": "BL-235",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "(a) the missing REVOKED note: docs/frontend-handoff now mentions REVOKED (README line ~195, TASK-043/048 notes), so the specific omission is moot. (b) The owed ask, a gate triggered by an enum value that crosses the wire and demanding a handoff note: not built. OpenApiSpecTest PINNED_ENUMS pins spec vs PHP enum members, but nothing ties an enum change to a frontend-handoff note; no test or PHPStan rule references frontend-handoff.",
+  "evidence": "tests/F5Sign/Acceptance/OpenApiSpecTest.php PINNED_ENUMS (spec parity only); grep for 'frontend-handoff' in tests/ and phpstan/src returns nothing"
+ },
+ "BL-477": {
+  "id": "BL-477",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "Each part-notice decision re-reads the whole envelope context after taking the recipient lock; NotifyEndedEnvelopeRecipientsUseCase reads it once and RecordRecipientPartEnded/RecipientPartNotices read it again per recipient. No scoped single-recipient read exists. Did not measure rows.",
+  "evidence": "RecipientPartNotices.php:81 and :109 $e = $this->envelopes->getEnvelopeContext($envelopeId, $issuedBy, $at); NotifyEndedEnvelopeRecipientsUseCase.php:102 getEnvelopeContext"
+ },
+ "BL-27": {
+  "id": "BL-27",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "placements has per-element Assert\\All/Collection constraints but no Assert\\Count/max bound; no Count anywhere in the file. Did not re-verify DocumentSigner O(N^2) cost.",
+  "evidence": "AssignSigningRequest.php: #[Assert\\All([new Assert\\Collection(...)])] public array $placements = []; grep 'Count' in file returns nothing"
+ },
+ "BL-316": {
+  "id": "BL-316",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "(1) RouteCollisionTest docblock still names `se.*`: still true. (2) routes.yaml still says 'Methods with the #[Route] attribute are automatically imported' and services.yaml 'the #[Route] action methods receive...' while no #[Route] exists in src: still true. (3) CLAUDE.md bundle table: gone, CLAUDE.md now says enumerate from config/bundles.php and describes TwigBundle correctly: fixed. (4) messenger.yaml retry comment now says four retries at 2,6,18,54 s (no 2.3 min claim): fixed (the residual 'capped at 60 s' is vestigial). (5) services.yaml still says 'No explicit handler entries needed' while _instanceof tags handlers: still true. (6) DbalTransactionMiddleware no longer mentions RelayEventLogCommand: fixed. (7) OnSessionCompletedHandler still says the two handlers 'are independent ... each gates on the signing mode before doing any work', and OnSessionCompleted still says 'each dispatches, and the mode decides which one's work survives': still true.",
+  "evidence": "tests/F5Sign/Integration/RouteCollisionTest.php:23 `envelope.*`, `se.*`; config/routes.yaml:4; config/services.yaml:211 and ~1526; OnSessionCompletedHandler.php:17-18; messenger.yaml:99",
+  "remains": "Items 1, 2, 5, 7 (stale comments in RouteCollisionTest, routes.yaml, services.yaml, OnSessionCompletedHandler/OnSessionCompleted)."
+ },
+ "BL-10": {
+  "id": "BL-10",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Dispatch of the commit was deletable green. Now CommitSignatureControllerTest asserts the bus received exactly one CommitSignature. The controller still hardcodes COMPLETED in the body, but the dispatch is pinned, which is the defect described. The row's suggested 'second-commit->409' case is not what closed it, but the ask was 'a case or a spy', and a spy (FakeCommandBus) is in place.",
+  "evidence": "tests/F5Sign/Session/Unit/UI/Http/CommitSignatureControllerTest.php: self::assertCount(1, $bus->dispatched); self::assertInstanceOf(CommitSignature::class, $bus->dispatched[0]);"
+ },
+ "BL-188": {
+  "id": "BL-188",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Row is marked Closed by TASK-070. Verified a mechanism exists: ADR-0088 read-only copy pair (Authn::COPY_LINK / COPY_READ), config/routes/api/copy.php, copy reader classes; a finished signer reaches their copy without re-passing the access gate. Ask was a decision plus its ADR: ADR-0088 and ADR-0090 exist. Did not trace the waiting-screen wording past 5 min.",
+  "evidence": "config/routes/api/copy.php exists; docs/adr/ADR-0088-a-recipients-copy-is-read-through-its-own-link.md; CLAUDE.md Authn::COPY_LINK description"
+ },
+ "BL-29": {
+  "id": "BL-29",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Row says no egress sink routes through the redactor (no before_send). Now config/packages/sentry.yaml sets before_send and before_send_transaction to SentryBeforeSend, which takes SensitiveDataRedactor and redacts exceptions, extra, tags, contexts, request, breadcrumbs and spans. Sentry logs (enable_logs) are not enabled so no unwired log sink; no Monolog sentry handler. traces_sample_rate stays 0 in all .env files. Residual: before_send_log is not set (moot while enable_logs is off).",
+  "evidence": "sentry.yaml: before_send: 'F5Sign\\Foundation\\Observability\\Sentry\\SentryBeforeSend' and before_send_transaction: same; SentryBeforeSend::__construct(private SensitiveDataRedactor $redactor); redactBreadcrumbs()"
+ },
+ "BL-350": {
+  "id": "BL-350",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "Looked for an aggregate or Acceptance case that admits a commit, holds its bytes, has other members decline, and asserts the step waits then agrees on landing. EnvelopeStepPolicyTest only drives admitDecline; MINIMUM_UNREACHABLE tests found do not combine an admitted-unlanded commit. Not exhaustively proven absent.",
+  "evidence": "tests/F5Sign/Envelope/Unit/Domain/Aggregate/EnvelopeStepPolicyTest.php (only ->admitDecline); grep for MINIMUM_UNREACHABLE in tests lists EnvelopeRecipientDeclineTest, StepPolicyDeliveryBarHttpTest etc., none admitting a commit before declines"
+ },
+ "BL-176": {
+  "id": "BL-176",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "Decision (a) built: AddRecipientUseCase skips destination guard only when declaredClaimable; ClaimRecipientUseCase re-runs guard; the pair test exists. Remaining ask 'tell the dashboard gateway' is off-repo communication, not code, so does not keep the row valid for the backend. Guard for undeclared contactless recipients still active (BL-162 regression arm).",
+  "evidence": "AddRecipientUseCase.php: if (!$command->declaredClaimable) { $this->destinations->guard(...) } ; ClaimRecipientUseCase.php:125 $this->destinations->guard(; AddRecipientUseCaseTest::the_declaration_defers_the_destination_guard_and_nothing_else_does"
+ },
+ "BL-318": {
+  "id": "BL-318",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "Event queues (queue.envelope/session/signatureexecution/notification/evidenceaudit.events) all carry x-dead-letter-exchange f5sign.events.dead-letter bound to queue.events.dead-letter, and Symfony's AMQP receiver nacks without requeue on every failure including scheduled retries, so the mechanism stands. The five-copies count was a live measurement; not re-run. No dedupe/filter or note found in the retry config.",
+  "evidence": "../f5sign-infra/docker/rabbitmq/definitions.json: queue.envelope.events ... \"x-dead-letter-exchange\": \"f5sign.events.dead-letter\"; binding f5sign.events.dead-letter -> queue.events.dead-letter"
+ },
+ "BL-100": {
+  "id": "BL-100",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "Owed ask: an operational rule 'drain before deploying a payload change or make the codec read-tolerant'. Infra README/CLAUDE.md/Makefile have no mention of poison messages, payload changes or draining before deploy (only a purge_queue in Makefile at :289, a dev helper). Backend docs mention poison only for the relay row counter (ADR-0031). Read-tolerant codec not found. Note: I also saw BACKLOG rows via an over-broad grep in docs/*.md; verdict based on code and infra.",
+  "evidence": "grep -i 'poison|payload change|drain before' over ../f5sign-infra *.md, Makefile, *.sh returns only Makefile:289 purge_queue"
+ },
+ "BL-170": {
+  "id": "BL-170",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "(1) make test and infection overlap: Makefile test target = ensure-stack test-db-setup then composer test; infection = test-db-reset test-db-setup test-storage-reset then composer infection; both use f5sign_test in php-fpm, no flock or mutex (grep flock in Makefile empty); infection even resets the DB, still unserialized. (2) Stale container observation: unconfirmed n=1, no change found. Note the wt-backend lanes isolate worktrees but not the main-stack pair.",
+  "evidence": "f5sign-infra/Makefile:459 `test: ensure-stack test-db-setup` ; :643 `infection: ensure-stack test-db-reset test-db-setup test-storage-reset`; no flock"
+ },
+ "BL-325": {
+  "id": "BL-325",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "The three reactions check closedAt from a view read earlier, with no serialization against the ending notice; NotifyEndedEnvelopeRecipientsUseCase's own docblock states 'and saves its invitation after this audience was read is not caught, and nothing here serializes the' two. The ending-notice use case takes no envelope lock before reading the audience; only the part-notice path locks.",
+  "evidence": "NotifyActivatedStepRecipientsUseCase.php:88 if ($envelope->closedAt !== null); NotifyCorrectedRecipientUseCase.php:113; NotifyResentInvitationRecipientUseCase.php:116; NotifyEndedEnvelopeRecipientsUseCase.php:68"
+ },
+ "BL-166": {
+  "id": "BL-166",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "No usage table/migration: none found (no usage table in migrations). Single impl NullUsageMeter: true (only implementer of UsageMeterInterface). Meter call sites in IssueAuthChallengeUseCase/IssueCopyChallengeUseCase/SendEnvelopeUseCase still record nothing. Stale detail: SMS_DSN is no longer null://null in .env.dev (now twilio://ACdev:devtoken@messagepit...); .env.test is null://null and .env absent, so the bound on exposure still holds for unconfigured deployments.",
+  "evidence": "src/F5Sign/Foundation/Billing/NullUsageMeter.php: implements UsageMeterInterface; .env.dev:159 SMS_DSN=twilio://ACdev:devtoken@messagepit:8200",
+  "remains": "entire ask (usage table, RLS, migration, vocabulary, ADR); only the .env.dev sentence is stale"
+ },
+ "BL-385": {
+  "id": "BL-385",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "Machine (delegated) commit route carries no signature image and refuses a non-SIMPLE recipient with 409 SIGNATURE_MODE_NOT_OFFERED: true. Gap (relaying a drawn signature) unchanged; backlog is a 'what would force it' deferral.",
+  "evidence": "Session/Application/Exception/SignatureModeNotOfferedOnTheMachineRouteException.php: return 'SIGNATURE_MODE_NOT_OFFERED'; CommitDelegatedSignatureUseCase.php:313 '// The delegated route carries no signature image: its act is a machine's'",
+  "remains": ""
+ },
+ "BL-39": {
+  "id": "BL-39",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Backend half (both migration docblocks carry the migrate-before-deploy warning): present in Version20260729000001. Operator half in f5sign-infra: Makefile migrate-prod no longer says 'correr DESPUES de deploy-prod'; it now says non-additive releases migrate BEFORE deploy-prod and points to deploy.md section 5; README and deploy.md 'Later updates' table now say 'if any is NOT additive, migrate-prod goes before (see section 5)'; deploy.md names Version20260729000001-3 as the first non-additive case. View shim remains unbuilt (as the row demands). Whether first prod cutover has happened is not checkable.",
+  "evidence": "../f5sign-infra/Makefile migrate-prod comment: 'If the release brings a NON-additive one (RENAME...) this target goes BEFORE deploy-prod'; deploy.md:595 table row"
+ },
+ "BL-78": {
+  "id": "BL-78",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "No security-contact / compromised-key notification channel or placement decision found in IdentityAccess, Notification or migrations. BL-73 gap (which key authenticated a request) still acknowledged as open in Principal docblock; Principal carries client not key.",
+  "evidence": "src/F5Sign/Foundation/Actor/Principal.php: 'nothing anywhere records which credential authenticated a request... $client names the client, not the key'"
+ },
+ "BL-97": {
+  "id": "BL-97",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "Fixtures still reach around the app with the owner role (ProvisionsTenants used by ~96 tests): still true. 'Shrink when provisioning exists': provisioning command exists but the trait docblock now argues it deliberately does NOT shrink (decided). Test DB accumulation limb: make test only runs test-db-setup (migrate), no per-test cleanup of tenant/log rows; only RemovesIssuedTrails cleans some tables. Wanted fixture-policy layer: tests/README.md has no stated bypass-vs-through policy for fixtures (only the ProvisionsTenants docblock states it for tenants).",
+  "evidence": "tests/F5Sign/Support/ProvisionsTenants.php docblock 'DISCHARGED... it does not shrink'; infra Makefile test: ensure-stack test-db-setup",
+  "remains": "general fixture policy in tests/README.md; per-test cleanup for accumulating rows; the 'should shrink' premise is outdated"
+ },
+ "BL-230": {
+  "id": "BL-230",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "Under a neutral access gate re-opening the link mints a fresh credential with agp=now (postdates retirement anchor): StartSessionUseCase mints via mintCredentialFor(..., issuedAt) when accessGateIsOpen. Signing link not revoked by reset. No decision recorded/implemented among the three options.",
+  "evidence": "StartSessionUseCase: if ($command->accessGateIsOpen) { ... $this->sessions->mintCredentialFor($command->sessionId, $command->refreshDigest, $command->issuedAt); }"
+ },
+ "BL-147": {
+  "id": "BL-147",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Row asked to make the stale-container-dump failure mechanical (warm in the phpstan path or fail loudly). Infra Makefile now has warm-dev-container as prerequisite of make phpstan and make qa, with cache:warmup, cache:clear fallback and explicit error if the XML dump is missing. The raw composer phpstan script and wt-backend lanes were not verified to warm; canonical path is make.",
+  "evidence": "../f5sign-infra/Makefile: 'phpstan: warm-dev-container'; 'qa: ensure-stack warm-dev-container test-db-setup'; composer.json phpstan = plain vendor/bin/phpstan analyse"
+ },
+ "BL-24": {
+  "id": "BL-24",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "'No dedicated test' for Settings and FieldPlacement: false now; both have unit tests (SettingsTest 7 methods, FieldPlacementTest 5 methods). The ~68-mutant figure cannot be re-measured without Infection; coverage depth not assessed.",
+  "evidence": "tests/F5Sign/Envelope/Unit/Domain/ValueObject/SettingsTest.php; tests/F5Sign/Envelope/Unit/Contract/Type/FieldPlacementTest.php"
+ },
+ "BL-308": {
+  "id": "BL-308",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "Decline previously consumed no signing challenge. SigningSession::decline now takes signingGateDeclared and calls consumeAnsweredSigningChallenge(SigningAct::DECLINE) when declared, matching ADR-0070 section 2.4. Did not verify callers pass the flag nor a dedicated test, but AUTH_OTP_DECLINE purpose exists per repo docs.",
+  "evidence": "SigningSession::decline: if ($signingGateDeclared) { $this->consumeAnsweredSigningChallenge(SigningAct::DECLINE, $now); }"
+ },
+ "BL-175": {
+  "id": "BL-175",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "config/packages/sentry.yaml now exists; environment is explicit '%env(SENTRY_ENVIRONMENT)%' with no default and not derived from APP_ENV; SENTRY_ENVIRONMENT absent from .env (set only in .env.dev/.env.test) so unset fails at container build (stricter than DSN-present only); bundle default measured and documented; sentry-symfony installed.",
+  "evidence": "config/packages/sentry.yaml: environment: '%env(SENTRY_ENVIRONMENT)%'; .env has only SENTRY_DSN="
+ },
+ "BL-203": {
+  "id": "BL-203",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "(1) renewal-cannot-launder-retired-credential: renewal carries agp forward (SessionRenewalListener passes claims->accessGatePassedAt; controller passes gatePassedAt), but no test mints, retires via reset, renews and asserts refusal; SessionRenewalCeremonyHttpTest's only 'retired' test is about the refresh-grace reuse-kill, unrelated. (2) reset does not revoke signing token: only a_reset_before_the_recipient_ever_opened_the_link test exists; no mint, reset, re-open same token test found.",
+  "evidence": "tests/F5Sign/Session/Acceptance/SessionRenewalCeremonyHttpTest.php (no retirement-by-reset case); GatedSigningCeremonyHttpTest::a_reset_before_the_recipient_ever_opened_the_link_is_in_force_when_they_do"
+ },
+ "BL-194": {
+  "id": "BL-194",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "claims_checked": "email===null skip deleted (use case comment speaks of the skip \"that then stood\"); unclaimed-slot continue retained ahead of channel resolution.",
+  "evidence": "NotifyActivatedStepRecipientsUseCase: if ($recipient->isUnclaimedSlot()) { continue; }"
+ },
+ "BL-356": {
+  "id": "BL-356",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "medium",
+  "claims_checked": "Intermittent full-suite-order flake against MinIO; needs a live run to reproduce. Test class StorageLifecycleScenarioTest exists.",
+  "evidence": "needs live run"
+ },
+ "BL-130": {
+  "id": "BL-130",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "Row is Folded into ADR-0096. Per CLAUDE.md, only the decline reason (SESSION_DECLINED) is encrypted; other free-text members (reservations, title, name, other reason) remain in clear in the append-only log and erasure is not built. So the folded finding is still largely open, now tracked by ADR-0096. Confirmed SessionCompleted::$reservations is still a plain ?string.",
+  "evidence": "CLAUDE.md KeyManagement: 'Only the decline reason is encrypted today... the other four free-text members, erasure and the columns are decided and not built'",
+  "remains": "reservations, title, name and the rest of the free text still in clear; no erasure path"
+ },
+ "BL-483": {
+  "id": "BL-483",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "Claim: NOTIFICATION_COPY_BASE_URL (and SIGNING_BASE_URL) not validated as https. Checked config/services.yaml and all consumers; no scheme check anywhere. Ask: decide both together - undecided.",
+  "evidence": "config/services.yaml: notification.copy_base_url: '%env(NOTIFICATION_COPY_BASE_URL)%' passed raw; RecipientNotices.php: $link = rtrim($this->copyBaseUrl, '/') . '/' . $plaintext; NotifyClaimedRecipientUseCase.php: rtrim($this->signingBaseUrl, '/') . '/' . $token. Only EmailNotificationChannel::originOf() reads the signing base, no https enforcement.",
+  "remains": ""
+ },
+ "BL-94": {
+  "id": "BL-94",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "Claim: no type-level signal distinguishing domain-fact issuer (CreateEnvelope/VoidEnvelope) from attribution-only issuer. Commands all carry ActorId issuedBy and implement plain Command; no marker interface or distinct carrier. Ask: type signal OR explicit documentary decision in ADR-0046: ADR-0046 sec 5.2 'Not enforced, held by review' does not record the issuer-split decision.",
+  "evidence": "CreateEnvelope.php: 'public ActorId $issuedBy' + 'implements Command'; ADR-0046 sec 1 describes the split in prose only; sec 5.2 lists three non-enforced items, none about the split.",
+  "remains": ""
+ },
+ "BL-286": {
+  "id": "BL-286",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "Claim: decline recorded no browser-side evidence. Now DeclineSignatureUseCase passes sourceIp, userAgent, acceptLanguage and reported evidence into SigningSession::decline, which sets them on the aggregate; repository persists signer_ip, signer_user_agent, signer_accept_language, reported_evidence columns on the session row. Row says decline fact gains no member - consistent.",
+  "evidence": "DeclineSignatureUseCase: '$session->decline(... signerIp: $command->sourceIp, signerUserAgent: $command->userAgent, signerAcceptLanguage: $command->acceptLanguage, reportedEvidence: $reported)'; DbalSigningSessionRepository: 'signer_ip' => $session->signerIp(), 'signer_accept_language' in column map.",
+  "remains": ""
+ },
+ "BL-395": {
+  "id": "BL-395",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "(a) closed-leg check before stamping invitation_failed_at: DONE - Envelope::markRecipientDeliveryFailed returns early on terminal recipient outcome before recordInvitationFailed. (b) adapter saves unconditionally: STILL TRUE - EnvelopeCommandAdapter::markRecipientDeliveryFailed always calls saveLifecycle, while markRecipientDestinationRefused saves only when $moved (markRecipientDeliveryFailed returns void so cannot signal a no-op).",
+  "evidence": "Envelope.php: 'if ($recipient->outcome()->isTerminal()) { return; } $failed = $invitation !== null && $recipient->recordInvitationFailed($now);'; EnvelopeCommandAdapter.php: '$envelope->markRecipientDeliveryFailed(...); ... $this->envelopes->saveLifecycle($envelope);' unconditional.",
+  "remains": "Unconditional save in the markRecipientDeliveryFailed adapter path (low-severity, no write correctness issue shown)."
+ },
+ "BL-167": {
+  "id": "BL-167",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "Ask 1: add missing prefixes so uncovered reaches zero - done (Lcobucci and libphonenumber, plus Sentry, are in the Vendor regex). Ask 2: gate on Uncovered>0 - done (composer arch uses --fail-on-uncovered). Vendor 'use' census in src (Symfony, Doctrine, OpenApi, Psr, Lcobucci, AsyncAws, Sentry, libphonenumber, Twig, Monolog) is all covered by the regex. Historical dated readings are records, not live claims.",
+  "evidence": "deptrac.yaml: Vendor collector '^(Symfony|Doctrine|...|OpenApi|Sentry|libphonenumber|Lcobucci)\\\\.*' with a comment 'THIS LIST IS CLOSED'; composer.json scripts.arch: 'vendor/bin/deptrac analyse --no-progress --fail-on-uncovered'",
+  "remains": ""
+ },
+ "BL-159": {
+  "id": "BL-159",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "claims_checked": "Expiry half: liveChallengeFor requires isLive, expired gives AUTH_CHALLENGE_EXPIRED - done. Transfer half: fix/signing-gate-on-the-act is an ancestor of HEAD; consumeSigningChallengeFor and isVerifiedAndUnspent no longer exist; SigningSession::answerSigningGate verifies and consumes in the act's unit of work (answeredOnThisAct), and the standalone submit route refuses SIGNING gate (signingGateAnsweredOnTheAct), so no verified proof waits for another holder.",
+  "evidence": "git merge-base --is-ancestor fix/signing-gate-on-the-act HEAD -> yes; SigningSession.php: '$challenge->markVerified($now); $this->answeredOnThisAct = $challenge;'; SubmitAuthResponseUseCase: 'if ($gate === AuthGate::SIGNING) { throw SigningSessionStateException::signingGateAnsweredOnTheAct($sessionId); }'.",
+  "remains": ""
+ },
+ "BL-118": {
+  "id": "BL-118",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "Claim: no seam for asynchronous hard bounce/receipt. No inbound delivery-webhook route; DeliveryStatus DELIVERED/BOUNCED exist as modeled but unreached ('need a provider that calls back, which today's SMTP transports do not have'); only synchronous refusal at hand-off feeds failure facts.",
+  "evidence": "DeliveryStatus.php docblock: '`DELIVERED` and `BOUNCED` need a provider that calls back, which today's SMTP transports do not have'; no route/handler under config/routes or Notification/UI for provider callbacks; no code sets BOUNCED.",
+  "remains": ""
+ },
+ "BL-425": {
+  "id": "BL-425",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "Claim: nothing decides whether notification rows are purged; no purge exists. Custodian schedule has only app:notification:report-sms-volume for Notification; no DELETE on notification tables in src or migrations; TASK-058 and Notification docblocks say retention is deferred. Trigger (first retention rule or privacy review) has not fired.",
+  "evidence": "CustodianSchedule.php: only self::job('app:notification:report-sms-volume', 'PT1H', '00:55'); Notification.php docblock: 'broader retention posture - encrypting the column, deleting the row - is deferred deliberately'.",
+  "remains": ""
+ },
+ "BL-3": {
+  "id": "BL-3",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "claims_checked": "CLAUDE.md no longer carries any ../../Arquitectura ref (done; it now says the design repo is unreachable). Sibling docs still carry old '../../Arquitectura/...' links (not repointed to ../f5sign-doc/Arquitectura): phpstan/README.md (7), phpstan/AUTHORING.md (9), docs/tasks/TASK-003 (1). They are tagged as OFFREPO debt deferred, and repo policy is now 'never link out to the design repo', so the original repoint ask is partly superseded.",
+  "evidence": "rg '\\.\\./\\.\\./Arquitectura' -> phpstan/README.md:3, phpstan/AUTHORING.md:9, docs/tasks/TASK-003-cross-bc-acl-realization.md:42; phpstan/README.md OFFREPO comment: 'design-repo debt, deferred as a scoped re-home'.",
+  "remains": "Links in phpstan/README.md, phpstan/AUTHORING.md and docs/tasks/TASK-003 still point at ../../Arquitectura; either repoint or retire per the in-repo-only policy."
+ },
+ "BL-386": {
+  "id": "BL-386",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "No per-tenant default for signature_modes/biometrics_offered/show_name: no tenant-level setting for these in IdentityAccess/Foundation (grep empty); they live per recipient (AddRecipientRequest, MapsSignatureSetting). Default [SIMPLE] per recipient remains.",
+  "evidence": "grep of signature_modes|show_name in src/F5Sign/IdentityAccess and Foundation: no hits; only Envelope/UI/Http/Request/AddRecipientRequest.php and Infrastructure/Persistence/Doctrine/MapsSignatureSetting.php",
+  "remains": ""
+ },
+ "BL-387": {
+  "id": "BL-387",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "claims_checked": "Domain rule exists (Recipient refuses delegated recipient with non-SIMPLE setting). Test pin for claimable + MACHINE_KEY pair: SignatureModesHttpTest only has non-claimable 'a delegated recipient asked to draw' (signs_via MACHINE_KEY, DELEGATED_RECIPIENT_SIGNS_SIMPLE); RecipientTest covers delegated gates, not the setting for a claimable slot; no claim-then-read case with signature setting found (ClaimInvitesCrossingTest does not touch it).",
+  "evidence": "tests/F5Sign/Acceptance/SignatureModesHttpTest.php:100 yield 'a delegated recipient asked to draw' => [['signs_via' => 'MACHINE_KEY', ... 'signature_modes' => ['DRAW']]; no 'claimable' in that file",
+  "remains": ""
+ },
+ "BL-388": {
+  "id": "BL-388",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "claims_checked": "OpenApiSpecTest still only proves a code is named by SOME operation (concatenated responses of all operations, regex match); per-route reachability test not built; test docblock itself says it needs a PHPStan collector with bus resolution, an ADR-level decision. is_a discovery was added as described.",
+  "evidence": "tests/F5Sign/Acceptance/OpenApiSpecTest.php every_problem_coded_refusal_is_named_by_an_operation_that_answers_it: $named = implode(\"\\n\", $responses); preg_match('/\\b' . $code . '\\b/', $named); docblock 'It proves a code is named by SOME operation, not by every operation that can answer it'",
+  "remains": ""
+ },
+ "BL-389": {
+  "id": "BL-389",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "high",
+  "claims_checked": "Legal review of the biometric checkbox and the f5sign-docs 'Paginas Legales' wording are off-repo legal/product items; no code claim to verify.",
+  "evidence": "off-repo (legal review, f5sign-docs)",
+  "remains": ""
+ }
+}

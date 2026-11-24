@@ -1,0 +1,2731 @@
+{
+ "BL-234": {
+  "id": "BL-234",
+  "verdict": "PARTIAL",
+  "confidence": "high",
+  "evidence": "UploadDocumentBytesUseCase now records the custody inside own() and does the object-store put after the commit ('The RPC, after the commit and outside every boundary', ADR-0063); RevokeEnvelopeSessionsUseCase still foreach over findByEnvelope in one transaction; no statement_timeout/idle_in_transaction timeout or long-transaction monitor found in src/config/infra.",
+  "note": "narrow row to revoke fan-out + the three unbuilt ADR-0031 remedies",
+  "remains": "Site (2) (upload put inside the bus transaction) is gone. Remains: no time ceiling, no long-transaction monitoring/alert, no writer advisory locks, and site (1) the unbounded revoke fan-out (no recipient cap)."
+ },
+ "BL-239": {
+  "id": "BL-239",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "platform.event_log has no correlation column (migrations only stream_id); no correlation stamp in Bus/Serialization.",
+  "note": ""
+ },
+ "BL-8": {
+  "id": "BL-8",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No test executes RelayEventLogCommand; ListEventLogDeadLettersCommandTest only mentions it in a docblock saying it gets none.",
+  "note": ""
+ },
+ "BL-32": {
+  "id": "BL-32",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No test cross-checks the event-type registry against definitions.json bindings; only EventBrokerAlternateExchangeTest (unbound key lands in unroutable).",
+  "note": ""
+ },
+ "BL-84": {
+  "id": "BL-84",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "definitions.json bindings on f5sign.events: Envelope, Session, SignatureExecution, Notification, EvidenceAudit; no IdentityAccess; no relay filter.",
+  "note": ""
+ },
+ "BL-133": {
+  "id": "BL-133",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Same: no App.IdentityAccess.Event binding in infra definitions.json; no relay filter for log-only events.",
+  "note": ""
+ },
+ "BL-83": {
+  "id": "BL-83",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "render-definitions.sh injects a single administrator user; definitions.json has no topic_permissions.",
+  "note": "infra repo"
+ },
+ "BL-100": {
+  "id": "BL-100",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "../f5sign-infra/docs/operations/deploy.md: 'caddy stops before the workers, and the queues drain in between ... one it cannot decode blocks its queue until someone purges it by hand (backend BL-100)'; worker-status-prod prints queue depth.",
+  "note": "the owed operational rule is now written; read-tolerant codec arm still absent but row said either"
+ },
+ "BL-86": {
+  "id": "BL-86",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "EnvelopeCreated::fromPayload uses ActorId::fromString($row->string('sender_id')) directly; ActorId::fromString throws InvalidActorIdException on unqualified value; no read-tolerant arm.",
+  "note": ""
+ },
+ "BL-110": {
+  "id": "BL-110",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No checkpoint-rewind command exists (only app:event-log:replay); row already narrowed to this deferral.",
+  "note": ""
+ },
+ "BL-129": {
+  "id": "BL-129",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "EventRelay::replayQuarantined dispatches then DELETEs the dead-letter row; no actor/reason/log append.",
+  "note": ""
+ },
+ "BL-131": {
+  "id": "BL-131",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ReplayEventLogEventCommand/replayQuarantined return and print event_type and attempts for any tenant's row.",
+  "note": ""
+ },
+ "BL-132": {
+  "id": "BL-132",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "sanitizeErrorMessage only str_replace NUL + mb_scrub; no redaction.",
+  "note": ""
+ },
+ "BL-154": {
+  "id": "BL-154",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "../f5sign-infra/docs/operations/rabbitmq.md: 'If one day recreating turns out to be unacceptable, the way out is to declare it as a RabbitMQ policy, which does apply to live queues'; README and make rabbit-check-dlx carry the import-silent-success warning.",
+  "note": "documented as a sentence, no policy procedure; status is already Folded"
+ },
+ "BL-318": {
+  "id": "BL-318",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "infra definitions.json still gives the event queues x-dead-letter-exchange to queue.events.dead-letter and nothing dedups; the measurement itself not re-run.",
+  "note": ""
+ },
+ "BL-319": {
+  "id": "BL-319",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "backend .env.test: MESSENGER_TRANSPORT_DSN_AMQP=amqp://...:5672/f5sign_test; infra render-definitions.sh RABBITMQ_TEST_VHOST copies topology into f5sign_test; rabbitmq.md documents it (2026-09-30).",
+  "note": ""
+ },
+ "BL-374": {
+  "id": "BL-374",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No scheduled job or custodian sweep reads queue.failed; messenger.yaml unchanged in that regard.",
+  "note": ""
+ },
+ "BL-310": {
+  "id": "BL-310",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No x-delivery-limit/quorum in infra definitions.json or rabbitmq.conf; event queues are classic.",
+  "note": ""
+ },
+ "BL-352": {
+  "id": "BL-352",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "ChainConflictRetryStrategy still 183-retry curve; no cap on recipients per step/envelope in Envelope requests (only AddRecipientRequest Count(max: 3) on a sub-list).",
+  "note": ""
+ },
+ "BL-373": {
+  "id": "BL-373",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Only Notification's DeliveryRetryStrategy claims messages; trail/receipt issuance falls to ChainConflictRetryStrategy fallback, whose isRetryable never reads TrailNotIssued::$outlook.",
+  "note": ""
+ },
+ "BL-26": {
+  "id": "BL-26",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "SignForRecipientUseCase catches only ArtifactAlreadyAppendedException and ArtifactChainConflictException; DssInvalidRequestException extends DomainException {} and no Unrecoverable* exists in src.",
+  "note": ""
+ },
+ "BL-15": {
+  "id": "BL-15",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "SEALING_FAILED/ROUTING_FAILED appear only in EnvelopeStatus (declared, no writer); no WorkerMessageFailed handler writing status.",
+  "note": ""
+ },
+ "BL-311": {
+  "id": "BL-311",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "SignForRecipientUseCase redelivery guard is only via cleared signature image or ArtifactAlreadyAppendedException after the work; no-image recipients still rerun.",
+  "note": ""
+ },
+ "BL-463": {
+  "id": "BL-463",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Envelope::recordRecipientCompletion/ SignForRecipientUseCase have no repeat guard keyed on RECIPIENT_SIGNED for approvers without image or artifact.",
+  "note": ""
+ },
+ "BL-260": {
+  "id": "BL-260",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "SignForRecipientUseCase has no step predicate; recordRecipientCompletion checks only sent/terminal/admittedAct, not step activity.",
+  "note": ""
+ },
+ "BL-480": {
+  "id": "BL-480",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "messenger.yaml async_events_amqp queues: envelope, signatureexecution, notification, evidenceaudit; queue.session.events absent.",
+  "note": ""
+ },
+ "BL-98": {
+  "id": "BL-98",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DomainEventPayloadTest docblock: 'Every is a hand-maintained roster' and still #[DataProvider('events')] literal list.",
+  "note": ""
+ },
+ "BL-39": {
+  "id": "BL-39",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "../f5sign-infra/docs/operations/deploy.md §5 replaced the fixed order with a two-question rule ('Either answer no (RENAME, ... SET NOT NULL): migrate first, with a cutover window'); README says whether migrate goes before or after depends on the release; the Makefile 'correr DESPUES' wording no longer found.",
+  "note": "the 2026-07-29 release itself is past; whether prod ever cut over can't be checked"
+ },
+ "BL-72": {
+  "id": "BL-72",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ApiClientProvisioningTest asserts assertNull($row['tenant_id']) for the two facts; DbalEventLog stamps tenant from ambient scope; TASK-014 projector not started.",
+  "note": ""
+ },
+ "BL-338": {
+  "id": "BL-338",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Envelope::apply records StepCompleted then RecipientReleased; ADR order not stated beyond INV 20 comment; no consumer forcing.",
+  "note": ""
+ },
+ "BL-204": {
+  "id": "BL-204",
+  "verdict": "PARTIAL",
+  "confidence": "low",
+  "evidence": "src/F5Sign/Foundation/RecordedText/RecordedText.php docblock: 'WrittenInClear is the clear form of ADR-0096 section 2.6, which answers the open sub-decision of ADR-0032 decision 8 (BL-204)'. ADR-0032 status says decision 8 superseded by ADR-0096.",
+  "remains": "RecipientClaimed still carries no identity (ADR-0032 decision 7 ciphered identity not built); the row still says FieldCipher has no callers (true) but the decision-8 sub-decision it asks for is answered by ADR-0096 for free text only.",
+  "note": "The owed decision now has a home in ADR-0096; row text and trigger (TASK-014) are stale."
+ },
+ "BL-232": {
+  "id": "BL-232",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "RecipientClaimed still 'implements DomainEvent' only; no decision recorded."
+ },
+ "BL-31": {
+  "id": "BL-31",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "high",
+  "evidence": "Live run of worker + broker + SMTP path cannot be settled from code.",
+  "note": "Operational verification."
+ },
+ "BL-406": {
+  "id": "BL-406",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "EventRelay.php lines 347 and 481: 'ORDER BY event_log.sys_transaction_id, sys_global_position' with comment at ~330 explaining the qualified-column fix; EventRelayTransactionIdOrderTest exists."
+ },
+ "BL-492": {
+  "id": "BL-492",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "SentryBeforeSend only scrubs exception value text (redactExceptions setValue); no zend.exception_ignore_args setting found in repo or infra; #[SensitiveParameter] used only in KeyManagement/form-engine classes."
+ },
+ "BL-138": {
+  "id": "BL-138",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "EventRelay still filters on pg_snapshot_xmin; infra wt-backend lanes give separate cluster. Operational finding, mitigation tests as described."
+ },
+ "BL-139": {
+  "id": "BL-139",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "high",
+  "evidence": "Row states cause unconfirmed; flake of shared eu-dss/MinIO needs an experiment, not code.",
+  "note": "Needs A/B/C run."
+ },
+ "BL-170": {
+  "id": "BL-170",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "Makefile infection target resets test DB but no mutex between make test and infection found; part (2) observation n=1. Did not inspect infra scripts for a lock."
+ },
+ "BL-94": {
+  "id": "BL-94",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "No marker interface or distinct carrier type for attribution-only issuers found under src/ (rg for attribution-only markers empty)."
+ },
+ "BL-73": {
+  "id": "BL-73",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Principal::client() used only by RequestContextProcessor, SentryScopeEnricher and SendRecipientAuthOtpController (telemetry/rate limit); no per-key access fact or credential id recorded in event log."
+ },
+ "BL-146": {
+  "id": "BL-146",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "SigningSession.php ~421: '$session->record(new SigningSessionStarted(... accessMethodExecuted ...))' drained by startIfAbsent on insert; TrailAssembler::authentication reads it as the first-open fact.",
+  "note": "Row's premise 'start() records zero events' is obsolete since TASK-034."
+ },
+ "BL-185": {
+  "id": "BL-185",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "TrailAssembler::authentication: '$gates === [] && $atOpen ... DIRECT_LINK => AssuranceTier::LINK_POSSESSION_ONLY' reads SigningSessionStarted from the log, so an ungated pass does leave an evidenced fact in the trail.",
+  "note": "AuthGatePassed is still not emitted for a neutral gate, but the audit gap the row names is covered."
+ },
+ "BL-372": {
+  "id": "BL-372",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DbalUnitOfWork::rollBackQuietly catches Throwable and reports nothing; UnitOfWork docblock: 'A rollback that fails afterwards does not replace it'."
+ },
+ "BL-21": {
+  "id": "BL-21",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "ADR-0031 still says both premises inferred, not measured; no measurement found in docs/tests/migrations."
+ },
+ "BL-243": {
+  "id": "BL-243",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DbalCustodyRepository docblock line ~48: still upserts every column with no version predicate; CustodyLostUpdateTest still a characterization test."
+ },
+ "BL-244": {
+  "id": "BL-244",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DocumentSigner.php:213 and MockSignUseCase.php:121 still call custodies->write(); only the audit trail uses writeAlongside."
+ },
+ "BL-245": {
+  "id": "BL-245",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "findLockedForUpdate called only inside CustodyService::writeAlongside and its withdraw(); other sites use find()."
+ },
+ "BL-246": {
+  "id": "BL-246",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "TransactionalCustodyRepository still the only conditional owner; Repository contract unchanged."
+ },
+ "BL-247": {
+  "id": "BL-247",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "custody_live referenced in src only in DbalPendingCustodies docblock explaining why it is not read."
+ },
+ "BL-14": {
+  "id": "BL-14",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "ADR-0062 stage-then-promote (states 'Resolves BL-14 outright'); config/packages/storage.yaml has a non-locked `staging` container, ConfiguredPlacementResolver stamps lock at promotion, PromoteSignedDocumentsCommand promotes the tip. Signed bytes no longer put straight into the COMPLIANCE zone before the CAS.",
+  "note": "StorageZone::TEMP is still unused, but the staging container replaced it; ADR-0016 header records the supersession. I did not trace every write path end to end."
+ },
+ "BL-17": {
+  "id": "BL-17",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "DbalEnvelopeRepository::boundTheLockWait: \"SET LOCAL lock_timeout = '5s'\" (ADR-0073 section 2.1) bounds the wait for the envelope root lock.",
+  "remains": "No statement_timeout / idle_in_transaction_session_timeout anywhere in src, config or infra; the time the lock is held across DSS is still unbounded.",
+  "note": "Row's literal 'lock_timeout appears nowhere' is false now."
+ },
+ "BL-18": {
+  "id": "BL-18",
+  "verdict": "PARTIAL",
+  "confidence": "low",
+  "evidence": "infra .env.prod.example still WORKER_REPLICAS=1 with no warning comment; BL-14 half is resolved (ADR-0062).",
+  "remains": "Only the BL-17 lock-across-DSS risk still arms with worker scaling.",
+  "note": "Infra-coupled."
+ },
+ "BL-313": {
+  "id": "BL-313",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "CustodyStore::open() @throws only ObligationNotSatisfiable; CustodyObligations::strengthen() @throws two; CustodyObligationService still warns IRREVOCABLE 'resolves to a COMPLIANCE lock...'; services.yaml still 'No consumer wires it yet' for CustodyReclamation; PendingCustodySweep still 'a sweep has no author'."
+ },
+ "BL-314": {
+  "id": "BL-314",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "GetCurrentDocumentHandler/GetSealedDocumentHandler have no try/catch; CustodyBytesCorruptedException extends ConflictException; neither download controller mentions 409."
+ },
+ "BL-370": {
+  "id": "BL-370",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "storage.yaml only has storage.s3.idle_timeout_seconds: 60.0; no total-duration bound; DocumentSigner/MockSignUseCase still write() in bus tx."
+ },
+ "BL-371": {
+  "id": "BL-371",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "S3ByteStore::put catches AsyncAwsException and throws ByteStoreException::putFailed with no 4xx/unknown split."
+ },
+ "BL-375": {
+  "id": "BL-375",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No prefix-listing port found in Storage; sweep-pending only reports; ReportOrphanedBytesCommand prints keys."
+ },
+ "BL-376": {
+  "id": "BL-376",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No per-run LIMIT in Storage/Envelope/EvidenceAudit sweep queries; only LIMIT 1 subqueries."
+ },
+ "BL-377": {
+  "id": "BL-377",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "UploadDocumentBytesUseCase line ~32 'reconcilable from either side' and MockSignUseCase line ~119 comment unchanged (0 commits since)."
+ },
+ "BL-378": {
+  "id": "BL-378",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "high",
+  "evidence": "Depends on infra runbook and key ownership in ../f5sign-infra.",
+  "note": "Other-owner item."
+ },
+ "BL-242": {
+  "id": "BL-242",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "CustodianSchedule::jobs() lists only app:signing-token:purge among these tables; no purge function/DELETE for auth_challenge, signing_session, api_key or notification in src or migrations.",
+  "note": ""
+ },
+ "BL-323": {
+  "id": "BL-323",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "CustodianSchedule::jobs() has conserve-trails and report-unpromoted but no job reporting unconserved trails.",
+  "note": ""
+ },
+ "BL-324": {
+  "id": "BL-324",
+  "verdict": "PARTIAL",
+  "confidence": "high",
+  "evidence": "ConserveTrailsCommandTest::a_tenant_whose_receipts_cannot_be_read_fails_the_run_and_the_next_tenant_is_kept (receiptsFailingOnTheFirstRead) now covers the receipts loop.",
+  "remains": "The trails loop (conserveTrails(): try { inScope(... trails->unconserved()) } catch Throwable) still has no test that makes the tenant read throw; only P-TRAIL-178 (ceiling read) exists.",
+  "note": "Narrow the row to the trail loop."
+ },
+ "BL-380": {
+  "id": "BL-380",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "IssueAuditTrailUseCase docblock Concurrency still says both issuances gather/render/seal/upload and the loser discards.",
+  "note": ""
+ },
+ "BL-298": {
+  "id": "BL-298",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DoctrineEnvelopeReadRepository line ~252: '// An EXTENSION (LTA) artifact kind, if added, would extend the filter.' still present.",
+  "note": ""
+ },
+ "BL-297": {
+  "id": "BL-297",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DocumentConserved docblock still says 'they are the ones with this digest'; payload has only artifact_id and custody_id.",
+  "note": ""
+ },
+ "BL-356": {
+  "id": "BL-356",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "StorageLifecycleScenarioTest still exists and asserts versionExists; flake cannot be checked without running tests.",
+  "note": ""
+ },
+ "BL-302": {
+  "id": "BL-302",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "AuditTrailSources::gather: '**One document's bytes are held at a time**: they are digested and read back, and released before the next'; keeps PrefixDigests ($finalDigests) not bytes.",
+  "note": "Landed claim confirmed in tree."
+ },
+ "BL-321": {
+  "id": "BL-321",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "TypstTrailRenderer makes sprintf('%s/trail-%s', scratchDir) job dir, removes in finally; remove() swallows failure; evidence_audit.render_scratch_dir=/tmp; no sweep of trail-* anywhere.",
+  "note": ""
+ },
+ "BL-34": {
+  "id": "BL-34",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "medium",
+  "evidence": "Backend half present: route download_current_document in config/routes/api/envelope.php + DownloadCurrentDocumentController. Remaining is the dashboard deployment.",
+  "note": "Client deploy is outside the code."
+ },
+ "BL-200": {
+  "id": "BL-200",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "ObjectStore/S3ObjectStore::get(string $storageKey) and zoneFromKey() still bare-string; row itself narrows to the owed rule (ADR-0063 5). Did not verify that the rule is still absent in phpstan/.",
+  "note": ""
+ },
+ "BL-104": {
+  "id": "BL-104",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "UploadDocumentContentController line 94 $contentType = $file->getClientMimeType(); rg -i nosniff over src, config and ../f5sign-infra finds nothing.",
+  "note": ""
+ },
+ "BL-3": {
+  "id": "BL-3",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "CLAUDE.md no longer has ../../Arquitectura (now ../f5sign-doc/Arquitectura/, 'not reachable').",
+  "remains": "phpstan/README.md (line 3 and more), phpstan/AUTHORING.md and docs/tasks/TASK-003-cross-bc-acl-realization.md still carry ../../Arquitectura links (docs/adr ones are statements of 'never link').",
+  "note": "Narrow to those sibling docs."
+ },
+ "BL-19": {
+  "id": "BL-19",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DssReportUnreadableException, DssSigningFailedException, DssInvalidRequestException still 'extends DomainException' (use DomainException); now three, not two.",
+  "note": ""
+ },
+ "BL-20": {
+  "id": "BL-20",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Document::$visible still exists (Domain/Entity/Document.php) and EnvelopeJsonPresenter emits 'visible' => $document->visible.",
+  "note": ""
+ },
+ "BL-56": {
+  "id": "BL-56",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Version20260713000001 defines public.current_tenant_id() as plpgsql STABLE with no PARALLEL SAFE; no later CREATE OR REPLACE in migrations.",
+  "note": ""
+ },
+ "BL-303": {
+  "id": "BL-303",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DbalEnvelopeRepository still binds created_at/sent_at as datetime_immutable (line ~932); UtcDateTimeImmutableType format stops at seconds; DbalCustodyRepository binds obligation_conservation_until as datetime_immutable.",
+  "note": ""
+ },
+ "BL-351": {
+  "id": "BL-351",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ready_to_seal_at, settings_expires_at, refresh_grace_until, soft_locked_until, attempted_at all still bound as datetime_immutable; ORDER BY attempted_at ASC has no tie-break.",
+  "note": ""
+ },
+ "BL-479": {
+  "id": "BL-479",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "notification.requested_at written via datetime_immutable (second precision); DbalNotificationHistory orders by (requested_at, id), so the tie is broken by id, not necessarily chronologically.",
+  "note": ""
+ },
+ "BL-92": {
+  "id": "BL-92",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "DbalTenantRepository::save/find have only @param docblocks and no instanceof guard; DbalApiClientRepository has instanceof ApiClient / ApiClientId guards. Uniqueness among siblings not censused.",
+  "note": ""
+ },
+ "BL-121": {
+  "id": "BL-121",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "CreateEnvelopeRequest::$title has no Length; AddRecipientRequest::$full_name no Length; only $locale has Length(max: 35); Locale::of() has no length check.",
+  "note": ""
+ },
+ "BL-85": {
+  "id": "BL-85",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "UuidGenerator::CANONICAL_PATTERN still ends '/iD'; isCanonical docblock says 'Nothing folds the case in PHP'.",
+  "note": ""
+ },
+ "BL-65": {
+  "id": "BL-65",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DbalEnvelopeRepository::upsertField uses UpsertStatement::sql('envelope.field', ..., ['id'], OnConflict::UPDATE); UpsertStatement sets every non-conflict column from EXCLUDED.",
+  "note": ""
+ },
+ "BL-112": {
+  "id": "BL-112",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "f5sign-infra scripts/wt-validate.sh default WT_GATES='lint arch phpstan test' (composer lint/arch/phpstan/test in php-fpm-wt); make wt-backend, wt-backend-test, wt-backend-infection exist.",
+  "note": "The owed worktree-aware static-check target now exists. Did not verify the old 300s composer timeout."
+ },
+ "BL-135": {
+  "id": "BL-135",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "f5sign-infra docker-compose.wt.backend.yml mounts docker/php/php.ini (512M) and zz-wt-infection.ini so Infection's phpunit child gets a raised memory_limit; wt-validate.sh line ~691 documents the non-inherited -d. Backend CLAUDE.md warns the ad-hoc container is 128M.",
+  "note": "Did not verify the task-runner skill recipe text in ai/ was patched."
+ },
+ "BL-140": {
+  "id": "BL-140",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "high",
+  "evidence": "Measurement-discipline note with no code surface.",
+  "note": ""
+ },
+ "BL-258": {
+  "id": "BL-258",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "git worktree list shows no worktree inside the checkout (no wt/senry); worktrees/ holds only an empty .orca-preparing directory and git status is clean.",
+  "note": "The worktree is gone; an empty untracked dir remains, not in .gitignore."
+ },
+ "BL-305": {
+  "id": "BL-305",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "f5sign-infra docker-compose.yml lines 257 and 296 still bind-mount ./docker/postgres/init-app-role.sh as a single file.",
+  "note": ""
+ },
+ "BL-320": {
+  "id": "BL-320",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "f5sign-infra wait-for-tl.sh still only polls for a non-empty *lotl*xml file in the cache dir; Makefile dss-wait-tl just execs it.",
+  "note": ""
+ },
+ "BL-211": {
+  "id": "BL-211",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "tests/F5Sign/Foundation/Unit/Architecture/MigrationVersionTest.php requires /^Version(\\d{14})$/ as a real YmdHis time; migrations now e.g. Version20261029084859, so the per-day 000001 counter collision no longer arises.",
+  "note": "Residual: volumes already holding a colliding string need a reset (one-time, historical)."
+ },
+ "BL-147": {
+  "id": "BL-147",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "f5sign-infra Makefile: `phpstan: warm-dev-container` runs cache:warmup and fails if the XML dump is missing.",
+  "remains": "The backend `composer phpstan` script (vendor/bin/phpstan analyse) still does not warm the container, so a direct composer run or a worktree lane can still read a stale dump.",
+  "note": ""
+ },
+ "BL-134": {
+  "id": "BL-134",
+  "verdict": "PARTIAL",
+  "confidence": "low",
+  "evidence": "task-runner SKILL Phase 3: only task-validate runs tests on the lane; the other gate runners are report-only (no Edit tool).",
+  "remains": "Gates still launched in parallel on one tree/DB; no fence or per-skill isolation for sabotage, so row's cause is only mitigated.",
+  "note": ""
+ },
+ "BL-137": {
+  "id": "BL-137",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No ancestor-check lint found (git grep is-ancestor in tests/bin/composer.json is empty).",
+  "note": ""
+ },
+ "BL-153": {
+  "id": "BL-153",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Observational/process row; no census check beyond pg_proc test exists for the prose part.",
+  "note": ""
+ },
+ "BL-165": {
+  "id": "BL-165",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No count-word docblock detector exists; row is a candidate check.",
+  "note": ""
+ },
+ "BL-141": {
+  "id": "BL-141",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "Process/habit row; nothing in code settles it.",
+  "note": ""
+ },
+ "BL-236": {
+  "id": "BL-236",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "phpstan.dist.neon paths now include `migrations`.",
+  "remains": "config/ and public/ still read by no static gate; .php-cs-fixer finder is still src,tests,phpstan; deptrac is ./src (intentional).",
+  "note": ""
+ },
+ "BL-167": {
+  "id": "BL-167",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "Not re-opened in detail; deptrac.yaml Vendor collector unchanged in kind.",
+  "note": "Row text was truncated in the batch."
+ },
+ "BL-108": {
+  "id": "BL-108",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Only .github/workflows/build-image.yml exists; it does not run phpunit/phpstan.",
+  "note": ""
+ },
+ "BL-383": {
+  "id": "BL-383",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "Recipient reads ORDER BY step_ordinal, id (DbalEnvelopeRepository:709) - id tie-break is random, not creation order; no fix or confirmation.",
+  "note": ""
+ },
+ "BL-470": {
+  "id": "BL-470",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "RecipientNotificationHistoryHttpTest:282 still assertStringNotContainsString('550', $raw).",
+  "note": ""
+ },
+ "BL-471": {
+  "id": "BL-471",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ChannelChangeReinvitesCrossingTest:225 still ORDER BY n.requested_at, d.position with no tie-breaker.",
+  "note": ""
+ },
+ "BL-447": {
+  "id": "BL-447",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "RecipientCorrectionHttpTest:94 still `RELAY_DRAIN_PUMPS = 20`.",
+  "note": ""
+ },
+ "BL-291": {
+  "id": "BL-291",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "PromoteSignedDocumentsCommandTest still has 3 #[SkipDatabaseRollback] cases and no tearDown/cleanup.",
+  "note": ""
+ },
+ "BL-292": {
+  "id": "BL-292",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "medium",
+  "evidence": "Needs a live down() run through the admin lane; the code cannot settle it.",
+  "note": "Needs a live down() run through the admin lane; the code cannot settle it."
+ },
+ "BL-384": {
+  "id": "BL-384",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "composer.lock still has symfony/psr-http-message-bridge v8.1.0 against extra.symfony.require 7.4.*.",
+  "note": ""
+ },
+ "BL-365": {
+  "id": "BL-365",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No test tokenizing for consecutive doc comments (DocumentationLinkTest has no such check).",
+  "note": ""
+ },
+ "BL-381": {
+  "id": "BL-381",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "`static_lambda` on; `static_private_method` absent from .php-cs-fixer.dist.php.",
+  "note": ""
+ },
+ "BL-254": {
+  "id": "BL-254",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "docs/frontend-handoff has 63 files besides README; the Handoffs vigentes list has about 25 entries.",
+  "note": "Count improved from 3 of 19 but still partial."
+ },
+ "BL-7": {
+  "id": "BL-7",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "medium",
+  "evidence": "Folded row; blocked on an owner decision (keep the index hand-maintained); code cannot settle it.",
+  "note": "Folded row; blocked on an owner decision (keep the index hand-maintained); code cannot settle it."
+ },
+ "BL-410": {
+  "id": "BL-410",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "`rg 'CLAUD[E]\\.md' src tests config migrations` still hits 158 times in 126 files.",
+  "note": ""
+ },
+ "BL-440": {
+  "id": "BL-440",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "medium",
+  "evidence": "Depends on advisory data and the owner's request; lock still has symfony/http-foundation and yaml v7.4.14.",
+  "note": "Depends on advisory data and the owner's request; lock still has symfony/http-foundation and yaml v7.4.14."
+ },
+ "BL-458": {
+  "id": "BL-458",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Dockerfile: `FROM php:8.5-fpm-alpine` by tag and unpinned `apk add python3`.",
+  "note": ""
+ },
+ "BL-459": {
+  "id": "BL-459",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Hash-pinned wheels; no pip-audit step found in the repo.",
+  "note": ""
+ },
+ "BL-111": {
+  "id": "BL-111",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "TemplateSyntax::TOKEN_PATTERN still `/\\{\\{(\\w+)\\}\\}/`; no ICU adopted.",
+  "note": ""
+ },
+ "BL-23": {
+  "id": "BL-23",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ICU MessageFormat not adopted; conditional guard still not built.",
+  "note": ""
+ },
+ "BL-1": {
+  "id": "BL-1",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "ADR-0015 still lists trait-vs-native as open; RetryableHttpClientTrait still used (TwilioSmsTransport), GenericRetryStrategy absent.",
+  "note": "Row is Folded to ADR-0015."
+ },
+ "BL-95": {
+  "id": "BL-95",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "UuidGenerator still hand-rolled; symfony/uid absent from composer.json and vendor. Docblock now states a different keeping reason.",
+  "note": ""
+ },
+ "BL-6": {
+  "id": "BL-6",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "UuidGeneratorTest uses v5 only inside isCanonical(); no known-vector or determinism test for v5.",
+  "note": ""
+ },
+ "BL-82": {
+  "id": "BL-82",
+  "verdict": "PARTIAL",
+  "confidence": "low",
+  "evidence": "ApiKeyId still in Foundation/Identity, but its docblock now records why it lives there (identity reference, ADR-0044 §2.1) - the documentation branch the row favours.",
+  "remains": "Row could close as documented if the owner accepts that branch; the placement itself is unchanged.",
+  "note": ""
+ },
+ "BL-79": {
+  "id": "BL-79",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No PHPStan rule requiring Domain/Entity classes to extend Entity exists in phpstan/src/Rules; ApiKey now extends Entity (IdentityAccess/Domain/Entity/ApiKey.php)."
+ },
+ "BL-101": {
+  "id": "BL-101",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No ADR on who may read request input; ADR-0021/44/47/48 unchanged on it and no header-roster rule in phpstan/src/Rules."
+ },
+ "BL-120": {
+  "id": "BL-120",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No policy resolver/store at tenant/workspace/envelope levels; constants read through DeliveredCodePolicy single point."
+ },
+ "BL-225": {
+  "id": "BL-225",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ADR-0004 line 22 still lists UI/ among adapter layers that may import other BCs' Contract; deptrac.yaml says <BC>/UI imports only own Contract/Application."
+ },
+ "BL-195": {
+  "id": "BL-195",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ADR-0058 still reads 'adapter performing a cross-BC read would put a domain question in the one layer that cannot answer it'."
+ },
+ "BL-304": {
+  "id": "BL-304",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "f5sign-infra/docker-compose.prod.yml x-backend-env anchor (line 34) still carries RELAY_DATABASE_URL (44) and PROVISIONING_DATABASE_URL (56), merged by 4 services; doctrine.yaml declares all connections with no when@ gating."
+ },
+ "BL-175": {
+  "id": "BL-175",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "config/packages/sentry.yaml: environment: '%env(SENTRY_ENVIRONMENT)%', not derived from APP_ENV, comment says unset with DSN is a boot failure; sentry-symfony is installed (commit 63595f33).",
+  "note": ".env ships SENTRY_ENVIRONMENT=development as default, so 'refuse to boot' is by %env()% absence only in prod if the key is absent; default never yields 'production'."
+ },
+ "BL-9": {
+  "id": "BL-9",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "Mutation counts cannot be re-measured without Infection (not run). Unit EventLogCommitmentTest now exists but no dedicated CanonicalJsonPayloadCodec/EventRelay unit test seen; not verified."
+ },
+ "BL-10": {
+  "id": "BL-10",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "tests/F5Sign/Session/Unit/UI/Http/CommitSignatureControllerTest.php uses FakeCommandBus and asserts assertCount(1,$bus->dispatched) and assertInstanceOf(CommitSignature::class, $bus->dispatched[0]) - the spy the row asked for."
+ },
+ "BL-11": {
+  "id": "BL-11",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "EnvelopeHttpTest has adding_a_document/step/recipient, uploading_document_bytes, declaring_a_document_assignment ...is_a_conflict plus AddFieldHttpTest for addField; guardDraft sites now are addDocument, uploadDocumentBytes, addStep, addRecipient, assignDocument, addField, all covered. assignSigning is no longer a guardDraft site."
+ },
+ "BL-12": {
+  "id": "BL-12",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "AssignSigningControllerTest (Unit/UI/Http) now exists, so 'zero test references' is false.",
+  "remains": "The CAS-conflict path through the adapter seam (EnvelopeCommandAdapter/AssignSigningHandler) still has no test beyond domain level; not found in tests.",
+  "note": "Controller half resolved."
+ },
+ "BL-13": {
+  "id": "BL-13",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "medium",
+  "evidence": "Whether covered-MSI>=90 is reachable for SQL-only RLS is a measurement/decision; ADR-0035 per-tier gate still Pending."
+ },
+ "BL-24": {
+  "id": "BL-24",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "tests/F5Sign/Envelope/Unit/Domain/ValueObject/SettingsTest.php and Unit/Contract/Type/FieldPlacementTest.php exist.",
+  "note": "Mutant counts not re-measured."
+ },
+ "BL-25": {
+  "id": "BL-25",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No test asserts a fresh start() yields consentGiven() === false; every consentGiven() assertion in tests/F5Sign/Session is assertTrue."
+ },
+ "BL-89": {
+  "id": "BL-89",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No SigningTokenListenerTest and no #[CoversClass(SigningTokenListener)]; only indirect references in acceptance/integration tests and TenantRequestListenerTest."
+ },
+ "BL-90": {
+  "id": "BL-90",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No enumerating test of Envelope UI controllers asserting principal->issuedBy; only per-controller unit tests (AssignSigning, AssignDocuments, AddField)."
+ },
+ "BL-91": {
+  "id": "BL-91",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "rg ProvisionTenantCommand finds only src/IdentityAccess/UI/Cli files; nothing under tests/."
+ },
+ "BL-93": {
+  "id": "BL-93",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Authn::fromRouteDefault still has the instanceof self arm; all 6 src callers pass getString(). Part (b) not re-verified: RouteAuthnDeclarationTest has been reworked and its assertions look discriminating now, but the original 'second assertion' cannot be identified.",
+  "note": "Possibly (b) is stale."
+ },
+ "BL-97": {
+  "id": "BL-97",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "ProvisionsTenants docblock now records the policy for when a fixture may bypass the application (arrangement seeds, subject acts) and says the shrink note is discharged/will not shrink; provisioning command exists.",
+  "remains": "Second limb: no per-test cleanup of accumulating tenant/event-log rows (test DB still only migrated by test-db-setup; dama yaml still unwrapped connections); no general fixture-layer policy/consolidation of EnvelopeBuilder/Fake doubles.",
+  "note": "First limb discharged."
+ },
+ "BL-102": {
+  "id": "BL-102",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Nothing runs a real artifact's unit test against its double; rule 4 prose only."
+ },
+ "BL-105": {
+  "id": "BL-105",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "AuthoringLoadsUnderRowLockTest still globs dirname($file).'/*UseCase.php' (Authoring dir only); no census of UseCase/Lifecycle."
+ },
+ "BL-124": {
+  "id": "BL-124",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "EmailNotificationChannel::fallbackLocale() is defined (line 1342) and called only from tests (EmailNotificationChannelTest); no src caller."
+ },
+ "BL-155": {
+  "id": "BL-155",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "SeedsSentEnvelopes trait exists; LeakedLinkRefusedHttpTest and SessionCredentialTenantScopeTest still keep private seeds (not using the trait for their seed)."
+ },
+ "BL-179": {
+  "id": "BL-179",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "A migrate-over-fixture harness pattern now exists: tests/F5Sign/Integration/EndingDataMigrationTest.php (Version20260928131928::dataMapping over seeded rows) and Notification/Integration/DeliveryTimestampsMigrationTest.php, so 'nothing in the suite does that' is stale.",
+  "remains": "No such test for Version20260820000003 (auth gate TEXT->jsonb); bar 8 of TASK-032 still unproved for it."
+ },
+ "BL-203": {
+  "id": "BL-203",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No test for renew-after-retire (agp carried forward) and none for reset-then-reopen-same-token; no RenewSessionCredentialUseCase test file; CorrectedContactClosesTheLinkHttpTest only has a_reset_access_code_leaves_the_link_open."
+ },
+ "BL-215": {
+  "id": "BL-215",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No two-concurrent-delegated-commits test; SigningGateOnTheActUnitOfWorkTest probe exists (as the row says) but is not the requested test."
+ },
+ "BL-222": {
+  "id": "BL-222",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "EnvelopeCredentialRetirementTest::RETIRES still has bookkeeping rows with no behavioural case; census only catches unclassified gestures."
+ },
+ "BL-262": {
+  "id": "BL-262",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "SigningReadersRefuseUnsentEnvelopeTest callers() needles are only '->issueFor(' (and getContextForRecipient crossing); no '->authContext->read(' needle."
+ },
+ "BL-317": {
+  "id": "BL-317",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "OpenApiSpecTest::every_api_v1_route_is_documented still compares router paths against /api/doc.json paths only, with no check for #[OA\\*] on the controller."
+ },
+ "BL-337": {
+  "id": "BL-337",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "EnvelopeEndingStoriesTest::EXCLUDED still excludes 'an integrator-signed member who never acts counts as reached' (builder authors no MACHINE_KEY member)."
+ },
+ "BL-342": {
+  "id": "BL-342",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "OpenApiSpecTest has no ActRefusal reference; is_a(ProblemCoded) discovery only"
+ },
+ "BL-344": {
+  "id": "BL-344",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "EnvelopeRootLockRaceTest has no deadline/clocks case; no clocks act in envelope_race_child.php (not grep-confirmed beyond that)"
+ },
+ "BL-345": {
+  "id": "BL-345",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "claim still holds"
+ },
+ "BL-346": {
+  "id": "BL-346",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "ReconcileEndingsCommandTest has only two tests, no VIEWER seed"
+ },
+ "BL-347": {
+  "id": "BL-347",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "OpenApiSpecTest has no AT_LEAST/step-description assertion"
+ },
+ "BL-348": {
+  "id": "BL-348",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no HTTP test comparing step deadline vs expiry on same facts found"
+ },
+ "BL-349": {
+  "id": "BL-349",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "CloseEnvelopeNowHttpTest has no VIEWER case"
+ },
+ "BL-350": {
+  "id": "BL-350",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no admitted-but-unlanded vs declines test found outside the evaluator tier"
+ },
+ "BL-387": {
+  "id": "BL-387",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no claimable+MACHINE_KEY pair test found (RecipientTest delegated cases are not claimable)"
+ },
+ "BL-388": {
+  "id": "BL-388",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "OpenApiSpecTest uses is_a ProblemCoded discovery, still global not per-route"
+ },
+ "BL-401": {
+  "id": "BL-401",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "NotificationRowLockTest probes repository only; no per-use-case probes"
+ },
+ "BL-405": {
+  "id": "BL-405",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "test still has a single foreign message NotificationRequested"
+ },
+ "BL-416": {
+  "id": "BL-416",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no PDF text extraction test; TypstTrailRendererTest has none of these assertions"
+ },
+ "BL-430": {
+  "id": "BL-430",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "ResendOnANamedChannelHttpTest only asserts declaration unchanged"
+ },
+ "BL-443": {
+  "id": "BL-443",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "test only asserts next_resend_at is RFC3339"
+ },
+ "BL-448": {
+  "id": "BL-448",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "EnvelopeContactRevisionTest/EnvelopeCredentialRetirementTest still CoversClass(Envelope) only; no census"
+ },
+ "BL-464": {
+  "id": "BL-464",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "census still reads throws by spelling; no per-branch ternary handling seen"
+ },
+ "BL-468": {
+  "id": "BL-468",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "RecipientReceiptRule::forSession still inlines comparison citing RecipientAuthContext::retires; SessionReceiptHttpTest has no retired/closed 404 case"
+ },
+ "BL-478": {
+  "id": "BL-478",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no e2e for unsecured void in RecipientNotices*HttpTest"
+ },
+ "BL-67": {
+  "id": "BL-67",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "AddFieldHttpTest still #[CoversNothing]"
+ },
+ "BL-96": {
+  "id": "BL-96",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Principal::tenant still ?TenantId with private ctor, tenantOrFail kept (docblock says deliberate)"
+ },
+ "BL-454": {
+  "id": "BL-454",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "FormEngineSensitiveParametersTest::parameters() still hand-listed"
+ },
+ "BL-413": {
+  "id": "BL-413",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no per-recipient cap found in channel-change notify path"
+ },
+ "BL-99": {
+  "id": "BL-99",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no regenerate-and-diff test for LIVE_SCHEMA.md"
+ },
+ "BL-363": {
+  "id": "BL-363",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "both stale sentences still present in LIVE_SCHEMA.md and envelope-domain-model.md"
+ },
+ "BL-30": {
+  "id": "BL-30",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "SequentialPadesLoopTest exists, no soak evidence; not checked further"
+ },
+ "BL-409": {
+  "id": "BL-409",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "operational Infection re-run; not checkable in code"
+ },
+ "BL-379": {
+  "id": "BL-379",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "medium",
+  "evidence": "doc hygiene backlog of ~80 candidates in a 896-line file"
+ },
+ "BL-109": {
+  "id": "BL-109",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "CLAUDE.md Current state now lists IdentityAccess, Storage, KeyManagement among populated BCs and says 'Enumerate rather than trust this list'; .env var list expanded"
+ },
+ "BL-316": {
+  "id": "BL-316",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "(3) CLAUDE.md now says enumerate bundles from config/bundles.php and describes TwigBundle as enabled; (4) messenger.yaml comment rewritten around PerMessageRetryStrategy; (6) DbalTransactionMiddleware no longer mentions RelayEventLogCommand",
+  "remains": "(1) RouteCollisionTest still names se.*; (2) routes.yaml/services.yaml still describe #[Route] attribute routing; (5) not checked; (7) OnSessionCompletedHandler still says handlers 'are independent ... gates on signing mode before doing any work'"
+ },
+ "BL-362": {
+  "id": "BL-362",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "nelmio_api_doc.yaml still has 'Always false today', 'currently Spanish', 'Two sources for now', 'was a member here until 2026-09-01', BL-270/BL-272/BL-40 refs",
+  "note": ""
+ },
+ "BL-293": {
+  "id": "BL-293",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "docs/ddd/signing-session-domain-model.md top banner (~line 65) still lists 'mint a new challenge' half and re-send route (route 4) among unbuilt items",
+  "note": ""
+ },
+ "BL-315": {
+  "id": "BL-315",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ADR-0021 line 37 still says kernel.request/before routing, missing-tenant 400; ADR-0022 line 68 still 'Not built'; listener is on KernelEvents::CONTROLLER",
+  "note": ""
+ },
+ "BL-396": {
+  "id": "BL-396",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "SignerAuthPolicy docblock for OTP_SMS_CHALLENGE_TTL_SECONDS still says 'Still inert - no SMS channel exists yet' though SmsNotificationChannel exists; LIVE_SCHEMA half is fixed (invitations_revoked_at row present)",
+  "note": ""
+ },
+ "BL-411": {
+  "id": "BL-411",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Still-live surfaces: EmailNotificationChannel:297, RecipientInvitationResendHttpTest:70/254, EnvelopeCredentialRetirementTest:116, ADR-0059 relates/crosswalk rows cite ADR-0045 s2.6 'issuance is additive'",
+  "note": ""
+ },
+ "BL-223": {
+  "id": "BL-223",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "AUTHORING.md convention 8 still absolute; ADR-0050..0060 still carry emoji marks (e.g. 0057: 70, 0055: 45); no lint exists",
+  "note": ""
+ },
+ "BL-164": {
+  "id": "BL-164",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Only the two specific pairing tests exist (SmsCopyTest, AuthOtpEmailCopyTest); no generic detector",
+  "note": ""
+ },
+ "BL-235": {
+  "id": "BL-235",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No gate ties a changed wire enum value to a handoff note; OpenApiSpecTest only pins enums to PHP enums. (REVOKED now appears in TASK-050 handoff, but the detection gap remains)",
+  "note": ""
+ },
+ "BL-181": {
+  "id": "BL-181",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "a38800cb: components.schemas.ProblemCode catalog published and OpenApiSpecTest::every_problem_coded_refusal_names_its_code_in_the_spec ties it both ways (asks 2 and 3 done)",
+  "note": "narrow row to per-route code on sender 4xx responses",
+  "remains": "Ask (1): per-route 4xx code descriptions; ~167 OA\\Response entries are still bare ref: '#/components/responses/...' and the shared components carry no code"
+ },
+ "BL-209": {
+  "id": "BL-209",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "OpenApiSpecTest docblock (~line 810) says no tool builds the route-to-throw graph; per-route lists 'stay closed by review'",
+  "note": ""
+ },
+ "BL-248": {
+  "id": "BL-248",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "SendAuthOtpController/SendRecipientAuthOtpController 409 descriptions do not name AUTH_METHOD_NOT_CHOSEN; only SendCopyOtpController and the descriptor's selection prose do",
+  "note": ""
+ },
+ "BL-250": {
+  "id": "BL-250",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "SendRecipientAuthOtpController, SubmitRecipientAuthResponseController, CommitDelegatedSignatureController declare no response: 404",
+  "note": ""
+ },
+ "BL-253": {
+  "id": "BL-253",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "GetAuthDescriptorController 409 still says 'the same link is described normally once their step is active'",
+  "note": ""
+ },
+ "BL-264": {
+  "id": "BL-264",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "SigningTokenIssuance docblock still states no isTerminal() refusal; recipientStepNotActive thrown for dormant step regardless",
+  "note": ""
+ },
+ "BL-266": {
+  "id": "BL-266",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "CommitDelegatedSignatureController 409 lists ENVELOPE_NOT_SENT and RECIPIENT_SLOT_NOT_CLAIMED; CommitDelegatedSignatureUseCase has no slot/claimed check or either code",
+  "note": ""
+ },
+ "BL-267": {
+  "id": "BL-267",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "MintSigningTokenController 201 JsonContent declares properties but no required; session-read nested objects not rechecked",
+  "note": ""
+ },
+ "BL-177": {
+  "id": "BL-177",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No ALLOW_EXTRA_ATTRIBUTES or strictness config in config/ or src/; #[MapRequestPayload] now in ~60 places",
+  "note": ""
+ },
+ "BL-163": {
+  "id": "BL-163",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Envelope::addRecipient still throws EnvelopeStepNotFoundException ('Step not found ... ordinal=') with no mention of no steps",
+  "note": ""
+ },
+ "BL-59": {
+  "id": "BL-59",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "f5sign-signer develop app/composables/api/types.ts has 'occurrences: FieldOccurrence[]'; f5sign-signer/docs/HANDOFF-fields-occurrences.md and backend docs/frontend-handoff/* exist; no-bump decision recorded",
+  "note": "Cross-repo; signer absorbed both breaks and notice was delivered. Dashboard consumption not checked."
+ },
+ "BL-174": {
+  "id": "BL-174",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "high",
+  "evidence": "Backend Sentry wired (config/packages/sentry.yaml); what remains is Sentry org quota, a backend project and a live end-to-end run, all outside the code",
+  "note": ""
+ },
+ "BL-341": {
+  "id": "BL-341",
+  "verdict": "PARTIAL",
+  "confidence": "high",
+  "evidence": "TASK-050-signer handoff names RECIPIENT_VETOED and MEMBER_NOT_REACHED; TASK-050-integrator-step-policy-and-close-now.md names only MEMBER_NOT_REACHED (lines 114,138)",
+  "note": "signer half done",
+  "remains": "Integrator handoff lacks RECIPIENT_VETOED (and its veto-ends-the-step rule)"
+ },
+ "BL-143": {
+  "id": "BL-143",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "rg TOKEN_EXPIRED src config returns nothing; only docs/frontend-handoff mention it; shared 401 unchanged",
+  "note": ""
+ },
+ "BL-142": {
+  "id": "BL-142",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "config/routes/api/signing.php:186 'decline' POST /signing/decline now exists with Authn::SESSION_CREDENTIAL (TASK-046)",
+  "note": "decline built and takes the session credential as the row answered",
+  "remains": "PATCH fields, evidence, complete, review-ack still not routed or classified"
+ },
+ "BL-300": {
+  "id": "BL-300",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "SealRequestRejected docblock still gives 'the bytes are not a PDF' as its example; DSS signing behaviour not measured",
+  "note": ""
+ },
+ "BL-294": {
+  "id": "BL-294",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "OtpSent.php:37 still describes deliveryReference as the opaque id of the notification occasion; IssueAuthChallengeUseCase:428 passes cause 'otp-issuance:<id>'",
+  "note": ""
+ },
+ "BL-295": {
+  "id": "BL-295",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "OneTimeCodeDeliveryService docblock (line 39) still quotes the in-caller-transaction premise",
+  "note": ""
+ },
+ "BL-364": {
+  "id": "BL-364",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "evidence-audit-domain-model.md intro still says Audit Trail XML signed XAdES-B-LTA (17 XAdES hits); banner says next feature reconciles it",
+  "note": ""
+ },
+ "BL-412": {
+  "id": "BL-412",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "wasIssuedBefore defined in ResolvedSigningToken.php:70; only other mention is a Recipient docblock; no callers in src or tests",
+  "note": ""
+ },
+ "BL-476": {
+  "id": "BL-476",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "f5sign-infra master contains 8d311a4 (docker-compose.prod.yml:121 COPY_READ_CREDENTIAL_SECRET required, .env.prod.example:77); root AI store backend CLAUDE.md rule 4 pattern (A) list now names COPY_READ_CREDENTIAL_SECRET",
+  "note": "Both coordinated changes landed; .env absent, .env.dev/.env.test hold dev values"
+ },
+ "BL-287": {
+  "id": "BL-287",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ADR-0064 line 206 and 546 still reserve envelope.declined; envelope.voided is the only terminal-negative event",
+  "note": ""
+ },
+ "BL-198": {
+  "id": "BL-198",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "EventRelay still only logs the epoch repair; no counter/command; swallowedCount() only in tests"
+ },
+ "BL-273": {
+  "id": "BL-273",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "config/packages/framework.yaml: trusted_proxies '%env(default::SYMFONY_TRUSTED_PROXIES)%', trusted_headers ['x-forwarded-for','x-forwarded-proto']; .env:56 SYMFONY_TRUSTED_PROXIES= (empty)"
+ },
+ "BL-70": {
+  "id": "BL-70",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "symfony/rate-limiter now installed; config/packages/rate_limiter.yaml has otp_* and otp_machine_* policies on cache.rate_limiter, so the 'zero RateLimiter' measurement is false",
+  "remains": "No abuse control on the credential-probe / general request path (API key digest lookups, other endpoints); Caddyfile still has no rate limit. Narrow the row to that and drop the 'not installed' claim."
+ },
+ "BL-78": {
+  "id": "BL-78",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No credential-compromise notification channel or contact placement in IdentityAccess"
+ },
+ "BL-80": {
+  "id": "BL-80",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Only informal bearerFormat 'f5s_ak_<body><control>' in config/packages/nelmio_api_doc.yaml; no published grammar artifact"
+ },
+ "BL-81": {
+  "id": "BL-81",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No RevokeApiKey use case; ApiKey::revoke() has no callers outside the domain; issueKey() only called from ApiClient::register()"
+ },
+ "BL-184": {
+  "id": "BL-184",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Mint route still MACHINE_KEY; only a sentAt/claimable check in SigningTokenIssuance::issueFor; neutral-gate path unchanged"
+ },
+ "BL-115": {
+  "id": "BL-115",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "Design claim about ADR-0049 lockout clearing; did not trace lockout code"
+ },
+ "BL-62": {
+  "id": "BL-62",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "findContextForSE still loads all fields via loadFieldViews($id) 'WHERE envelope_id = :id', no recipient predicate"
+ },
+ "BL-279": {
+  "id": "BL-279",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No limiter on commit controllers; OtpSendLimiter used only by OTP send/copy-challenge use cases"
+ },
+ "BL-473": {
+  "id": "BL-473",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Limiter used for code sends only; OpenCopyController/SubmitCopyAuthController have none"
+ },
+ "BL-382": {
+  "id": "BL-382",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Caddyfile request_body max_size 50MB, post_max_size=50M; CommitSignatureRequest takes biometric_data as mixed"
+ },
+ "BL-55": {
+  "id": "BL-55",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Caddyfile max_size 50MB, post_max_size=50M, memory_limit=512M unchanged"
+ },
+ "BL-27": {
+  "id": "BL-27",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "AssignSigningRequest::$placements has Assert\\All only, no Assert\\Count"
+ },
+ "BL-178": {
+  "id": "BL-178",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Per-method limiters unchanged; MAX_DECLARED_LIST_LENGTH is a derived bound"
+ },
+ "BL-189": {
+  "id": "BL-189",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Source key still IP-hash per otp_*_source; machine surface has otp_machine_*_source; closure undecided"
+ },
+ "BL-427": {
+  "id": "BL-427",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "OtpSendKeys::wideDestination still tenant-free; 30/h in rate_limiter.yaml"
+ },
+ "BL-428": {
+  "id": "BL-428",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "OtpSendKeys still unsalted sha256"
+ },
+ "BL-429": {
+  "id": "BL-429",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Recipient::mayGoOutBySms read at resend request; delivery resolves later in NotifyResentInvitationRecipientUseCase"
+ },
+ "BL-431": {
+  "id": "BL-431",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Cap counted in Recipient::resendInvitation at the write; no refund path"
+ },
+ "BL-442": {
+  "id": "BL-442",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Resend bound per-recipient/channel in Recipient::resendInvitation; no aggregate"
+ },
+ "BL-446": {
+  "id": "BL-446",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No limiter on addition re-invite SMS"
+ },
+ "BL-114": {
+  "id": "BL-114",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "Decision about ADR-0045 grammar vs 6-digit codes; unsettled in code"
+ },
+ "BL-63": {
+  "id": "BL-63",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "config/routes/nelmio_api_doc.yaml app.swagger /api/doc.json _authn: 'NONE', no when@ gate"
+ },
+ "BL-88": {
+  "id": "BL-88",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "SigningTokenIssuance::issueFor calls getContextForRecipient() and throws envelopeNotYetSent; SigningCeremonyHttpTest setUp uses seedSentEnvelope(...) with real rows, docblock says a nonexistent envelope is a 404"
+ },
+ "BL-144": {
+  "id": "BL-144",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Contract hazard; session still derived from bearer alone; no envelope echo found"
+ },
+ "BL-145": {
+  "id": "BL-145",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "RequestContextProcessor docblock still says allow-list has no enforcement (BL-29); redactor wired only into SentryBeforeSend"
+ },
+ "BL-159": {
+  "id": "BL-159",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "SigningSession::consumeAnsweredSigningChallenge() consumes only the challenge answered in the same unit for this act (answeredOnThisAct, else AuthGateRefusedException::codeRequired()); no waiting proof exists to transfer",
+  "note": "Row text says open until fix/signing-gate-on-the-act lands; code on develop has it. Expiry half also done (AUTH_CHALLENGE_EXPIRED)."
+ },
+ "BL-229": {
+  "id": "BL-229",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No revoked_at on session.signing_token in any migration; only envelope.recipient.invitations_revoked_at"
+ },
+ "BL-230": {
+  "id": "BL-230",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "Decision item; no code change found"
+ },
+ "BL-439": {
+  "id": "BL-439",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "AddRecipient/ResetRecipientAccessCode/ChangeRecipientAuthRequirement controllers set no Cache-Control"
+ },
+ "BL-472": {
+  "id": "BL-472",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "no-store only on copy controllers; StartSession, session receipt (private only), MintSigningToken, SendCopyOtp have none"
+ },
+ "BL-474": {
+  "id": "BL-474",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No revoke action; MintCopyLinkController docblock says a new link does not retire an earlier one"
+ },
+ "BL-475": {
+  "id": "BL-475",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "GetCopyController and DownloadCopyDocumentController still read request attributes separately; not reconciled"
+ },
+ "BL-221": {
+  "id": "BL-221",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Uri::fromString is only filter_var(FILTER_VALIDATE_URL); no destination check"
+ },
+ "BL-37": {
+  "id": "BL-37",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "AddRecipientRequest has no document-access field"
+ },
+ "BL-116": {
+  "id": "BL-116",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "CustodianSchedule::jobs lists no auth-attempt cleaner"
+ },
+ "BL-117": {
+  "id": "BL-117",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "medium",
+  "evidence": "legal/product discharge dependent on BL-119",
+  "note": "legal decision"
+ },
+ "BL-118": {
+  "id": "BL-118",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No provider callback; EmailNotificationChannel docblock says SMTP has none"
+ },
+ "BL-119": {
+  "id": "BL-119",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "AuthMethod docblock: 'No strength ordering is defined'"
+ },
+ "BL-160": {
+  "id": "BL-160",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Notification::SECRET_BEARING_VARIABLES=['link','code'] dropped once settled; no cipher at rest"
+ },
+ "BL-161": {
+  "id": "BL-161",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "LogNotificationChannel::render folds $variables->toArray() into logged parts; no redaction"
+ },
+ "BL-168": {
+  "id": "BL-168",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Recipient::correctContact does not ++authGeneration; AuthChallenge has no generation field"
+ },
+ "BL-180": {
+  "id": "BL-180",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ResetRecipientAccessCodeUseCase/Envelope::resetRecipientAccessCode do no ACCESS_CODE declaration check"
+ },
+ "BL-182": {
+  "id": "BL-182",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "AddRecipientRequest::validateAccessCodeHasAGate still uses [access_method, signing_method] only"
+ },
+ "BL-205": {
+  "id": "BL-205",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "PUT .../recipients/{recipientId}/auth in config/routes/api/envelope.php; Envelope.php checks firstOpenedAt; test s1_a_stranded_slot_is_narrowed_claimed_entered_and_signed exists; merge 76c70285 is ancestor of HEAD",
+  "note": "row already says decided and built"
+ },
+ "BL-206": {
+  "id": "BL-206",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Envelope::resetRecipientAccessCode/unlockRecipientAuth guard only guardAccessRecoverable; no isUnclaimedSlot check"
+ },
+ "BL-208": {
+  "id": "BL-208",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "ClaimRecipientRequest has no access_code; introduce-after-claim via PUT auth exists",
+  "remains": "slot declaring ACCESS_CODE at authoring still needs claim then reset; claim route OA does not document the flow",
+  "note": "row already says narrowed"
+ },
+ "BL-212": {
+  "id": "BL-212",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Recipient::resendInvitation checks only per-channel resend stamps; correctContact does not stamp"
+ },
+ "BL-213": {
+  "id": "BL-213",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Email-only resends have no domain count cap; MAX_SMS_RESENDS only for SMS-capable resends"
+ },
+ "BL-434": {
+  "id": "BL-434",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "signing slot optional; not contradicted in code"
+ },
+ "BL-435": {
+  "id": "BL-435",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "same predicate as BL-182, scalar-only"
+ },
+ "BL-436": {
+  "id": "BL-436",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "only AddRecipientController dispatches AddRecipient; command accepts null requirement"
+ },
+ "BL-437": {
+  "id": "BL-437",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Envelope.php refuses gate change when firstOpenedAt() !== null"
+ },
+ "BL-438": {
+  "id": "BL-438",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "same as BL-180: reset stores hash without checking declaration"
+ },
+ "BL-441": {
+  "id": "BL-441",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "RecipientAuthRequirementChanged consumed only by TrailAssembler; no notification"
+ },
+ "BL-391": {
+  "id": "BL-391",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ConfiguredAuthMethodAvailability is deployment-only; no tenant gate on OTP_SMS"
+ },
+ "BL-392": {
+  "id": "BL-392",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Session has no reaction to Notification delivery outcome"
+ },
+ "BL-257": {
+  "id": "BL-257",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "IssueAuthChallengeUseCase still refuses dormant step before limiter; recorded decision"
+ },
+ "BL-296": {
+  "id": "BL-296",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "IssueAuthChallengeUseCase calls startIfAbsent (~l.295) before unitOfWork->own (~l.462)"
+ },
+ "BL-162": {
+  "id": "BL-162",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "Envelope/Application/Service/DeclaredMethodDestinations.php; AddRecipientUseCase calls $this->destinations->guard($command->authRequirement, $command->email, $command->phone) at authoring",
+  "note": ""
+ },
+ "BL-176": {
+  "id": "BL-176",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "AddRecipientUseCase skips destinations->guard() only for a claimable declaration; ClaimRecipientUseCase calls DeclaredMethodDestinations (option a built)",
+  "note": "Leftover 'tell the dashboard gateway' is an other-owner item"
+ },
+ "BL-183": {
+  "id": "BL-183",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "RecipientAuthContext::$closedLegOutcome (from RecipientAuthContextReader: legIsClosed() ? outcomeAsAdmitted()->value : null); IssueAuthChallengeUseCase: if (!$auth->gatePasses) throw legClosed()/envelopeNoLongerLive before any code is minted; GetAuthDescriptorController publishes closedLegAtTheGate()",
+  "note": "Outcome now crosses; refusal occurs before a code is issued"
+ },
+ "BL-172": {
+  "id": "BL-172",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "EnvelopeJsonPresenter.php: 'phone' => $recipient->phone published whole beside email",
+  "note": ""
+ },
+ "BL-432": {
+  "id": "BL-432",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "RecipientNotificationChannels::resolveNamed returns of($one, []) -> NOT_SENT_NO_REACHABLE_CHANNEL; unnamed with declared [] -> DELIVERED_BY_INTEGRATOR via ResolvedNotificationChannels::unsentKind()",
+  "note": ""
+ },
+ "BL-216": {
+  "id": "BL-216",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No src/F5Sign/Webhook tree; ADR-0064 still Proposed and unbuilt; no webhook subscription code in src",
+  "note": ""
+ },
+ "BL-217": {
+  "id": "BL-217",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No src/F5Sign/Webhook tree; ADR-0064 still Proposed and unbuilt; no webhook subscription code in src",
+  "note": ""
+ },
+ "BL-218": {
+  "id": "BL-218",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No src/F5Sign/Webhook tree; ADR-0064 still Proposed and unbuilt; no webhook subscription code in src",
+  "note": ""
+ },
+ "BL-219": {
+  "id": "BL-219",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No src/F5Sign/Webhook tree; ADR-0064 still Proposed and unbuilt; no webhook subscription code in src",
+  "note": ""
+ },
+ "BL-220": {
+  "id": "BL-220",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No src/F5Sign/Webhook tree; ADR-0064 still Proposed and unbuilt; no webhook subscription code in src",
+  "note": ""
+ },
+ "BL-226": {
+  "id": "BL-226",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No src/F5Sign/Webhook tree; ADR-0064 still Proposed and unbuilt; no webhook subscription code in src",
+  "note": ""
+ },
+ "BL-394": {
+  "id": "BL-394",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No src/F5Sign/Webhook tree; ADR-0064 still Proposed and unbuilt; no webhook subscription code in src",
+  "note": ""
+ },
+ "BL-426": {
+  "id": "BL-426",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No src/F5Sign/Webhook tree; ADR-0064 still Proposed and unbuilt; no webhook subscription code in src",
+  "note": ""
+ },
+ "BL-75": {
+  "id": "BL-75",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "rg for RD 311/2022 / Esquema Nacional / Accessibility Act in docs and src hits only BACKLOG.md",
+  "note": ""
+ },
+ "BL-22": {
+  "id": "BL-22",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "FieldType::RESERVATIONS exists (ADR-0069, Accepted exercised); FormRevisionPlanner draws it: '$recorded = FieldType::RESERVATIONS === $field->type ? $owner->reservations : $field->value' in the fill revision before each signature (ADR-0085)",
+  "note": "A pre-sign mechanism was decided and built; the circular ownership no longer holds"
+ },
+ "BL-166": {
+  "id": "BL-166",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "NullUsageMeter is the only UsageMeterInterface implementation; no usage table in migrations",
+  "note": ""
+ },
+ "BL-103": {
+  "id": "BL-103",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No tenant-supplied copy store or token allow-list; DbalTenantNotificationDefaults is channel defaults only",
+  "note": ""
+ },
+ "BL-76": {
+  "id": "BL-76",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "NotifyCompletedEnvelopeRecipients docblock still excludes the sender pending BL-76; IdentityQuery appears nowhere in src",
+  "note": ""
+ },
+ "BL-77": {
+  "id": "BL-77",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No senderEmail/senderContact/sender_email in src or migrations",
+  "note": ""
+ },
+ "BL-325": {
+  "id": "BL-325",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "NotifyActivatedStepRecipientsUseCase only checks $envelope->closedAt !== null at read time; no serialization point added",
+  "note": ""
+ },
+ "BL-326": {
+  "id": "BL-326",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "VoidEnvelopeRequest::$reason still one dual-purpose field, only #[OA] text as control; a Length(max:1000) cap exists (one of the short-of-fix controls the row lists)",
+  "note": ""
+ },
+ "BL-299": {
+  "id": "BL-299",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "TenantNames docblock: stop-gap, Identity & Access holds no legal name",
+  "note": ""
+ },
+ "BL-274": {
+  "id": "BL-274",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No Geo-IP derivation in src (only browser-reported geolocation status)",
+  "note": ""
+ },
+ "BL-29": {
+  "id": "BL-29",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "SentryBeforeSend is wired as before_send/before_send_transaction in config/packages/sentry.yaml and calls SensitiveDataRedactor, so 'no egress sink routes through them' is no longer true",
+  "note": "Row text still says nothing calls the redactor",
+  "remains": "Whether any other off-box sink (log shipping of Monolog lines, which stay plaintext) must also route through the redactor; row's headline claim should be narrowed"
+ },
+ "BL-49": {
+  "id": "BL-49",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Column still plaintext; row records the decision; no cipher callers",
+  "note": ""
+ },
+ "BL-130": {
+  "id": "BL-130",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "Foundation/RecordedText + ADR-0096 encrypt the decline reason on SESSION_DECLINED only; RecipientSigned still carries 'reservations' as plain string",
+  "note": "Row is Folded into ADR-0096",
+  "remains": "Reservations, title, name and other free-text members still plaintext in the log; erasure unbuilt"
+ },
+ "BL-171": {
+  "id": "BL-171",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "FieldCipher has no callers outside Foundation/Crypto and a docblock mention; no column enciphered; ADR-0096 carrier not built",
+  "note": ""
+ },
+ "BL-214": {
+  "id": "BL-214",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "AssertedEvidence still Pii-only, FieldCipher not wired; FIELD_ENCRYPTION_SECRET= still empty in .env",
+  "note": ""
+ },
+ "BL-275": {
+  "id": "BL-275",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "RecipientSigned etc. still carry reservations as a plain string in the payload; ADR-0096 encryption of reservations not built yet",
+  "note": "Folded into ADR-0096"
+ },
+ "BL-278": {
+  "id": "BL-278",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "config/packages/sentry.yaml attach_stacktrace: true; no exception_ignore_args in infra or backend docker files; SentryBeforeSend does not strip frame vars",
+  "note": ""
+ },
+ "BL-415": {
+  "id": "BL-415",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No purge/pseudonymisation step for reported_*, signer_ip, signer_user_agent, signer_accept_language; only PurgeExpiredSigningTokensCommand exists in Session; no NULLing code found",
+  "note": ""
+ },
+ "BL-425": {
+  "id": "BL-425",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No retention/purge for notification tables in Custodian schedule or elsewhere",
+  "note": ""
+ },
+ "BL-460": {
+  "id": "BL-460",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Recipient::recordAdmittedReservations still plain text; FieldCipher has no callers outside Foundation/Crypto",
+  "note": ""
+ },
+ "BL-493": {
+  "id": "BL-493",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "RecordRecipientDecline still declares `public RecordedText $reason`; RecordRecipientDeclineUseCase never mentions reason",
+  "note": ""
+ },
+ "BL-494": {
+  "id": "BL-494",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Migration Version20261029084859 grants app role SELECT, INSERT on key_management.data_key and keyring; request path still mints",
+  "note": ""
+ },
+ "BL-495": {
+  "id": "BL-495",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DeploymentWrappingKeys::ofOneKey passes 'pair' for every process; its docblock has TODO citing BL-495; PublicHalfHolder not used outside fromConfiguration",
+  "note": ""
+ },
+ "BL-481": {
+  "id": "BL-481",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No change found; variables still hold the link; ADR-0033 unbuilt (FieldCipher no callers)",
+  "note": ""
+ },
+ "BL-482": {
+  "id": "BL-482",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "LogNotificationChannel::render still does http_build_query($variables->toArray()); no masking; selector docblock says no purpose selects LOG but not confirmed for prod",
+  "note": ""
+ },
+ "BL-403": {
+  "id": "BL-403",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "DeliveryRetriesExhaustedListener logs ['exception'=>$e] on failure; unconfirmed claim, no test reading the line found",
+  "note": ""
+ },
+ "BL-74": {
+  "id": "BL-74",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No LoA/identity-proofing field in src/migrations/config; decision item still open",
+  "note": ""
+ },
+ "BL-268": {
+  "id": "BL-268",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No digest/HMAC of field values in SignatureCommitted; decided not now",
+  "note": ""
+ },
+ "BL-4": {
+  "id": "BL-4",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DssHttpAdapter::seal() has no level guard; SignatureLevel has B_T/LT/LTA and nothing rejects them",
+  "note": ""
+ },
+ "BL-42": {
+  "id": "BL-42",
+  "verdict": "OBSOLETE",
+  "confidence": "medium",
+  "evidence": "No lock_config/locked_field_ids anywhere; locking now computed per signature by form engine: assets/signature-execution/form_engine.py creates signature fields 'each with a /Lock', FormRevisionPlanner/DrawnRevisionCheck (ADR-0085)",
+  "note": "capability delivered without the stored column"
+ },
+ "BL-281": {
+  "id": "BL-281",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "setReason absent in src and in ../f5sign-infra/docker/eu-dss; no Reason forwarded",
+  "note": ""
+ },
+ "BL-366": {
+  "id": "BL-366",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Envelope reads no page geometry (no pageCount/MediaBox in Envelope); only SignatureExecution PageBox; send() still doesn't check bounds",
+  "note": ""
+ },
+ "BL-449": {
+  "id": "BL-449",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No own signing service; DSS webapp still used (DssHttpAdapter)",
+  "note": "architecture decision"
+ },
+ "BL-450": {
+  "id": "BL-450",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "Dependency upgrade not checkable in code beyond infra; no evidence done",
+  "note": ""
+ },
+ "BL-451": {
+  "id": "BL-451",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No code comparing locked field values at /ByteRange against final document; DrawnRevisionCheck only checks drawn revision",
+  "note": ""
+ },
+ "BL-452": {
+  "id": "BL-452",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "FormRevisionPlanner lists FieldType::RADIO among types not drawn",
+  "note": ""
+ },
+ "BL-453": {
+  "id": "BL-453",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "DocumentSigner/NotPreparableReason still sign without drawing; no upload-time refusal",
+  "note": ""
+ },
+ "BL-455": {
+  "id": "BL-455",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "form_engine.py sets only RLIMIT_AS; no RLIMIT_CPU/NPROC/NOFILE",
+  "note": ""
+ },
+ "BL-456": {
+  "id": "BL-456",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "form_engine.py page_tree walk: `seen` is per-path frozenset (`seen | {ref.idnum}`), not global",
+  "note": ""
+ },
+ "BL-457": {
+  "id": "BL-457",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No sandbox change found; residual by design",
+  "note": ""
+ },
+ "BL-461": {
+  "id": "BL-461",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "Edge cases not individually verified; no fix commit found",
+  "note": ""
+ },
+ "BL-301": {
+  "id": "BL-301",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "DssHttpAdapter::send() returns $this->decoded($response,$path,$status) inside guard; transport failures become DssUnavailableException; commit 3fa6a8b3",
+  "note": ""
+ },
+ "BL-169": {
+  "id": "BL-169",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "TwilioSandboxTest still excluded group; no evidence of a real run",
+  "note": "likely not checkable beyond that"
+ },
+ "BL-271": {
+  "id": "BL-271",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Role::fillsFields() true only for SIGNER, APPROVER; EDITOR false",
+  "note": ""
+ },
+ "BL-41": {
+  "id": "BL-41",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "AddField still accepts anchor_text; no send-time resolver found; edge refusal remains",
+  "note": ""
+ },
+ "BL-43": {
+  "id": "BL-43",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "docs/ddd/envelope-domain-model.md still lists the nine-member vocabulary with INITIAL/EUDI_CREDENTIAL",
+  "note": ""
+ },
+ "BL-44": {
+  "id": "BL-44",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "envelope.document_assignment_placement still read/written by MapsDocumentAssignmentPlacements and DbalEnvelopeRepository; SigningSessionReader/SigningFieldView still reference placements",
+  "note": ""
+ },
+ "BL-385": {
+  "id": "BL-385",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "SignatureModeNotOfferedOnTheMachineRouteException still raised; machine commit carries no image"
+ },
+ "BL-386": {
+  "id": "BL-386",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No tenant default for signature_modes/biometrics_offered/show_name; AddRecipientController treats null as [SIMPLE]"
+ },
+ "BL-477": {
+  "id": "BL-477",
+  "verdict": "STILL_VALID",
+  "confidence": "low",
+  "evidence": "Recipient context handler still projects from findContextForSE full context; no scoped read exists"
+ },
+ "BL-35": {
+  "id": "BL-35",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "GetEnvelopeContextForRecipientHandler still reads findContextForSE and projects down, no document_assignment join"
+ },
+ "BL-40": {
+  "id": "BL-40",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "fields_draft only a null placeholder in GetSigningSessionController; no PATCH route or version counter"
+ },
+ "BL-45": {
+  "id": "BL-45",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No removeField/delete pass; only DELETE FROM in src is EventRelay dead letter"
+ },
+ "BL-46": {
+  "id": "BL-46",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No recipient/assignment/field removal exists; send() has no orphan re-check beyond authoring guard"
+ },
+ "BL-48": {
+  "id": "BL-48",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No PUT occurrences/MoveField/UpdateField route or command in config/routes"
+ },
+ "BL-50": {
+  "id": "BL-50",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Limb 2 built (SignerPatternRule); signer isPatternSafe still a heuristic, limb 1 is signer's"
+ },
+ "BL-53": {
+  "id": "BL-53",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DbalEnvelopeRepository::save still loops all fields upsertField/upsertFieldOccurrences, no dirty set"
+ },
+ "BL-68": {
+  "id": "BL-68",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "AddFieldController still hand-rolls is_finite check returning 400"
+ },
+ "BL-69": {
+  "id": "BL-69",
+  "verdict": "PARTIAL",
+  "confidence": "high",
+  "evidence": "Envelope::addStep now: `if (!$existing->asksTheSameAs($minSignatures, $veto, $deadlineHours)) throw StepRedeclaredException::policyDiffers`",
+  "remains": "addStep no longer silently ignores a divergent minSignatures; addDocument and addRecipient still do no existing-id check and overwrite; Idempotency-Key Layer 3 still unbuilt",
+  "note": "addStep clause is stale"
+ },
+ "BL-193": {
+  "id": "BL-193",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No route/mechanism to change occupant or edit fullName/role/locale; only corrections, claim; retirement anchor exists but not used for this"
+ },
+ "BL-270": {
+  "id": "BL-270",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "FieldType::acceptsValidation() still returns TEXT||DATE"
+ },
+ "BL-272": {
+  "id": "BL-272",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "SignerPatternRule built; its docblock still lists the three PCRE/JS gaps"
+ },
+ "BL-276": {
+  "id": "BL-276",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "recordFieldValues bounds reservations with no visibility condition"
+ },
+ "BL-277": {
+  "id": "BL-277",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "CommitDelegatedSignatureController passes $payload->reservations raw; normalizeReservations only in CommitSignatureController"
+ },
+ "BL-333": {
+  "id": "BL-333",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "AddStepRequest::ordinal has only #[Assert\\Positive], no upper bound"
+ },
+ "BL-353": {
+  "id": "BL-353",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Role::isBlocking() defined, no src caller; docblock unchanged"
+ },
+ "BL-354": {
+  "id": "BL-354",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ensurePreSendInvariants still throws 'no recipients (BC §7 inv 2)' unconditionally"
+ },
+ "BL-201": {
+  "id": "BL-201",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Residual stands: PendingCustodySweep remedy unbuilt, SweepPendingCustodiesCommand reports only; no lifecycle rule in infra minio"
+ },
+ "BL-202": {
+  "id": "BL-202",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "EnvelopeStatus has SEALING, CORRECTING, ROUTING_FAILED, SEALING_FAILED; none written (SEALING only read in complete())"
+ },
+ "BL-210": {
+  "id": "BL-210",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Settings::defaultsFor builds RemindersSchedule::none(); only persistence reads it, no endpoint or worker"
+ },
+ "BL-233": {
+  "id": "BL-233",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Locale::of only rejects blank, no trim or bound"
+ },
+ "BL-327": {
+  "id": "BL-327",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No SMS truncated-reason fallback in NotifyEndedEnvelopeRecipientsUseCase"
+ },
+ "BL-334": {
+  "id": "BL-334",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "SweepEnvelopeClocksCommand collects failures every run; no once-per-envelope logging"
+ },
+ "BL-343": {
+  "id": "BL-343",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "ReleaseReasons::reasonFor still uses member->latestInvitation() irrespective of $at"
+ },
+ "BL-358": {
+  "id": "BL-358",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "StartSessionUseCase still throws legClosed() when read says deadline not passed; race unchanged"
+ },
+ "BL-359": {
+  "id": "BL-359",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No step deadline anywhere in src/F5Sign/EvidenceAudit"
+ },
+ "BL-360": {
+  "id": "BL-360",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "TrailAssembler::claimWhileSlotCouldAct checks only completion and step close, not RecipientReleased"
+ },
+ "BL-361": {
+  "id": "BL-361",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "EvidenceAudit never reads EnvelopeCompleted->released/declined (no match in src/F5Sign/EvidenceAudit); trail states outcomes from RECIPIENT_RELEASED/SESSION_DECLINED."
+ },
+ "BL-306": {
+  "id": "BL-306",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No automatic re-invite/reminder sweep for an expired link; LIFETIME still fixed (Envelope::SIGNING_LINK_LIFETIME='P7D')."
+ },
+ "BL-307": {
+  "id": "BL-307",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No conserve-always setting anywhere in src or migrations."
+ },
+ "BL-308": {
+  "id": "BL-308",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "DeclineSignatureUseCase:173 `$signingGateDeclared = $auth->hasSigningGate(); if (...) $this->signingGate->answer(act: SigningAct::DECLINE ...)` consumes a signing challenge for a decline.",
+  "note": "ADR-0075 §2.2 made decline signing-gated."
+ },
+ "BL-309": {
+  "id": "BL-309",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No link-issued fact; release reasons still derive from invitation instant plus fixed life (ReleaseReasons, Envelope::SIGNING_LINK_LIFETIME)."
+ },
+ "BL-418": {
+  "id": "BL-418",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "TrailAssembler only reads OtpSent (line ~417); RecipientDeliveryFailed not referenced in EvidenceAudit."
+ },
+ "BL-419": {
+  "id": "BL-419",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No verifier guide for personal.invitations; OUTCOME_NOT_RECORDED only in typst/ADR/tests/handoff."
+ },
+ "BL-469": {
+  "id": "BL-469",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "assets/evidence-audit/receipt.typ:237 `[La parte declaró no formular reservas. Si firmó como destinatario en la entrega, ...]` now matches the trail's wording."
+ },
+ "BL-237": {
+  "id": "BL-237",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "AuthMethod::executedByTheRecipient() still the only gate (OpeningFacts:45); no 'admitted without presence' fact/column in src or migrations."
+ },
+ "BL-188": {
+  "id": "BL-188",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "Row marked closed by TASK-070; copy-link pair (Authn::COPY_LINK / COPY_READ, ADR-0088) exists in code (config/routes/api/copy.php).",
+  "note": "Closure taken from docs plus presence of copy routes; not exhaustively verified."
+ },
+ "BL-173": {
+  "id": "BL-173",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "NotifyActivatedStepRecipientsUseCase has no `email === null` skip; unreachable recipients go through channels->resolve()/unsentKind and recordInvitationNotSent(...)."
+ },
+ "BL-194": {
+  "id": "BL-194",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "TASK-031 landed on develop: the email skip is gone and `if ($recipient->isUnclaimedSlot()) { continue; }` stays in NotifyActivatedStepRecipientsUseCase."
+ },
+ "BL-227": {
+  "id": "BL-227",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "Recipient::correctContact budget only spent for isCorrection(); additions are RecipientContactAdded; NotifyCorrectedRecipientUseCase resolves declared channels (resolveAmong) per BL-227 comment; controller answers 200 {warnings}."
+ },
+ "BL-228": {
+  "id": "BL-228",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "Envelope::resendInvitation uses ResolvedNotificationChannels $reach/unsentKind and RECIPIENT_HAS_NO_REACHABLE_CHANNEL; no email-only guard."
+ },
+ "BL-444": {
+  "id": "BL-444",
+  "verdict": "RESOLVED",
+  "confidence": "high",
+  "evidence": "migrations/Version20261021095351.php docblock lines 20-25 say such rows are 'never read: their refusals fire before the interval is checked'."
+ },
+ "BL-122": {
+  "id": "BL-122",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "DbalTenantNotificationDefaults:67 `is_string($locale) && trim($locale) !== '' ? Locale::of($locale) : null` still does not normalise; no btrim CHECK in migrations."
+ },
+ "BL-123": {
+  "id": "BL-123",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Only DbalTenantNotificationDefaults touches notification.tenant_default; no writer in src."
+ },
+ "BL-125": {
+  "id": "BL-125",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "layout.html.twig:53 `lang=\"{{ view.lang }}\"` and EmailLayoutView `public string $lang` still the guard (do-not-tidy record)."
+ },
+ "BL-126": {
+  "id": "BL-126",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "SigningSessionReader:548-556 still exhaustive match over RecipientOutcome with no default."
+ },
+ "BL-136": {
+  "id": "BL-136",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No PHPStan rule or test constrains Twig rendering from controllers or EmailLayoutView Markup typing (phpstan/src has no twig rule)."
+ },
+ "BL-156": {
+  "id": "BL-156",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "Signer handles it: f5sign-signer app/middleware/session.global.ts:148 cuts on AUTH_PENDING without credential members; useSessionStore.ts:575 same.",
+  "note": "Cross-repo; backend side unchanged and is as the row describes."
+ },
+ "BL-187": {
+  "id": "BL-187",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "BiometricCaptureShape documents the units, but no ADR in docs/adr mentions device_dpi/graphometric; TASK-014 not started."
+ },
+ "BL-190": {
+  "id": "BL-190",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "No Role check in StartSessionUseCase/RecipientAuthContext; NotifyActivatedStepRecipientsUseCase has no role filter; only SigningSessionReader:582 refuses IN_PERSON_HOST/CERTIFIED_DELIVERY."
+ },
+ "BL-191": {
+  "id": "BL-191",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "IN_PERSON_HOST only refused at SigningSessionReader:582 roleNotInteractive; FieldCipher still only referenced by Foundation/Crypto and Session AssertedEvidence docs."
+ },
+ "BL-196": {
+  "id": "BL-196",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Fan-out still stacks continue guards in NotifyActivatedStepRecipientsUseCase (step ordinal, isUnclaimedSlot, signsVia delegated, unsent channel, find-or-skip); no Envelope-side actionable predicate."
+ },
+ "BL-224": {
+  "id": "BL-224",
+  "verdict": "PARTIAL",
+  "confidence": "medium",
+  "evidence": "DeliveryStatus DELIVERED still has no producer (Delivery.php:41 'still await the delivery-receipt seam'); no inbound provider callback route.",
+  "remains": "The SMS receipt seam is still unbuilt and unrowed. The row's census claim that three use cases match DeliveryChannel::SMS straight into noDestinationFor is stale: now only RecipientNotificationChannels:48 calls it after TASK-031.",
+  "note": "Narrow the row to the receipt seam."
+ },
+ "BL-238": {
+  "id": "BL-238",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "SignsVia has no system/automatic member; idea-only row."
+ },
+ "BL-261": {
+  "id": "BL-261",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "frontierStep() and STEP_NOT_ACTIVE guards unchanged in Session readers; operational repair state still unaddressed."
+ },
+ "BL-265": {
+  "id": "BL-265",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "No remove/withdraw recipient path exists (rg for removeRecipient/withdraw finds nothing in Envelope); frontier park still latent."
+ },
+ "BL-282": {
+  "id": "BL-282",
+  "verdict": "STILL_VALID",
+  "confidence": "high",
+  "evidence": "Only DeclineSignatureUseCase (recipient's own); no delegated decline use case in Session."
+ },
+ "BL-284": {
+  "id": "BL-284",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "Role::mayDecline() still returns false for REVIEWER and IN_PERSON_HOST"
+ },
+ "BL-285": {
+  "id": "BL-285",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "EnvelopeStatus::CORRECTING declared in EnvelopeStatus.php; no writer in src"
+ },
+ "BL-288": {
+  "id": "BL-288",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no renewal for terminal sessions found; not re-opened"
+ },
+ "BL-289": {
+  "id": "BL-289",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "CERTIFIED_DELIVERY mayDecline true; GetSigningSessionController still answers ROLE_NOT_INTERACTIVE"
+ },
+ "BL-390": {
+  "id": "BL-390",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no inbound delivery-receipt route; DELIVERED still unwritten"
+ },
+ "BL-393": {
+  "id": "BL-393",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no cross-envelope contact memory found"
+ },
+ "BL-397": {
+  "id": "BL-397",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no daytime deferral in Notification"
+ },
+ "BL-398": {
+  "id": "BL-398",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "SmsNotificationChannel authors only es/en"
+ },
+ "BL-399": {
+  "id": "BL-399",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no automatic reminders for unopened invitations"
+ },
+ "BL-400": {
+  "id": "BL-400",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no integrator 'delivered' declaration route in config/routes/api"
+ },
+ "BL-402": {
+  "id": "BL-402",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "only migration CHECK is (status='FAILED')=(failure_kind IS NOT NULL) in Version20261009144204; no value-set CHECK"
+ },
+ "BL-407": {
+  "id": "BL-407",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "trace still keyed per destination kind; no second channel on a kind"
+ },
+ "BL-408": {
+  "id": "BL-408",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "optional; no concrete case"
+ },
+ "BL-414": {
+  "id": "BL-414",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "CancelPendingInvitationsUseCase::toTheSecond still compares to the second"
+ },
+ "BL-417": {
+  "id": "BL-417",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "config/services.yaml still has envelope.sms_notifications.wired: true"
+ },
+ "BL-420": {
+  "id": "BL-420",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no second-connection mint guard; still find-then-mint"
+ },
+ "BL-421": {
+  "id": "BL-421",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "recipientStepIsActive still returns $step->activatedAt !== null"
+ },
+ "BL-422": {
+  "id": "BL-422",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "notification_subject_idx still (tenant_id, subject_type, subject_ref); no composite index"
+ },
+ "BL-423": {
+  "id": "BL-423",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no provider failure code column"
+ },
+ "BL-424": {
+  "id": "BL-424",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "history route has no purpose/channel filter"
+ },
+ "BL-445": {
+  "id": "BL-445",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "async race unmitigated; no harness"
+ },
+ "BL-483": {
+  "id": "BL-483",
+  "verdict": "STILL_VALID",
+  "confidence": "medium",
+  "evidence": "no https validation of the base URL env vars in config/src"
+ },
+ "BL-286": {
+  "id": "BL-286",
+  "verdict": "RESOLVED",
+  "confidence": "medium",
+  "evidence": "DeclineSignatureUseCase takes $command->userAgent and a ReportedEvidence ($reported) and persists them on the session (TASK-045 D13 docblock)"
+ },
+ "BL-389": {
+  "id": "BL-389",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "high",
+  "evidence": "legal review and f5sign-docs copy; off-repo"
+ },
+ "BL-404": {
+  "id": "BL-404",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "high",
+  "evidence": "needs observation on a dev stack with RabbitMQ"
+ },
+ "BL-433": {
+  "id": "BL-433",
+  "verdict": "NOT_CHECKABLE",
+  "confidence": "high",
+  "evidence": "depends on dashboard and signer repositories and an owner hold"
+ },
+ "BL-395": {
+  "id": "BL-395",
+  "verdict": "PARTIAL",
+  "confidence": "high",
+  "evidence": "Envelope::markRecipientDeliveryFailed returns early on a terminal outcome before recordInvitationFailed (fixed); EnvelopeCommandAdapter::markRecipientDeliveryFailed still calls saveLifecycle unconditionally",
+  "remains": "the adapter path still saves unconditionally"
+ }
+}
